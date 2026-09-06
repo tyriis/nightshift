@@ -973,13 +973,16 @@ export const makeDb = (path: string): Kysely<DB> => {
 
 - [ ] **Step 3.9: Implement `src/infra/sqlite/migrations.ts`.** API trap (verified): `Migrator`, `Migration`, `MigrationProvider` import from **`kysely/migration`** — the root `kysely` re-exports are type-error stubs in 0.29.x. `MigrationProvider` has exactly one member (`getMigrations`); no `getLock`. `down` omitted intentionally (v1, append-only schema).
 
+Lint adaptations (verified): the type-checked eslint config (`no-explicit-any`, `require-await`, `only-throw-error`) forces `Kysely<DB>` instead of `Kysely<any>`, a non-`async` `getMigrations` returning `Promise.resolve(...)`, and wrapping a non-`Error` migrator rejection before throwing.
+
 ```ts
 import { sql, type Kysely } from 'kysely'
 import { Migrator, type Migration, type MigrationProvider } from 'kysely/migration'
+import type { DB } from '#root/infra/sqlite/schema'
 
 const migrations: Record<string, Migration> = {
   '2026-09-06_init': {
-    up: async (db: Kysely<any>) => {
+    up: async (db: Kysely<DB>) => {
       await sql`create table actors (
         id text primary key,
         kind text not null check (kind in ('human','agent')),
@@ -1072,17 +1075,17 @@ const migrations: Record<string, Migration> = {
 }
 
 class InCodeMigrationProvider implements MigrationProvider {
-  async getMigrations(): Promise<Record<string, Migration>> {
-    return migrations
+  getMigrations(): Promise<Record<string, Migration>> {
+    return Promise.resolve(migrations)
   }
 }
 
-export const migrateToLatest = async (db: Kysely<any>): Promise<void> => {
+export const migrateToLatest = async (db: Kysely<DB>): Promise<void> => {
   const { error } = await new Migrator({
     db,
     provider: new InCodeMigrationProvider(),
   }).migrateToLatest()
-  if (error) throw error
+  if (error) throw error instanceof Error ? error : new Error('migration failed', { cause: error })
 }
 ```
 
