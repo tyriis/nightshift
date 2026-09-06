@@ -84,6 +84,7 @@ Conventions for every task: run `pnpm test <file>` for red/green checks, `pnpm l
 ### Task 1: Project scaffold from agent-test baseline
 
 **Files:**
+
 - Create: `package.json`, `pnpm-workspace.yaml`, `.mise.toml`, `tsconfig.json`, `vitest.config.ts`, `eslint.config.js`, `.prettierrc`, `.prettierignore`, `.editorconfig`, `.gitignore`, `lefthook.yaml`
 - Create: `.github/workflows/ci.yaml`, `LICENSE`
 - Create: `src/app.ts`, `src/app.test.ts`
@@ -148,26 +149,34 @@ Conventions for every task: run `pnpm test <file>` for red/green checks, `pnpm l
 }
 ```
 
-> **Versions verified 2026-09-06** against the live npm registry with an install + strict-typecheck probe (Node ESM): better-sqlite3 13.0.3 (N-API, ships prebuilds, **no install script** → not an `onlyBuiltDependencies` entry), kysely 0.29.5 (**migration symbols import from `kysely/migration`, root re-exports are deprecated type-error stubs**; do not use the `0.30.0-beta` on tag `next`), zod 4.5.4, fastify 5.12.3 (supersedes agent-test's 5.8.5), typescript 6.0.3, @types/node 24.13.3. Remaining pins match `tyriis/agent-test` verbatim.
+> **Versions verified 2026-09-06** against the live npm registry with an install + strict-typecheck probe (Node ESM), then re-verified in this repo: better-sqlite3 13.0.3 (N-API prebuilds; pnpm still requires the `onlyBuiltDependencies` approval entry — see workspace file note), kysely 0.29.5 (**migration symbols import from `kysely/migration`, root re-exports are deprecated type-error stubs**; do not use the `0.30.0-beta` on tag `next`), zod 4.5.4, fastify 5.12.3 (supersedes agent-test's 5.8.5), typescript 6.0.3, @types/node 24.13.3. Remaining pins match `tyriis/agent-test` verbatim.
 
 - [ ] **Step 1.2: Create root config files.**
 
 `pnpm-workspace.yaml`:
+
 ```yaml
 onlyBuiltDependencies:
   - esbuild
+  - better-sqlite3
 ```
-(better-sqlite3 v13 ships N-API prebuilds with no install script, so it does **not** need an approval entry here.)
+
+(pnpm 10+ blocks dependency build scripts unless explicitly approved — empirically verified on this repo: without the `better-sqlite3` entry pnpm silently ignores its install script and no native binding lands, breaking Task 3 on every clean checkout. If the entry ever turns out unnecessary on a future version, the symptom is `Cannot find module ... better_sqlite3.node`.)
 
 `.mise.toml`:
+
 ```toml
 [tools]
+node = "24"
 pnpm = "10.33.0"
 direnv = "2.37.1"
 lefthook = "2.1.6"
 ```
 
+(node pinned to the CI/engines floor so local runs exercise the same major the pipeline tests. better-sqlite3 is N-API → its prebuilt binding is ABI-stable across majors; after switching run `pnpm install`.)
+
 `tsconfig.json` (from agent-test verbatim):
+
 ```json
 {
   "compilerOptions": {
@@ -194,6 +203,7 @@ lefthook = "2.1.6"
 ```
 
 `vitest.config.ts` (agent-test base; domain keeps 100%, global floor 85%):
+
 ```ts
 import { defineConfig } from 'vitest/config'
 
@@ -251,6 +261,7 @@ pnpm-lock.yaml
 ```
 
 `lefthook.yaml` (agent-test verbatim):
+
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/evilmartians/lefthook/master/schema.json
 pre-commit:
@@ -277,6 +288,7 @@ pre-push:
 ```
 
 `.github/workflows/ci.yaml`:
+
 ```yaml
 name: CI
 on:
@@ -297,7 +309,10 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm build
 ```
+
+(`pnpm build` guards the production half of the `#root/*` import map — `dist/*.js` default condition — which lint/test never touch.)
 
 - [ ] **Step 1.3: Fetch the Apache-2.0 license.**
 
@@ -305,6 +320,7 @@ jobs:
 curl -fsSL https://www.apache.org/licenses/LICENSE-2.0.txt -o LICENSE
 head -1 LICENSE
 ```
+
 Expected: `                                 Apache License`
 
 - [ ] **Step 1.4: Write the failing ping test** `src/app.test.ts`:
@@ -329,6 +345,7 @@ describe('app', () => {
 ```bash
 pnpm install && pnpm test src/app.test.ts
 ```
+
 Expected: FAIL — `Cannot find module '#root/app'`.
 
 - [ ] **Step 1.6: Implement `src/app.ts`** (agent-test pattern; deps are threaded in at Task 13):
@@ -352,6 +369,7 @@ export const buildApp = (opts: { logger?: boolean } = {}): FastifyInstance => {
 ```bash
 pnpm test src/app.test.ts && pnpm lint && pnpm typecheck
 ```
+
 Expected: 1 test passed; lint/typecheck silent success.
 
 - [ ] **Step 1.8: Commit** (lefthook hooks activate on first commit — run `git config core.hooksPath .git/hooks; lefthook install` first if lefthook is on PATH):
@@ -366,6 +384,7 @@ git commit -m "chore: scaffold project tooling from agent-test baseline"
 ### Task 2: Domain core — errors, task types, lease tokens, ready predicate
 
 **Files:**
+
 - Create: `src/domain/errors.ts`, `src/domain/task.ts`, `src/domain/claim.ts`, `src/domain/ready.ts`
 - Test: `src/domain/claim.test.ts`, `src/domain/ready.test.ts`
 
@@ -404,6 +423,7 @@ describe('lease tokens', () => {
 ```bash
 pnpm test src/domain/claim.test.ts
 ```
+
 Expected: FAIL — cannot find `#root/domain/claim`.
 
 - [ ] **Step 2.3: Implement `src/domain/claim.ts`:**
@@ -477,7 +497,13 @@ describe('ready predicate (spec 6.3)', () => {
           claim_holder: fc.boolean(),
           unmet_blockers: fc.nat(4),
         }),
-        (c) => isTaskReady(c) === (c.status === 'todo' && !c.blocked_flag && c.child_count === 0 && !c.claim_holder && c.unmet_blockers === 0)
+        (c) =>
+          isTaskReady(c) ===
+          (c.status === 'todo' &&
+            !c.blocked_flag &&
+            c.child_count === 0 &&
+            !c.claim_holder &&
+            c.unmet_blockers === 0)
       )
     )
   })
@@ -611,6 +637,7 @@ export const isDomainError = (e: unknown): e is DomainError => e instanceof Doma
 ### Task 3: Infra foundations — env config, clock, ids, token hashing, SQLite db + migrations
 
 **Files:**
+
 - Create: `src/main/config.ts`, `src/infra/clock.ts`, `src/infra/ids.ts`, `src/infra/token-hash.ts`, `src/infra/sqlite/schema.ts`, `src/infra/sqlite/db.ts`, `src/infra/sqlite/migrations.ts`
 - Test: `src/main/config.test.ts`, `src/infra/ids.test.ts`, `src/infra/token-hash.test.ts`, `src/infra/sqlite/migrations.test.ts`
 
@@ -680,6 +707,7 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
 - [ ] **Step 3.3: Write failing ids/token-hash tests.**
 
 `src/infra/ids.test.ts`:
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { RandomIdGen } from '#root/infra/ids'
@@ -700,6 +728,7 @@ describe('RandomIdGen', () => {
 ```
 
 `src/infra/token-hash.test.ts`:
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { generateRawToken, hashToken } from '#root/infra/token-hash'
@@ -743,13 +772,13 @@ export class RandomIdGen {
   }
 }
 ```
+
 (`src/infra/clock.ts` = only the `SystemClock`+`isoNow` block; `src/infra/ids.ts` = the `RandomIdGen` block.)
 
 ```ts
 import { createHash, randomBytes } from 'node:crypto'
 
-export const hashToken = (raw: string): string =>
-  createHash('sha256').update(raw).digest('hex')
+export const hashToken = (raw: string): string => createHash('sha256').update(raw).digest('hex')
 
 export const generateRawToken = (): string => randomBytes(32).toString('base64url')
 ```
@@ -798,7 +827,9 @@ describe('migrations', () => {
   it('seeds review_gate policy on', async () => {
     const db = makeDb(':memory:')
     await migrateToLatest(db)
-    const r = await sql<{ value: string }>`select value from policy where key = 'review_gate'`.execute(db)
+    const r = await sql<{
+      value: string
+    }>`select value from policy where key = 'review_gate'`.execute(db)
     expect(r.rows[0]?.value).toBe('on')
     await db.destroy()
   })
@@ -1042,8 +1073,10 @@ class InCodeMigrationProvider implements MigrationProvider {
 }
 
 export const migrateToLatest = async (db: Kysely<any>): Promise<void> => {
-  const { error } = await new Migrator({ db, provider: new InCodeMigrationProvider() })
-    .migrateToLatest()
+  const { error } = await new Migrator({
+    db,
+    provider: new InCodeMigrationProvider(),
+  }).migrateToLatest()
   if (error) throw error
 }
 ```
@@ -1060,6 +1093,7 @@ git add -A && git commit -m "feat(infra): sqlite schema, in-code kysely migratio
 ### Task 4: Application ports + audit and task repositories
 
 **Files:**
+
 - Create: `src/application/ports.ts`, `src/infra/sqlite/audit-repo.ts`, `src/infra/sqlite/task-repo.ts`, `src/testing/fixtures.ts`
 - Test: `src/infra/sqlite/audit-repo.test.ts`, `src/infra/sqlite/task-repo.test.ts`
 
@@ -1345,6 +1379,7 @@ export const setStatus = async (db: Kysely<DB>, id: string, status: TaskStatus):
   await db.updateTable('tasks').set({ status }).where('id', '=', id).execute()
 }
 ```
+
 (Fixtures insert `'a_creator'` as a placeholder author — call `seedActor(db, 'a_creator')` before `seedTask` in tests.)
 
 - [ ] **Step 4.3: Write failing audit-repo test** `src/infra/sqlite/audit-repo.test.ts`:
@@ -1423,12 +1458,12 @@ export class SqliteAuditRepo implements AuditRepo {
       .execute()
   }
 
-  async search(q: { entity_type?: string; entity_id?: string; limit: number }): Promise<AuditRow[]> {
-    let query = this.db
-      .selectFrom('audit_log')
-      .selectAll()
-      .orderBy('id', 'desc')
-      .limit(q.limit)
+  async search(q: {
+    entity_type?: string
+    entity_id?: string
+    limit: number
+  }): Promise<AuditRow[]> {
+    let query = this.db.selectFrom('audit_log').selectAll().orderBy('id', 'desc').limit(q.limit)
     if (q.entity_type) query = query.where('entity_type', '=', q.entity_type)
     if (q.entity_id) query = query.where('entity_id', '=', q.entity_id)
     const rows = await query.execute()
@@ -1495,7 +1530,9 @@ describe('SqliteTaskRepo', () => {
     await repo.create(draft('t_parent'))
     await repo.create(draft('t_child', 't_parent'))
     await repo.create(draft('t_blocker'))
-    await sql`insert into dependencies (blocker_id, blocked_id) values ('t_blocker', 't_child')`.execute(db)
+    await sql`insert into dependencies (blocker_id, blocked_id) values ('t_blocker', 't_child')`.execute(
+      db
+    )
 
     const parent = await repo.findWithCounts('t_parent')
     expect(parent?.child_count).toBe(1)
@@ -1533,9 +1570,21 @@ describe('SqliteTaskRepo', () => {
     const repo = new SqliteTaskRepo(db)
     await repo.create({ ...draft('t_1'), status: 'todo' })
 
-    const first = await repo.tryClaim('t_1', 'tok_1', 'a_agent', 'in_progress', '2026-01-02T00:00:00.000Z')
+    const first = await repo.tryClaim(
+      't_1',
+      'tok_1',
+      'a_agent',
+      'in_progress',
+      '2026-01-02T00:00:00.000Z'
+    )
     expect(first).toEqual({ generation: 1 })
-    const second = await repo.tryClaim('t_1', 'tok_2', 'a_agent', 'in_progress', '2026-01-02T00:00:00.000Z')
+    const second = await repo.tryClaim(
+      't_1',
+      'tok_2',
+      'a_agent',
+      'in_progress',
+      '2026-01-02T00:00:00.000Z'
+    )
     expect(second).toBeNull()
 
     const claimed = await repo.findById('t_1')
@@ -1547,7 +1596,13 @@ describe('SqliteTaskRepo', () => {
     expect((await repo.findById('t_1'))?.claim_generation).toBe(2)
 
     // re-claim yields generation 3 — old token (gen 1) can never validate again
-    const third = await repo.tryClaim('t_1', 'tok_2', 'a_agent', 'in_progress', '2026-01-02T00:00:02.000Z')
+    const third = await repo.tryClaim(
+      't_1',
+      'tok_2',
+      'a_agent',
+      'in_progress',
+      '2026-01-02T00:00:02.000Z'
+    )
     expect(third).toEqual({ generation: 3 })
     await db.destroy()
   })
@@ -1593,7 +1648,11 @@ describe('SqliteTaskRepo', () => {
     await repo.create(draft('t_2'))
     expect(await repo.nextPosition(null)).toBe(2)
     expect(await repo.nextPosition('t_1')).toBe(1)
-    await repo.patch('t_1', { blocked_flag: true, title: 'renamed', assignee_id: 'a_agent' }, '2026-01-03T00:00:00.000Z')
+    await repo.patch(
+      't_1',
+      { blocked_flag: true, title: 'renamed', assignee_id: 'a_agent' },
+      '2026-01-03T00:00:00.000Z'
+    )
     const t = await repo.findById('t_1')
     expect(t?.blocked_flag).toBe(true)
     expect(t?.title).toBe('renamed')
@@ -1611,6 +1670,7 @@ describe('SqliteTaskRepo', () => {
   })
 })
 ```
+
 (`setup()` above is intentionally simple: the `seedTask(db, 'a_creator', …)` placeholder line does **not** exist in the final test — write `setup` exactly as: freshDb + two `seedActor` calls + return db.)
 
 - [ ] **Step 4.6: Implement `src/infra/sqlite/task-repo.ts`:**
@@ -1721,7 +1781,11 @@ export class SqliteTaskRepo implements TaskRepo {
       .where('tasks.status', '=', 'todo')
       .where('tasks.blocked_flag', '=', 0)
       .where('tasks.claim_token_id', 'is', null)
-      .where(sql<unknown>`not exists (select 1 from tasks c where c.parent_id = tasks.id)`, '=?', [])
+      .where(
+        sql<unknown>`not exists (select 1 from tasks c where c.parent_id = tasks.id)`,
+        '=?',
+        []
+      )
       .where(
         sql<unknown>`not exists (select 1 from dependencies d
                        join tasks b on b.id = d.blocker_id
@@ -1752,18 +1816,15 @@ export class SqliteTaskRepo implements TaskRepo {
     const values: Partial<TasksTable> = { updated_at }
     if (patch.title !== undefined) values.title = patch.title
     if (patch.description !== undefined) values.description = patch.description
-    if (patch.acceptance_criteria !== undefined) values.acceptance_criteria = patch.acceptance_criteria
+    if (patch.acceptance_criteria !== undefined)
+      values.acceptance_criteria = patch.acceptance_criteria
     if (patch.blocked_flag !== undefined) values.blocked_flag = patch.blocked_flag ? 1 : 0
     if (patch.assignee_id !== undefined) values.assignee_id = patch.assignee_id
     await this.db.updateTable('tasks').set(values).where('id', '=', id).execute()
   }
 
   async setStatus(id: string, status: TaskStatus, updated_at: string): Promise<void> {
-    await this.db
-      .updateTable('tasks')
-      .set({ status, updated_at })
-      .where('id', '=', id)
-      .execute()
+    await this.db.updateTable('tasks').set({ status, updated_at }).where('id', '=', id).execute()
   }
 
   async hasChildren(id: string): Promise<boolean> {
@@ -1855,6 +1916,7 @@ export class SqliteTaskRepo implements TaskRepo {
   }
 }
 ```
+
 **Note for the implementer:** if the `.where(sql<unknown>…, '=?', [])` form above fights Kysely typing, use the `sql` template inside `.where(sql\`…\`, 'is', 1)`-free variants — the canonical Kysely way to add a raw boolean predicate to a query builder is `.where((eb) => eb(sql\`not exists (…)\` as any, '=', 0 as any))`; simplest escape hatch: build the whole query with `sql`…`.execute(db)`. Keep semantics exactly as written; passing tests is the acceptance bar.
 
 - [ ] **Step 4.7: Verify green, hygiene, commit.**
@@ -1869,6 +1931,7 @@ git add -A && git commit -m "feat(repos): ports, audit repo, task repo with clai
 ### Task 5: Unit of work + dependency, label, actor repositories
 
 **Files:**
+
 - Create: `src/infra/sqlite/uow.ts`, `src/infra/sqlite/dependency-repo.ts`, `src/infra/sqlite/label-repo.ts`, `src/infra/sqlite/actor-repo.ts`
 - Test: `src/infra/sqlite/dependency-repo.test.ts`, `src/infra/sqlite/label-repo.test.ts`, `src/infra/sqlite/actor-repo.test.ts`, `src/infra/sqlite/uow.test.ts`
 
@@ -1978,6 +2041,7 @@ export class SqliteDependencyRepo implements DependencyRepo {
 - [ ] **Step 5.3: Write failing label + actor tests.**
 
 `src/infra/sqlite/label-repo.test.ts`:
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { SqliteLabelRepo } from '#root/infra/sqlite/label-repo'
@@ -1993,8 +2057,18 @@ const setup = async () => {
 describe('SqliteLabelRepo', () => {
   it('ensure is create-or-get', async () => {
     const { db, repo } = await setup()
-    const made = await repo.ensure({ id: 'l_new', name: 'infra', color: '#f00', created_at: '2026-01-01T00:00:00.000Z' })
-    const again = await repo.ensure({ id: 'l_other', name: 'infra', color: '#00f', created_at: '2026-01-01T00:00:00.000Z' })
+    const made = await repo.ensure({
+      id: 'l_new',
+      name: 'infra',
+      color: '#f00',
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
+    const again = await repo.ensure({
+      id: 'l_other',
+      name: 'infra',
+      color: '#00f',
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
     expect(again.id).toBe(made.id)
     expect(await repo.list()).toHaveLength(1)
     await db.destroy()
@@ -2002,7 +2076,12 @@ describe('SqliteLabelRepo', () => {
 
   it('attach/detach and labelsFor', async () => {
     const { db, repo } = await setup()
-    const label = await repo.ensure({ id: 'l_a', name: 'a', color: '#f00', created_at: '2026-01-01T00:00:00.000Z' })
+    const label = await repo.ensure({
+      id: 'l_a',
+      name: 'a',
+      color: '#f00',
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
     await repo.attach('t_1', label.id)
     await repo.attach('t_1', label.id) // idempotent
     expect((await repo.labelsFor('t_1')).map((l) => l.name)).toEqual(['a'])
@@ -2014,6 +2093,7 @@ describe('SqliteLabelRepo', () => {
 ```
 
 `src/infra/sqlite/actor-repo.test.ts`:
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { SqliteActorRepo } from '#root/infra/sqlite/actor-repo'
@@ -2084,19 +2164,28 @@ import type { DB } from '#root/infra/sqlite/schema'
 export class SqliteLabelRepo implements LabelRepo {
   constructor(private readonly db: Kysely<DB>) {}
 
-  async ensure(input: { id: string; name: string; color: string; created_at: string }): Promise<LabelRow> {
+  async ensure(input: {
+    id: string
+    name: string
+    color: string
+    created_at: string
+  }): Promise<LabelRow> {
     await this.db
       .insertInto('labels')
       .values(input)
       .onConflict((oc) => oc.column('name').doNothing())
       .execute()
-    return (
-      (await this.db.selectFrom('labels').selectAll().where('name', '=', input.name).executeTakeFirst()) as LabelRow
-    )
+    return (await this.db
+      .selectFrom('labels')
+      .selectAll()
+      .where('name', '=', input.name)
+      .executeTakeFirst()) as LabelRow
   }
 
   async list(): Promise<LabelRow[]> {
-    return this.db.selectFrom('labels').selectAll().orderBy('name', 'asc').execute() as Promise<LabelRow[]>
+    return this.db.selectFrom('labels').selectAll().orderBy('name', 'asc').execute() as Promise<
+      LabelRow[]
+    >
   }
 
   async attach(taskId: string, labelId: string): Promise<void> {
@@ -2146,13 +2235,19 @@ export class SqliteActorRepo implements ActorRepo {
     created_at: string
   }): Promise<ActorRow> {
     await this.db.insertInto('actors').values(input).execute()
-    return (
-      await this.db.selectFrom('actors').selectAll().where('id', '=', input.id).executeTakeFirst()
-    ) as ActorRow
+    return (await this.db
+      .selectFrom('actors')
+      .selectAll()
+      .where('id', '=', input.id)
+      .executeTakeFirst()) as ActorRow
   }
 
   async findByHandle(handle: string): Promise<ActorRow | null> {
-    const r = await this.db.selectFrom('actors').selectAll().where('handle', '=', handle).executeTakeFirst()
+    const r = await this.db
+      .selectFrom('actors')
+      .selectAll()
+      .where('handle', '=', handle)
+      .executeTakeFirst()
     return (r as ActorRow | undefined) ?? null
   }
 
@@ -2162,7 +2257,9 @@ export class SqliteActorRepo implements ActorRepo {
   }
 
   async list(): Promise<ActorRow[]> {
-    return this.db.selectFrom('actors').selectAll().orderBy('handle', 'asc').execute() as Promise<ActorRow[]>
+    return this.db.selectFrom('actors').selectAll().orderBy('handle', 'asc').execute() as Promise<
+      ActorRow[]
+    >
   }
 
   async insertToken(input: {
@@ -2180,7 +2277,11 @@ export class SqliteActorRepo implements ActorRepo {
       .selectFrom('tokens')
       .selectAll()
       .innerJoin('actors', 'actors.id', 'tokens.actor_id')
-      .select(['actors.kind as a_kind', 'actors.handle as a_handle', 'actors.display_name as a_display'])
+      .select([
+        'actors.kind as a_kind',
+        'actors.handle as a_handle',
+        'actors.display_name as a_display',
+      ])
       .where('tokens.token_hash', '=', hash)
       .where('tokens.revoked_at', 'is', null)
       .executeTakeFirst()
@@ -2230,7 +2331,11 @@ export class SqliteActorRepo implements ActorRepo {
   }
 
   async getPolicy(key: string): Promise<string | null> {
-    const r = await this.db.selectFrom('policy').select('value').where('key', '=', key).executeTakeFirst()
+    const r = await this.db
+      .selectFrom('policy')
+      .select('value')
+      .where('key', '=', key)
+      .executeTakeFirst()
     return r?.value ?? null
   }
 
@@ -2243,6 +2348,7 @@ export class SqliteActorRepo implements ActorRepo {
   }
 }
 ```
+
 **Note:** the join in `findActiveTokenByHash` deliberately returns a trimmed actor (no description/created_at round-trip needed by auth); `description: ''`/`created_at: ''` placeholders are acceptable because the auth path only consumes `id`, `kind`, `handle`, `display_name`.
 
 - [ ] **Step 5.6: Write failing UoW test** `src/infra/sqlite/uow.test.ts`:
@@ -2341,6 +2447,7 @@ git add -A && git commit -m "feat(repos): unit-of-work, dependency cycle detecti
 ### Task 6: Idempotency store (spec §7.3)
 
 **Files:**
+
 - Modify: `src/application/ports.ts` (append two interfaces)
 - Create: `src/infra/sqlite/idempotency-repo.ts`
 - Test: `src/infra/sqlite/idempotency-repo.test.ts`
@@ -2484,6 +2591,7 @@ pnpm test src/infra/sqlite/idempotency-repo.test.ts && git add -A && git commit 
 ### Task 7: Use-cases — CreateTask, UpdateTask
 
 **Files:**
+
 - Modify: `src/application/ports.ts` (append `ActorContext`)
 - Create: `src/application/usecases/create-task.ts`, `src/application/usecases/update-task.ts`
 - Test: `src/application/usecases/create-task.test.ts`, `src/application/usecases/update-task.test.ts`
@@ -2548,7 +2656,9 @@ describe('CreateTask', () => {
       .then(() => undefined)
     void audit
 
-    const auditRows = await new (await import('#root/infra/sqlite/audit-repo')).SqliteAuditRepo(db).search({
+    const auditRows = await new (await import('#root/infra/sqlite/audit-repo')).SqliteAuditRepo(
+      db
+    ).search({
       entity_type: 'task',
       entity_id: task.id,
       limit: 5,
@@ -2601,14 +2711,15 @@ describe('CreateTask', () => {
   })
 })
 ```
+
 **Implementer note:** the first test's `SqliteActorRepo` dummy lines are scaffolding noise — in the final file, delete the `const audit = …` block and the dynamic import; import `SqliteAuditRepo` statically at top and assert audit rows directly. Clean final version of that block:
 
 ```ts
-    const auditRows = await new SqliteAuditRepo(db).search({
-      entity_type: 'task',
-      entity_id: task.id,
-      limit: 5,
-    })
+const auditRows = await new SqliteAuditRepo(db).search({
+  entity_type: 'task',
+  entity_id: task.id,
+  limit: 5,
+})
 ```
 
 - [ ] **Step 7.3: Implement `src/application/usecases/create-task.ts`:**
@@ -2700,7 +2811,10 @@ import { DomainError } from '#root/domain/errors'
 describe('UpdateTask (content patch, decision D-e)', () => {
   it('patches content fields and audits before/after', async () => {
     const { db, uow } = await buildUow()
-    const created = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'old' })
+    const created = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'old',
+    })
     const uc = new UpdateTask(uow, fixedClock())
     const updated = await uc.run({
       ...human,
@@ -2735,7 +2849,11 @@ describe('UpdateTask (content patch, decision D-e)', () => {
   it('empty patch is a no-op (no audit noise)', async () => {
     const { db, uow } = await buildUow()
     const created = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
-    const updated = await new UpdateTask(uow, fixedClock()).run({ ...human, taskId: created.id, patch: {} })
+    const updated = await new UpdateTask(uow, fixedClock()).run({
+      ...human,
+      taskId: created.id,
+      patch: {},
+    })
     expect(updated.title).toBe('x')
     await db.destroy()
   })
@@ -2816,6 +2934,7 @@ git add -A && git commit -m "feat(usecases): CreateTask, UpdateTask with audit t
 ### Task 8: Use-case — SplitTask (atomic split, auto-release under claim, spec §6.2)
 
 **Files:**
+
 - Create: `src/application/usecases/split-task.ts`
 - Test: `src/application/usecases/split-task.test.ts`
 
@@ -2850,7 +2969,11 @@ describe('SplitTask (spec §6.2)', () => {
     expect(split.created[1]?.status).toBe('backlog')
     expect(split.parent.child_count).toBe(2)
 
-    const audit = await new SqliteAuditRepo(db).search({ entity_type: 'task', entity_id: parent.id, limit: 5 })
+    const audit = await new SqliteAuditRepo(db).search({
+      entity_type: 'task',
+      entity_id: parent.id,
+      limit: 5,
+    })
     expect(audit.some((a) => a.action === 'task_split')).toBe(true)
     await db.destroy()
   })
@@ -2859,7 +2982,11 @@ describe('SplitTask (spec §6.2)', () => {
     const { db, uow } = await buildUow()
     await seedActor(db, 'a_agent', 'agent', 'hermes-1')
     await seedToken(db, 'tok_agent', 'a_agent')
-    const parent = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'big', status: 'todo' })
+    const parent = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'big',
+      status: 'todo',
+    })
     const claim = await new ClaimTask(uow, fixedClock()).run({
       actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'Hermes' },
       tokenId: 'tok_agent',
@@ -2875,7 +3002,11 @@ describe('SplitTask (spec §6.2)', () => {
     expect(split.parent.task.claim_token_id).toBeNull()
     expect(split.parent.task.claim_generation).toBe(2)
 
-    const audit = await new SqliteAuditRepo(db).search({ entity_type: 'task', entity_id: parent.id, limit: 10 })
+    const audit = await new SqliteAuditRepo(db).search({
+      entity_type: 'task',
+      entity_id: parent.id,
+      limit: 10,
+    })
     expect(audit.some((a) => a.reason === 'claim released by split')).toBe(true)
 
     // the old lease token can never be used again:
@@ -2932,7 +3063,13 @@ describe('SplitTask (spec §6.2)', () => {
 ```ts
 import { TASK_STATUSES, type TaskRecord, type TaskStatus } from '#root/domain/task'
 import { DomainError } from '#root/domain/errors'
-import type { ActorContext, Clock, IdGen, UnitOfWork, TaskWithCounts } from '#root/application/ports'
+import type {
+  ActorContext,
+  Clock,
+  IdGen,
+  UnitOfWork,
+  TaskWithCounts,
+} from '#root/application/ports'
 
 export interface SplitChildDraft {
   title: string
@@ -3033,6 +3170,7 @@ git add -A && git commit -m "feat(usecases): atomic SplitTask with auto claim-re
 ### Task 9: Use-case — UpdateStatus (invariants 2, 3, 5 + canceled terminal)
 
 **Files:**
+
 - Modify: `src/domain/errors.ts` (add `canceled_terminal` code)
 - Create: `src/application/usecases/update-status.ts`
 - Test: `src/application/usecases/update-status.test.ts`
@@ -3071,9 +3209,19 @@ describe('UpdateStatus gates (spec §6.4)', () => {
     const uc = new UpdateStatus(uow, fixedClock())
     await uc.run({ ...human, taskId: task.id, to: 'todo', reason: 'groomed' })
     const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
-    await uc.run({ ...agent, taskId: task.id, to: 'in_review', reason: 'PR opened', lease_token: claim.lease_token })
+    await uc.run({
+      ...agent,
+      taskId: task.id,
+      to: 'in_review',
+      reason: 'PR opened',
+      lease_token: claim.lease_token,
+    })
 
-    const audit = await new SqliteAuditRepo(db).search({ entity_type: 'task', entity_id: task.id, limit: 20 })
+    const audit = await new SqliteAuditRepo(db).search({
+      entity_type: 'task',
+      entity_id: task.id,
+      limit: 20,
+    })
     expect(audit.some((a) => a.reason === 'claim released on review')).toBe(true)
 
     await uc.run({ ...human, taskId: task.id, to: 'done', reason: 'ship it' }) // claim gone → no token needed (D-c)
@@ -3082,50 +3230,90 @@ describe('UpdateStatus gates (spec §6.4)', () => {
 
   it('invariant 3: claimed task without valid lease gets stale_lease', async () => {
     const { db, uow } = await withAgent()
-    const task = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x', status: 'todo' })
+    const task = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'x',
+      status: 'todo',
+    })
     const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
     const uc = new UpdateStatus(uow, fixedClock())
-    await expect(uc.run({ ...human, taskId: task.id, to: 'in_progress', reason: 'nudge' })).rejects.toMatchObject({ code: 'stale_lease' })
     await expect(
-      uc.run({ ...human, taskId: task.id, to: 'in_progress', reason: 'nudge', lease_token: 't_wrong:1' })
+      uc.run({ ...human, taskId: task.id, to: 'in_progress', reason: 'nudge' })
     ).rejects.toMatchObject({ code: 'stale_lease' })
     await expect(
-      uc.run({ ...human, taskId: task.id, to: 'in_progress', reason: 'nudge', lease_token: `${task.id}:99` })
+      uc.run({
+        ...human,
+        taskId: task.id,
+        to: 'in_progress',
+        reason: 'nudge',
+        lease_token: 't_wrong:1',
+      })
+    ).rejects.toMatchObject({ code: 'stale_lease' })
+    await expect(
+      uc.run({
+        ...human,
+        taskId: task.id,
+        to: 'in_progress',
+        reason: 'nudge',
+        lease_token: `${task.id}:99`,
+      })
     ).rejects.toMatchObject({ code: 'stale_lease' })
     // the actual holder succeeds
     await expect(
-      uc.run({ ...agent, taskId: task.id, to: 'in_review', reason: 'ok', lease_token: claim.lease_token })
+      uc.run({
+        ...agent,
+        taskId: task.id,
+        to: 'in_review',
+        reason: 'ok',
+        lease_token: claim.lease_token,
+      })
     ).resolves.toBeTruthy()
     await db.destroy()
   })
 
   it('invariant 2: open_descendants blocks done', async () => {
     const { db, uow } = await withAgent()
-    const parent = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'p', status: 'todo' })
+    const parent = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'p',
+      status: 'todo',
+    })
     const split = await new SplitTask(uow, fixedClock(), seqIds()).run({
       ...human,
       taskId: parent.id,
       children: [{ title: 'c1', status: 'in_progress' }],
     })
     const uc = new UpdateStatus(uow, fixedClock())
-    await expect(uc.run({ ...human, taskId: parent.id, to: 'done', reason: 'x' })).rejects.toMatchObject({
+    await expect(
+      uc.run({ ...human, taskId: parent.id, to: 'done', reason: 'x' })
+    ).rejects.toMatchObject({
       code: 'open_descendants',
     })
     await uc.run({ ...human, taskId: split.created[0]!.id, to: 'canceled', reason: 'dropped' })
-    await expect(uc.run({ ...human, taskId: parent.id, to: 'done', reason: 'x' })).resolves.toBeTruthy()
+    await expect(
+      uc.run({ ...human, taskId: parent.id, to: 'done', reason: 'x' })
+    ).resolves.toBeTruthy()
     await db.destroy()
   })
 
   it('invariant 5: agent cannot set done while review_gate on; policy off allows; human always allowed', async () => {
     const { db, uow } = await withAgent()
-    const task = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x', status: 'todo' })
+    const task = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'x',
+      status: 'todo',
+    })
     const uc = new UpdateStatus(uow, fixedClock())
-    await expect(uc.run({ ...agent, taskId: task.id, to: 'done', reason: 'yolo' })).rejects.toMatchObject({
+    await expect(
+      uc.run({ ...agent, taskId: task.id, to: 'done', reason: 'yolo' })
+    ).rejects.toMatchObject({
       code: 'agent_close_forbidden',
     })
     // admin flips policy off
     await uow.withTransaction(async (repos) => repos.actors.setPolicy('review_gate', 'off'))
-    await expect(uc.run({ ...agent, taskId: task.id, to: 'done', reason: 'yolo' })).resolves.toBeTruthy()
+    await expect(
+      uc.run({ ...agent, taskId: task.id, to: 'done', reason: 'yolo' })
+    ).resolves.toBeTruthy()
     await db.destroy()
   })
 
@@ -3134,7 +3322,9 @@ describe('UpdateStatus gates (spec §6.4)', () => {
     const task = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
     const uc = new UpdateStatus(uow, fixedClock())
     await uc.run({ ...human, taskId: task.id, to: 'canceled', reason: 'nope' })
-    await expect(uc.run({ ...human, taskId: task.id, to: 'todo', reason: 'reconsider' })).rejects.toMatchObject({
+    await expect(
+      uc.run({ ...human, taskId: task.id, to: 'todo', reason: 'reconsider' })
+    ).rejects.toMatchObject({
       code: 'canceled_terminal',
     })
     await db.destroy()
@@ -3143,11 +3333,15 @@ describe('UpdateStatus gates (spec §6.4)', () => {
   it('unknown task → not_found; empty reason → invalid_request', async () => {
     const { db, uow } = await withAgent()
     const uc = new UpdateStatus(uow, fixedClock())
-    await expect(uc.run({ ...human, taskId: 't_ghost', to: 'todo', reason: 'x' })).rejects.toMatchObject({
+    await expect(
+      uc.run({ ...human, taskId: 't_ghost', to: 'todo', reason: 'x' })
+    ).rejects.toMatchObject({
       code: 'not_found',
     })
     const task = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
-    await expect(uc.run({ ...human, taskId: task.id, to: 'todo', reason: '  ' })).rejects.toMatchObject({
+    await expect(
+      uc.run({ ...human, taskId: task.id, to: 'todo', reason: '  ' })
+    ).rejects.toMatchObject({
       code: 'invalid_request',
     })
     await db.destroy()
@@ -3155,12 +3349,20 @@ describe('UpdateStatus gates (spec §6.4)', () => {
 
   it('invariant 6 (question gate): open human-assigned question gates agent in_review — Plan B wires the repo; here the seam is exercised with zero questions', async () => {
     const { db, uow } = await withAgent()
-    const task = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x', status: 'todo' })
+    const task = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'x',
+      status: 'todo',
+    })
     const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
     // with no questions present, in_review succeeds:
     await expect(
       new UpdateStatus(uow, fixedClock()).run({
-        ...agent, taskId: task.id, to: 'in_review', reason: 'pr', lease_token: claim.lease_token,
+        ...agent,
+        taskId: task.id,
+        to: 'in_review',
+        reason: 'pr',
+        lease_token: claim.lease_token,
       })
     ).resolves.toBeTruthy()
     await db.destroy()
@@ -3198,7 +3400,10 @@ export class UpdateStatus {
       const task = await repos.tasks.findById(input.taskId)
       if (!task) throw new DomainError('not_found', `task ${input.taskId} not found`)
       if (task.status === 'canceled') {
-        throw new DomainError('canceled_terminal', `task ${input.taskId} is canceled; cancel is terminal`)
+        throw new DomainError(
+          'canceled_terminal',
+          `task ${input.taskId} is canceled; cancel is terminal`
+        )
       }
 
       // Invariant 3: any transition of a claimed task requires its current fencing token.
@@ -3214,12 +3419,17 @@ export class UpdateStatus {
       if (input.to === 'done') {
         const gate = await repos.actors.getPolicy('review_gate')
         if ((gate ?? 'on') === 'on' && input.actor.kind === 'agent') {
-          throw new DomainError('agent_close_forbidden', 'agents may move work to in_review, not done (spec §6.4.5)')
+          throw new DomainError(
+            'agent_close_forbidden',
+            'agents may move work to in_review, not done (spec §6.4.5)'
+          )
         }
         // Invariant 6 seam: Plan B adds "open question assigned to a human → open_questions 409" here.
         const openDesc = await repos.tasks.countOpenDescendants(input.taskId)
         if (openDesc > 0) {
-          throw new DomainError('open_descendants', `${openDesc} descendants still open`, { open: openDesc })
+          throw new DomainError('open_descendants', `${openDesc} descendants still open`, {
+            open: openDesc,
+          })
         }
       }
 
@@ -3268,6 +3478,7 @@ git add -A && git commit -m "feat(usecases): UpdateStatus with invariants 2/3/5,
 ### Task 10: Use-cases — ClaimTask, ReleaseClaim, Heartbeat (invariants 1, 3, 4) + model-based interleaving test
 
 **Files:**
+
 - Modify: `src/application/ports.ts` (add `findActorByTokenId` to `ActorRepo`)
 - Modify: `src/infra/sqlite/actor-repo.ts` (implement it)
 - Create: `src/application/usecases/claim-task.ts`, `src/application/usecases/release-claim.ts`, `src/application/usecases/heartbeat.ts`
@@ -3374,7 +3585,10 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
 
     const canceled = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'z' })
     await new UpdateStatus(uow, fixedClock()).run({
-      ...human, taskId: canceled.id, to: 'canceled', reason: 'drop',
+      ...human,
+      taskId: canceled.id,
+      to: 'canceled',
+      reason: 'drop',
     })
     await expect(
       new ClaimTask(uow, fixedClock()).run({ ...agentA, taskId: canceled.id })
@@ -3388,25 +3602,39 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
 
   it('release/heartbeat require the current claim', async () => {
     const { db, uow, task } = await setup()
-    await expect(new ReleaseClaim(uow, fixedClock()).run({ ...agentA, taskId: task.id })).rejects.toMatchObject({
+    await expect(
+      new ReleaseClaim(uow, fixedClock()).run({ ...agentA, taskId: task.id })
+    ).rejects.toMatchObject({
       code: 'stale_lease',
     })
     const claim = await new ClaimTask(uow, fixedClock()).run({ ...agentA, taskId: task.id })
 
     await expect(
-      new Heartbeat(uow, fixedClock()).run({ ...agentB, taskId: task.id, lease_token: claim.lease_token })
+      new Heartbeat(uow, fixedClock()).run({
+        ...agentB,
+        taskId: task.id,
+        lease_token: claim.lease_token,
+      })
     ).rejects.toMatchObject({ code: 'stale_lease' })
     await expect(
-      new Heartbeat(uow, fixedClock()).run({ ...agentA, taskId: task.id, lease_token: `${task.id}:99` })
+      new Heartbeat(uow, fixedClock()).run({
+        ...agentA,
+        taskId: task.id,
+        lease_token: `${task.id}:99`,
+      })
     ).rejects.toMatchObject({ code: 'stale_lease' })
 
     const alive = await new Heartbeat(uow, fixedClock()).run({
-      ...agentA, taskId: task.id, lease_token: claim.lease_token,
+      ...agentA,
+      taskId: task.id,
+      lease_token: claim.lease_token,
     })
     expect(alive.last_heartbeat_at).toBe('2026-05-05T05:05:05.000Z')
 
     // B cannot release A's claim; A can
-    await expect(new ReleaseClaim(uow, fixedClock()).run({ ...agentB, taskId: task.id })).rejects.toMatchObject({
+    await expect(
+      new ReleaseClaim(uow, fixedClock()).run({ ...agentB, taskId: task.id })
+    ).rejects.toMatchObject({
       code: 'stale_lease',
     })
     const released = await new ReleaseClaim(uow, fixedClock()).run({ ...agentA, taskId: task.id })
@@ -3475,22 +3703,38 @@ describe('claim/release/status interleavings (model-based, spec §6.4.3/4)', () 
               if (holder !== null && oldToken) {
                 await expect(
                   statusUc.run({
-                    ...claimants[holder], taskId: task.id, to: 'in_progress',
-                    reason: 'zombie', lease_token: oldToken,
+                    ...claimants[holder],
+                    taskId: task.id,
+                    to: 'in_progress',
+                    reason: 'zombie',
+                    lease_token: oldToken,
                   })
                 ).rejects.toMatchObject({ code: 'stale_lease' })
               } else if (holder === null) {
-                await statusUc.run({ ...human, taskId: task.id, to: 'in_progress', reason: 'by hand' })
+                await statusUc.run({
+                  ...human,
+                  taskId: task.id,
+                  to: 'in_progress',
+                  reason: 'by hand',
+                })
               }
             } else {
               // statusWithLiveToken
               if (holder !== null) {
                 await statusUc.run({
-                  ...claimants[holder], taskId: task.id, to: 'in_progress',
-                  reason: 'progress', lease_token: liveToken,
+                  ...claimants[holder],
+                  taskId: task.id,
+                  to: 'in_progress',
+                  reason: 'progress',
+                  lease_token: liveToken,
                 })
               } else {
-                await statusUc.run({ ...human, taskId: task.id, to: 'in_progress', reason: 'by hand' })
+                await statusUc.run({
+                  ...human,
+                  taskId: task.id,
+                  to: 'in_progress',
+                  reason: 'by hand',
+                })
               }
             }
           }
@@ -3554,14 +3798,23 @@ export class ClaimTask {
         return new DomainError(
           'already_claimed',
           `task is claimed by ${holder?.display_name ?? 'another actor'}`,
-          { holder_handle: holder?.handle ?? null, holder_display_name: holder?.display_name ?? null }
+          {
+            holder_handle: holder?.handle ?? null,
+            holder_display_name: holder?.display_name ?? null,
+          }
         )
       }
 
       if (task.claim_token_id) throw await alreadyClaimed()
 
       const newStatus: TaskStatus = task.status === 'todo' ? 'in_progress' : task.status
-      const result = await repos.tasks.tryClaim(task.id, input.tokenId, input.actor.id, newStatus, now)
+      const result = await repos.tasks.tryClaim(
+        task.id,
+        input.tokenId,
+        input.actor.id,
+        newStatus,
+        now
+      )
       if (!result) throw await alreadyClaimed() // lost a race between check and CAS
 
       await repos.audit.append({
@@ -3574,7 +3827,10 @@ export class ClaimTask {
         reason: 'claim acquired',
         created_at: now,
       })
-      return { lease_token: formatLeaseToken(task.id, result.generation), generation: result.generation }
+      return {
+        lease_token: formatLeaseToken(task.id, result.generation),
+        generation: result.generation,
+      }
     })
   }
 }
@@ -3681,6 +3937,7 @@ export class Heartbeat {
 ```bash
 pnpm test && pnpm lint && pnpm typecheck
 ```
+
 Expected: all tests pass. If a Task 8/9 test fails, fix **the test file or the use-case per the spec decision record in the plan header** — never weaken an invariant.
 
 - [ ] **Step 10.7: Commit.**
@@ -3694,6 +3951,7 @@ git add -A && git commit -m "feat(usecases): ClaimTask/Release/Heartbeat with fe
 ### Task 11: Use-cases — AddBlock, RemoveBlock (invariant 7, cycle detection)
 
 **Files:**
+
 - Create: `src/application/usecases/add-block.ts`, `src/application/usecases/remove-block.ts`
 - Test: `src/application/usecases/add-block.test.ts`
 
@@ -3718,7 +3976,9 @@ describe('AddBlock / RemoveBlock (spec §6.3)', () => {
     const blocked = await create.run({ ...human, title: 'blocked', status: 'todo' })
 
     await new AddBlock(uow, fixedClock()).run({
-      ...human, taskId: blocked.id, blocker_id: blocker.id,
+      ...human,
+      taskId: blocked.id,
+      blocker_id: blocker.id,
     })
     const ctx = await new GetContext(
       (await import('#root/infra/sqlite/task-repo')).SqliteTaskRepo, // type anchor removed in final; see impl note
@@ -3726,7 +3986,11 @@ describe('AddBlock / RemoveBlock (spec §6.3)', () => {
     ).peek(blocked.id)
     void ctx
 
-    const audit = await new SqliteAuditRepo(db).search({ entity_type: 'task', entity_id: blocked.id, limit: 10 })
+    const audit = await new SqliteAuditRepo(db).search({
+      entity_type: 'task',
+      entity_id: blocked.id,
+      limit: 10,
+    })
     expect(audit.some((a) => a.action === 'block_added')).toBe(true)
     await db.destroy()
   })
@@ -3764,6 +4028,7 @@ describe('AddBlock / RemoveBlock (spec §6.3)', () => {
   })
 })
 ```
+
 **Implementer note:** the `GetContext(...)` block in the first test is scaffolding noise — delete it and the `void ctx` line; Task 12's own test file covers context assertions. Keep only the create/add/audit assertions.
 
 - [ ] **Step 11.2: Implement `src/application/usecases/add-block.ts`:**
@@ -3796,7 +4061,10 @@ export class AddBlock {
       const blocker = await repos.tasks.findById(input.blocker_id)
       if (!blocker) throw new DomainError('not_found', `blocker ${input.blocker_id} not found`)
       if (await repos.deps.wouldCycle(input.blocker_id, input.taskId)) {
-        throw new DomainError('dependency_cycle', `adding ${input.blocker_id} -> ${input.taskId} would create a cycle`)
+        throw new DomainError(
+          'dependency_cycle',
+          `adding ${input.blocker_id} -> ${input.taskId} would create a cycle`
+        )
       }
       await repos.deps.add(input.blocker_id, input.taskId)
       await repos.audit.append({
@@ -3863,6 +4131,7 @@ pnpm test src/application/usecases/add-block.test.ts && git add -A && git commit
 ### Task 12: Queries — GetNext (ready work) and GetContext (one-call bundle)
 
 **Files:**
+
 - Create: `src/application/usecases/get-next.ts`, `src/application/usecases/get-context.ts`
 - Test: `src/application/usecases/queries.test.ts`
 
@@ -3930,13 +4199,19 @@ describe('GetContext (spec §7.2 one-call bundle)', () => {
     const root = await create.run({ ...human, title: 'root', acceptance_criteria: 'ROOT-AC' })
     const mid = await create.run({ ...human, title: 'mid', parent_id: root.id, status: 'todo' })
     const leaf = await create.run({
-      ...human, title: 'leaf', parent_id: mid.id, status: 'todo', labels: ['infra'],
+      ...human,
+      title: 'leaf',
+      parent_id: mid.id,
+      status: 'todo',
+      labels: ['infra'],
       acceptance_criteria: 'LEAF-AC',
     })
     const blocker = await create.run({ ...human, title: 'blocker', status: 'in_progress' })
     await new AddBlock(uow, fixedClock()).run({ ...human, taskId: leaf.id, blocker_id: blocker.id })
 
-    const bundle = await new GetContext(repos.tasks, repos.deps, repos.labels).run({ taskId: leaf.id })
+    const bundle = await new GetContext(repos.tasks, repos.deps, repos.labels).run({
+      taskId: leaf.id,
+    })
     expect(bundle.task.acceptance_criteria).toBe('LEAF-AC')
     expect(bundle.ancestors.map((a) => a.title)).toEqual(['root', 'mid'])
     expect(bundle.ancestors[0]?.acceptance_criteria).toBe('ROOT-AC')
@@ -3952,8 +4227,9 @@ describe('GetContext (spec §7.2 one-call bundle)', () => {
 
   it('unknown task → not_found', async () => {
     const { db, repos } = await setup()
-    await expect(new GetContext(repos.tasks, repos.deps, repos.labels).run({ taskId: 't_ghost' }))
-      .rejects.toMatchObject({ code: 'not_found' })
+    await expect(
+      new GetContext(repos.tasks, repos.deps, repos.labels).run({ taskId: 't_ghost' })
+    ).rejects.toMatchObject({ code: 'not_found' })
     await db.destroy()
   })
 })
@@ -3998,7 +4274,13 @@ export class GetNext {
 ```ts
 import type { TaskRecord, TaskStatus } from '#root/domain/task'
 import { DomainError } from '#root/domain/errors'
-import type { BlockerRow, DependencyRepo, LabelRow, LabelRepo, TaskRepo } from '#root/application/ports'
+import type {
+  BlockerRow,
+  DependencyRepo,
+  LabelRow,
+  LabelRepo,
+  TaskRepo,
+} from '#root/application/ports'
 
 export interface ContextAncestor {
   id: string
@@ -4065,6 +4347,7 @@ git add -A && git commit -m "feat(usecases): GetNext ready-work and GetContext c
 ### Task 13: REST foundation — deps composition, auth, problem+json, idempotency hooks, bootstrap admin, entrypoint
 
 **Files:**
+
 - Modify: `src/domain/errors.ts` (add `unauthenticated` → 401)
 - Modify: `src/application/ports.ts` (add `ActorRepo.findTokenById`)
 - Modify: `src/infra/sqlite/actor-repo.ts` (implement it)
@@ -4126,7 +4409,9 @@ describe('actor & token management', () => {
     ).rejects.toMatchObject({ code: 'handle_taken' })
 
     const issued = await new CreateToken(uow, fixedClock(), seqIds()).run({
-      ...human, actor_id: agent.id, label: 'ci',
+      ...human,
+      actor_id: agent.id,
+      label: 'ci',
     })
     expect(issued.raw_token).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect(issued.token.id).toMatch(/^tok_seq/)
@@ -4168,7 +4453,14 @@ describe('actor & token management', () => {
 import type { ActorKind } from '#root/domain/task'
 import { DomainError } from '#root/domain/errors'
 import { generateRawToken, hashToken } from '#root/infra/token-hash'
-import type { ActorContext, ActorRow, Clock, IdGen, TokenRow, UnitOfWork } from '#root/application/ports'
+import type {
+  ActorContext,
+  ActorRow,
+  Clock,
+  IdGen,
+  TokenRow,
+  UnitOfWork,
+} from '#root/application/ports'
 
 export interface CreateActorInput extends ActorContext {
   kind: ActorKind
@@ -4327,7 +4619,10 @@ export class SetPolicy {
   async run(input: SetPolicyInput): Promise<void> {
     const allowed = POLICY_ALLOWLIST[input.key]
     if (!allowed || !allowed.includes(input.value)) {
-      throw new DomainError('invalid_request', `policy '${input.key}' does not accept value '${input.value}'`)
+      throw new DomainError(
+        'invalid_request',
+        `policy '${input.key}' does not accept value '${input.value}'`
+      )
     }
     const now = this.clock.now().toISOString()
     return this.uow.withTransaction(async (repos) => {
@@ -4545,7 +4840,11 @@ export const sendProblem = (
   status: number,
   code: string,
   detail: string
-): unknown => reply.code(status).type('application/problem+json').send(problem(status, code, detail))
+): unknown =>
+  reply
+    .code(status)
+    .type('application/problem+json')
+    .send(problem(status, code, detail))
 
 export const registerProblemHandlers = (app: FastifyInstance): void => {
   app.setErrorHandler((error: FastifyError, _request, reply) => {
@@ -4561,7 +4860,12 @@ export const registerProblemHandlers = (app: FastifyInstance): void => {
     const status = typeof error.statusCode === 'number' ? error.statusCode : 500
     if (status === 400) return sendProblem(reply, 400, 'invalid_request', error.message)
     app.log.error(error)
-    return sendProblem(reply, status === 401 ? 401 : 500, status === 401 ? 'unauthenticated' : 'internal_error', status === 401 ? error.message : 'internal error')
+    return sendProblem(
+      reply,
+      status === 401 ? 401 : 500,
+      status === 401 ? 'unauthenticated' : 'internal_error',
+      status === 401 ? error.message : 'internal error'
+    )
   })
 
   app.setNotFoundHandler((_request, reply) => {
@@ -4610,9 +4914,14 @@ export const registerAuth = (app: FastifyInstance, deps: AppDeps): void => {
     if (PUBLIC_PATHS.has(path)) return
     const header = request.headers.authorization
     if (!header?.startsWith('Bearer ')) {
-      throw new DomainError('unauthenticated', 'missing bearer token (Plan E adds human cookie sessions)')
+      throw new DomainError(
+        'unauthenticated',
+        'missing bearer token (Plan E adds human cookie sessions)'
+      )
     }
-    const hit = await deps.actorsRoot.findActiveTokenByHash(hashToken(header.slice('Bearer '.length)))
+    const hit = await deps.actorsRoot.findActiveTokenByHash(
+      hashToken(header.slice('Bearer '.length))
+    )
     if (!hit) throw new DomainError('unauthenticated', 'invalid or revoked token')
     request.actorRef = {
       id: hit.actor.id,
@@ -4649,10 +4958,16 @@ export const registerIdempotency = (app: FastifyInstance, deps: AppDeps): void =
       created_at: deps.clock.now().toISOString(),
     })
     if (outcome.state === 'complete') {
-      return reply.code(outcome.status).header('content-type', 'application/json').send(outcome.body)
+      return reply
+        .code(outcome.status)
+        .header('content-type', 'application/json')
+        .send(outcome.body)
     }
     if (outcome.state === 'in_flight') {
-      throw new DomainError('idempotency_in_flight', 'a request with this Idempotency-Key is in flight')
+      throw new DomainError(
+        'idempotency_in_flight',
+        'a request with this Idempotency-Key is in flight'
+      )
     }
     request.idemKey = key
   })
@@ -4695,7 +5010,11 @@ export const registerAuditRoutes = (app: FastifyInstance, deps: AppDeps): void =
     },
     async (request) => {
       const q = request.query as { entity_type?: string; entity_id?: string; limit: number }
-      return deps.auditRoot.search({ entity_type: q.entity_type, entity_id: q.entity_id, limit: q.limit })
+      return deps.auditRoot.search({
+        entity_type: q.entity_type,
+        entity_id: q.entity_id,
+        limit: q.limit,
+      })
     }
   )
 }
@@ -4800,13 +5119,25 @@ export const makeTestApp = async (): Promise<TestApp> => {
   const now = new Date().toISOString()
   await db
     .insertInto('actors')
-    .values({ id: 'a_nils', kind: 'human', handle: 'nils', display_name: 'Nils', description: '', created_at: now })
+    .values({
+      id: 'a_nils',
+      kind: 'human',
+      handle: 'nils',
+      display_name: 'Nils',
+      description: '',
+      created_at: now,
+    })
     .execute()
   await db
     .insertInto('tokens')
     .values({
-      id: 'tok_nils', actor_id: 'a_nils', token_hash: hashToken(adminToken),
-      label: 'test', created_at: now, last_used_at: null, revoked_at: null,
+      id: 'tok_nils',
+      actor_id: 'a_nils',
+      token_hash: hashToken(adminToken),
+      label: 'test',
+      created_at: now,
+      last_used_at: null,
+      revoked_at: null,
     })
     .execute()
   const app = buildApp(deps)
@@ -4844,7 +5175,11 @@ describe('app', () => {
     expect(anon.headers['content-type']).toContain('application/problem+json')
     expect(anon.json().code).toBe('unauthenticated')
 
-    const ok = await t.app.inject({ method: 'GET', url: '/audit', headers: { authorization: `Bearer ${t.adminToken}` } })
+    const ok = await t.app.inject({
+      method: 'GET',
+      url: '/audit',
+      headers: { authorization: `Bearer ${t.adminToken}` },
+    })
     expect(ok.statusCode).toBe(200)
     expect(ok.json()).toEqual([])
     await t.close()
@@ -4878,11 +5213,19 @@ describe('auth', () => {
 
   it('records token last-used on auth', async () => {
     const t = await makeTestApp()
-    await t.app.inject({ method: 'GET', url: '/audit', headers: { authorization: `Bearer ${t.adminToken}` } })
+    await t.app.inject({
+      method: 'GET',
+      url: '/audit',
+      headers: { authorization: `Bearer ${t.adminToken}` },
+    })
     // audit the touch indirectly: revoke via DB then re-auth fails
     const db = (t as unknown as { app: unknown }) && null
     void db
-    const before = await t.app.inject({ method: 'GET', url: '/audit', headers: { authorization: `Bearer ${t.adminToken}` } })
+    const before = await t.app.inject({
+      method: 'GET',
+      url: '/audit',
+      headers: { authorization: `Bearer ${t.adminToken}` },
+    })
     expect(before.statusCode).toBe(200)
     // direct check through the raw handle:
     const { SqliteActorRepo } = await import('#root/infra/sqlite/actor-repo')
@@ -4896,12 +5239,14 @@ describe('auth', () => {
   })
 })
 ```
+
 **Implementer note:** the last-used assertion needs the db handle — extend `TestApp` with `deps: AppDeps` (add `deps` to `makeTestApp`'s return, type `AppDeps`), then the test becomes:
 
 ```ts
-    const tok = await t.deps.actorsRoot.findActiveTokenByHash(hashToken(t.adminToken))
-    expect(tok?.token.last_used_at).not.toBeNull()
+const tok = await t.deps.actorsRoot.findActiveTokenByHash(hashToken(t.adminToken))
+expect(tok?.token.last_used_at).not.toBeNull()
 ```
+
 and delete the `SqliteActorRepo` scaffolding lines from the final file.
 
 `src/adapters/rest/idempotency.test.ts`:
@@ -4930,8 +5275,16 @@ describe('Idempotency-Key middleware (spec §7.3)', () => {
   it('different keys are independent; no key = no dedupe', async () => {
     const t = await setup()
     const base = { authorization: `Bearer ${t.adminToken}` }
-    const a = await t.app.inject({ method: 'POST', url: '/idem-echo', headers: { ...base, 'idempotency-key': 'k-a' } })
-    const b = await t.app.inject({ method: 'POST', url: '/idem-echo', headers: { ...base, 'idempotency-key': 'k-b' } })
+    const a = await t.app.inject({
+      method: 'POST',
+      url: '/idem-echo',
+      headers: { ...base, 'idempotency-key': 'k-a' },
+    })
+    const b = await t.app.inject({
+      method: 'POST',
+      url: '/idem-echo',
+      headers: { ...base, 'idempotency-key': 'k-b' },
+    })
     expect(a.body).not.toBe(b.body)
     await t.close()
   })
@@ -4939,11 +5292,15 @@ describe('Idempotency-Key middleware (spec §7.3)', () => {
   it('in-flight duplicate is rejected 409 idempotency_in_flight', async () => {
     const t = await setup()
     await t.deps.idemRoot.reserve({
-      actor_id: 'a_nils', idem_key: 'k-busy', request_method: 'POST',
-      request_path: '/idem-echo', created_at: new Date().toISOString(),
+      actor_id: 'a_nils',
+      idem_key: 'k-busy',
+      request_method: 'POST',
+      request_path: '/idem-echo',
+      created_at: new Date().toISOString(),
     })
     const res = await t.app.inject({
-      method: 'POST', url: '/idem-echo',
+      method: 'POST',
+      url: '/idem-echo',
       headers: { authorization: `Bearer ${t.adminToken}`, 'idempotency-key': 'k-busy' },
     })
     expect(res.statusCode).toBe(409)
@@ -4960,14 +5317,18 @@ describe('Idempotency-Key middleware (spec §7.3)', () => {
     const first = await t.app.inject({ method: 'POST', url: '/idem-boom', headers })
     expect(first.statusCode).toBe(500)
     const outcome = await t.deps.idemRoot.reserve({
-      actor_id: 'a_nils', idem_key: 'k-boom', request_method: 'POST',
-      request_path: '/idem-boom', created_at: new Date().toISOString(),
+      actor_id: 'a_nils',
+      idem_key: 'k-boom',
+      request_method: 'POST',
+      request_path: '/idem-boom',
+      created_at: new Date().toISOString(),
     })
     expect(outcome).toEqual({ state: 'reserved' }) // free again
     await t.close()
   })
 })
 ```
+
 (`TestApp` must expose `deps` per the note above.)
 
 - [ ] **Step 13.14: Verify green + full suite, hygiene, commit.**
@@ -4982,6 +5343,7 @@ git add -A && git commit -m "feat(rest): deps composition, bearer auth, problem+
 ### Task 14: Task & claim routes + API integration tests (spec §7.2, §7.4 agent loop, §11.2)
 
 **Files:**
+
 - Create: `src/adapters/rest/dto.ts`, `src/adapters/rest/routes/tasks.ts`
 - Modify: `src/adapters/rest/app.ts` (register task routes)
 - Test: `src/adapters/rest/routes/tasks.test.ts`
@@ -5192,6 +5554,7 @@ export const registerTaskRoutes = (app: FastifyInstance, deps: AppDeps): void =>
   })
 }
 ```
+
 **Implementer note:** the `Parameters<…> infer` trick in the POST /tasks body typing is optional cleverness — replace it with an explicit `interface CreateTaskBody { title: string; description?: string; acceptance_criteria?: string; parent_id?: string; status?: TaskStatus; labels?: string[] }` and cast. The `await import` in GET /tasks/:id should become a top-level import in the final file.
 
 - [ ] **Step 14.3: Register in `buildApp`** (after `registerAuditRoutes`):
@@ -5199,7 +5562,7 @@ export const registerTaskRoutes = (app: FastifyInstance, deps: AppDeps): void =>
 ```ts
 import { registerTaskRoutes } from '#root/adapters/rest/routes/tasks'
 // …
-  registerTaskRoutes(server, deps)
+registerTaskRoutes(server, deps)
 ```
 
 - [ ] **Step 14.4: Write the API integration test** `src/adapters/rest/routes/tasks.test.ts` — the §7.4 loop with real codes, on ephemeral SQLite:
@@ -5216,13 +5579,29 @@ const newAgent = async (t: TestApp, handle: string): Promise<string> => {
   const raw = randomBytes(32).toString('base64url')
   const now = new Date().toISOString()
   const id = `a_${handle}`
-  await t.deps.db.insertInto('actors').values({
-    id, kind: 'agent', handle, display_name: handle, description: '', created_at: now,
-  }).execute()
-  await t.deps.db.insertInto('tokens').values({
-    id: `tok_${handle}`, actor_id: id, token_hash: hashToken(raw), label: 'test',
-    created_at: now, last_used_at: null, revoked_at: null,
-  }).execute()
+  await t.deps.db
+    .insertInto('actors')
+    .values({
+      id,
+      kind: 'agent',
+      handle,
+      display_name: handle,
+      description: '',
+      created_at: now,
+    })
+    .execute()
+  await t.deps.db
+    .insertInto('tokens')
+    .values({
+      id: `tok_${handle}`,
+      actor_id: id,
+      token_hash: hashToken(raw),
+      label: 'test',
+      created_at: now,
+      last_used_at: null,
+      revoked_at: null,
+    })
+    .execute()
   return raw
 }
 
@@ -5234,8 +5613,15 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
 
     // 1. human files task
     const filed = await t.app.inject({
-      method: 'POST', url: '/tasks', headers: bearer(t),
-      payload: { title: 'Add rate limiter', acceptance_criteria: 'AC: 429s', status: 'todo', labels: ['infra'] },
+      method: 'POST',
+      url: '/tasks',
+      headers: bearer(t),
+      payload: {
+        title: 'Add rate limiter',
+        acceptance_criteria: 'AC: 429s',
+        status: 'todo',
+        labels: ['infra'],
+      },
     })
     expect(filed.statusCode).toBe(201)
     const task = filed.json()
@@ -5257,13 +5643,18 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
     const lease = winner.json().lease_token as string
 
     // 3. context bundle
-    const ctx = await t.app.inject({ method: 'GET', url: `/tasks/${task.id}/context`, headers: bearer(t) })
+    const ctx = await t.app.inject({
+      method: 'GET',
+      url: `/tasks/${task.id}/context`,
+      headers: bearer(t),
+    })
     expect(ctx.json().task.acceptance_criteria).toBe('AC: 429s')
 
     // heartbeat
     const hb = await t.app.inject({
-      method: 'POST', url: `/tasks/${task.id}/heartbeat`, headers: winner.headers.authorization
-        ? asAgent(ra.statusCode === 200 ? tokenA : tokenB) : {},
+      method: 'POST',
+      url: `/tasks/${task.id}/heartbeat`,
+      headers: winner.headers.authorization ? asAgent(ra.statusCode === 200 ? tokenA : tokenB) : {},
       payload: { lease_token: lease },
     })
     expect(hb.statusCode).toBe(200)
@@ -5271,17 +5662,28 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
 
     // 4. split releases the claim; old lease is dead
     const split = await t.app.inject({
-      method: 'POST', url: `/tasks/${task.id}/split`, headers: bearer(t),
-      payload: { children: [{ title: 'redis window', status: 'todo' }, { title: '429 body', status: 'todo' }] },
+      method: 'POST',
+      url: `/tasks/${task.id}/split`,
+      headers: bearer(t),
+      payload: {
+        children: [
+          { title: 'redis window', status: 'todo' },
+          { title: '429 body', status: 'todo' },
+        ],
+      },
     })
     expect(split.statusCode).toBe(201)
     const [c1, c2] = split.json().created
-    const afterSplit = (await t.app.inject({ method: 'GET', url: `/tasks/${task.id}`, headers: bearer(t) })).json()
+    const afterSplit = (
+      await t.app.inject({ method: 'GET', url: `/tasks/${task.id}`, headers: bearer(t) })
+    ).json()
     expect(afterSplit.claim_token_id).toBeNull()
     expect(afterSplit.child_count).toBe(2)
 
     const stale = await t.app.inject({
-      method: 'PATCH', url: `/tasks/${c1.id}/status`, headers: asAgent(ra.statusCode === 200 ? tokenA : tokenB),
+      method: 'PATCH',
+      url: `/tasks/${c1.id}/status`,
+      headers: asAgent(ra.statusCode === 200 ? tokenA : tokenB),
       payload: { status: 'in_review', reason: 'zombie', lease_token: lease },
     })
     expect(stale.statusCode).toBe(412)
@@ -5289,23 +5691,36 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
 
     // parent with children is not claimable
     const notLeaf = await t.app.inject({
-      method: 'POST', url: `/tasks/${task.id}/claim`, headers: asAgent(tokenB),
+      method: 'POST',
+      url: `/tasks/${task.id}/claim`,
+      headers: asAgent(tokenB),
     })
     expect(notLeaf.statusCode).toBe(409)
     expect(notLeaf.json().code).toBe('not_a_leaf')
 
     // 5. both agents claim children, open PRs, move to review with their own leases
-    for (const [child, tok] of [[c1, tokenA], [c2, tokenB]] as const) {
-      const claim = await t.app.inject({ method: 'POST', url: `/tasks/${child.id}/claim`, headers: asAgent(tok) })
+    for (const [child, tok] of [
+      [c1, tokenA],
+      [c2, tokenB],
+    ] as const) {
+      const claim = await t.app.inject({
+        method: 'POST',
+        url: `/tasks/${child.id}/claim`,
+        headers: asAgent(tok),
+      })
       expect(claim.statusCode).toBe(200)
       // without the lease token: 412
       const noLease = await t.app.inject({
-        method: 'PATCH', url: `/tasks/${child.id}/status`, headers: asAgent(tok),
+        method: 'PATCH',
+        url: `/tasks/${child.id}/status`,
+        headers: asAgent(tok),
         payload: { status: 'in_review', reason: 'pr up' },
       })
       expect(noLease.statusCode).toBe(412)
       const review = await t.app.inject({
-        method: 'PATCH', url: `/tasks/${child.id}/status`, headers: asAgent(tok),
+        method: 'PATCH',
+        url: `/tasks/${child.id}/status`,
+        headers: asAgent(tok),
         payload: { status: 'in_review', reason: 'pr up', lease_token: claim.json().lease_token },
       })
       expect(review.statusCode).toBe(200)
@@ -5313,7 +5728,9 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
 
       // agents may not close (invariant 5)
       const closeByAgent = await t.app.inject({
-        method: 'PATCH', url: `/tasks/${child.id}/status`, headers: asAgent(tok),
+        method: 'PATCH',
+        url: `/tasks/${child.id}/status`,
+        headers: asAgent(tok),
         payload: { status: 'done', reason: 'self-merge' },
       })
       expect(closeByAgent.statusCode).toBe(403)
@@ -5322,7 +5739,9 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
 
     // parent cannot be done while children are open
     const parentDoneEarly = await t.app.inject({
-      method: 'PATCH', url: `/tasks/${task.id}/status`, headers: bearer(t),
+      method: 'PATCH',
+      url: `/tasks/${task.id}/status`,
+      headers: bearer(t),
       payload: { status: 'done', reason: 'eager' },
     })
     expect(parentDoneEarly.statusCode).toBe(409)
@@ -5331,21 +5750,39 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
     // 6. human closes both children, then parent
     for (const child of [c1, c2]) {
       const done = await t.app.inject({
-        method: 'PATCH', url: `/tasks/${child.id}/status`, headers: bearer(t),
+        method: 'PATCH',
+        url: `/tasks/${child.id}/status`,
+        headers: bearer(t),
         payload: { status: 'done', reason: 'ship it' },
       })
       expect(done.statusCode).toBe(200)
     }
     const parentDone = await t.app.inject({
-      method: 'PATCH', url: `/tasks/${task.id}/status`, headers: bearer(t),
+      method: 'PATCH',
+      url: `/tasks/${task.id}/status`,
+      headers: bearer(t),
       payload: { status: 'done', reason: 'all leaves done' },
     })
     expect(parentDone.statusCode).toBe(200)
 
     // 7. the audit log reconstructs the story; board rollup is computable
-    const audit = (await t.app.inject({ method: 'GET', url: `/audit?entity_id=${task.id}&limit=100`, headers: bearer(t) })).json()
+    const audit = (
+      await t.app.inject({
+        method: 'GET',
+        url: `/audit?entity_id=${task.id}&limit=100`,
+        headers: bearer(t),
+      })
+    ).json()
     const actions = audit.map((a: { action: string }) => a.action)
-    expect(actions).toEqual(expect.arrayContaining(['task_created', 'claim_acquired', 'claim_released', 'task_split', 'status_changed']))
+    expect(actions).toEqual(
+      expect.arrayContaining([
+        'task_created',
+        'claim_acquired',
+        'claim_released',
+        'task_split',
+        'status_changed',
+      ])
+    )
     expect(audit.some((a: { reason: string }) => a.reason === 'claim released by split')).toBe(true)
 
     const board = (await t.app.inject({ method: 'GET', url: '/tasks', headers: bearer(t) })).json()
@@ -5353,7 +5790,9 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
     expect(parent.child_count).toBe(2)
 
     // ready-work query now empty for that label
-    const next = (await t.app.inject({ method: 'GET', url: '/tasks/next?label=infra', headers: bearer(t) })).json()
+    const next = (
+      await t.app.inject({ method: 'GET', url: '/tasks/next?label=infra', headers: bearer(t) })
+    ).json()
     expect(next).toEqual([])
 
     await t.close()
@@ -5361,19 +5800,35 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
 
   it('validation and idempotency at the API level', async () => {
     const t = await makeTestApp()
-    const bad = await t.app.inject({ method: 'POST', url: '/tasks', headers: bearer(t), payload: {} })
+    const bad = await t.app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: bearer(t),
+      payload: {},
+    })
     expect(bad.statusCode).toBe(400)
     expect(bad.json().code).toBe('invalid_request')
 
     const headers = { ...bearer(t), 'idempotency-key': 'file-1' }
-    const a = await t.app.inject({ method: 'POST', url: '/tasks', headers, payload: { title: 'dup-safe' } })
-    const b = await t.app.inject({ method: 'POST', url: '/tasks', headers, payload: { title: 'dup-safe' } })
+    const a = await t.app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers,
+      payload: { title: 'dup-safe' },
+    })
+    const b = await t.app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers,
+      payload: { title: 'dup-safe' },
+    })
     expect(a.body).toBe(b.body) // replay — no double-file (spec §7.3)
 
     await t.close()
   })
 })
 ```
+
 (`TestApp` already exposes `deps` per Task 13's note; if not yet added, add it now.)
 
 - [ ] **Step 14.5: Verify green + suite, hygiene, commit.**
@@ -5388,6 +5843,7 @@ git add -A && git commit -m "feat(rest): task/claim/split/status routes with §7
 ### Task 15: Dependency & label routes
 
 **Files:**
+
 - Modify: `src/application/ports.ts` + `src/infra/sqlite/label-repo.ts` (add `getById`)
 - Create: `src/application/usecases/labels.ts`, `src/adapters/rest/routes/dependencies.ts`, `src/adapters/rest/routes/labels.ts`
 - Modify: `src/adapters/rest/app.ts` (register both)
@@ -5406,7 +5862,15 @@ git add -A && git commit -m "feat(rest): task/claim/split/status routes with §7
 
 ```ts
 import { DomainError } from '#root/domain/errors'
-import type { ActorContext, Clock, IdGen, LabelRepo, LabelRow, TaskRepo, UnitOfWork } from '#root/application/ports'
+import type {
+  ActorContext,
+  Clock,
+  IdGen,
+  LabelRepo,
+  LabelRow,
+  TaskRepo,
+  UnitOfWork,
+} from '#root/application/ports'
 
 export interface CreateLabelInput extends ActorContext {
   name: string
@@ -5496,6 +5960,7 @@ export class DetachLabel {
   }
 }
 ```
+
 Add to `AppDeps['useCases']` (Task 13 file) and `makeDepsFromDb`: `createLabel`, `attachLabel`, `detachLabel`.
 
 - [ ] **Step 15.3: Implement the two route modules.**
@@ -5574,7 +6039,10 @@ const bearer = (t: TestApp): Record<string, string> => ({ authorization: `Bearer
 const mkTask = async (t: TestApp, title: string): Promise<string> =>
   (
     await t.app.inject({
-      method: 'POST', url: '/tasks', headers: bearer(t), payload: { title, status: 'todo' },
+      method: 'POST',
+      url: '/tasks',
+      headers: bearer(t),
+      payload: { title, status: 'todo' },
     })
   ).json().id as string
 
@@ -5584,43 +6052,61 @@ describe('dependency + label routes', () => {
     const blocker = await mkTask(t, 'blocker')
     const blocked = await mkTask(t, 'blocked')
 
-    const before = (await t.app.inject({ method: 'GET', url: '/tasks/next', headers: bearer(t) })).json()
+    const before = (
+      await t.app.inject({ method: 'GET', url: '/tasks/next', headers: bearer(t) })
+    ).json()
     expect(before.map((x: { id: string }) => x.id)).toContain(blocked)
 
     const ok = await t.app.inject({
-      method: 'PUT', url: `/tasks/${blocked}/blocks/${blocker}`, headers: bearer(t),
+      method: 'PUT',
+      url: `/tasks/${blocked}/blocks/${blocker}`,
+      headers: bearer(t),
     })
     expect(ok.statusCode).toBe(204)
 
     const dup = await t.app.inject({
-      method: 'PUT', url: `/tasks/${blocked}/blocks/${blocker}`, headers: bearer(t),
+      method: 'PUT',
+      url: `/tasks/${blocked}/blocks/${blocker}`,
+      headers: bearer(t),
     })
     expect(dup.statusCode).toBe(204) // idempotent PUT
 
-    const gone = (await t.app.inject({ method: 'GET', url: '/tasks/next', headers: bearer(t) })).json()
+    const gone = (
+      await t.app.inject({ method: 'GET', url: '/tasks/next', headers: bearer(t) })
+    ).json()
     expect(gone.map((x: { id: string }) => x.id)).not.toContain(blocked)
 
     const cycle = await t.app.inject({
-      method: 'PUT', url: `/tasks/${blocker}/blocks/${blocked}`, headers: bearer(t),
+      method: 'PUT',
+      url: `/tasks/${blocker}/blocks/${blocked}`,
+      headers: bearer(t),
     })
     expect(cycle.statusCode).toBe(409)
     expect(cycle.json().code).toBe('dependency_cycle')
 
     const self = await t.app.inject({
-      method: 'PUT', url: `/tasks/${blocker}/blocks/${blocker}`, headers: bearer(t),
+      method: 'PUT',
+      url: `/tasks/${blocker}/blocks/${blocker}`,
+      headers: bearer(t),
     })
     expect(self.statusCode).toBe(400)
 
     const unknown = await t.app.inject({
-      method: 'PUT', url: `/tasks/${blocked}/blocks/t_ghost`, headers: bearer(t),
+      method: 'PUT',
+      url: `/tasks/${blocked}/blocks/t_ghost`,
+      headers: bearer(t),
     })
     expect(unknown.statusCode).toBe(404)
 
     const rm = await t.app.inject({
-      method: 'DELETE', url: `/tasks/${blocked}/blocks/${blocker}`, headers: bearer(t),
+      method: 'DELETE',
+      url: `/tasks/${blocked}/blocks/${blocker}`,
+      headers: bearer(t),
     })
     expect(rm.statusCode).toBe(204)
-    const readyAgain = (await t.app.inject({ method: 'GET', url: '/tasks/next', headers: bearer(t) })).json()
+    const readyAgain = (
+      await t.app.inject({ method: 'GET', url: '/tasks/next', headers: bearer(t) })
+    ).json()
     expect(readyAgain.map((x: { id: string }) => x.id)).toContain(blocked)
     await t.close()
   })
@@ -5629,28 +6115,43 @@ describe('dependency + label routes', () => {
     const t = await makeTestApp()
     const task = await mkTask(t, 'labelled')
     const label = (
-      await t.app.inject({ method: 'POST', url: '/labels', headers: bearer(t), payload: { name: 'infra' } })
+      await t.app.inject({
+        method: 'POST',
+        url: '/labels',
+        headers: bearer(t),
+        payload: { name: 'infra' },
+      })
     ).json()
     expect(label.name).toBe('infra')
 
     const att = await t.app.inject({
-      method: 'PUT', url: `/tasks/${task}/labels/${label.id}`, headers: bearer(t),
+      method: 'PUT',
+      url: `/tasks/${task}/labels/${label.id}`,
+      headers: bearer(t),
     })
     expect(att.statusCode).toBe(204)
 
-    const ctx = (await t.app.inject({ method: 'GET', url: `/tasks/${task}/context`, headers: bearer(t) })).json()
+    const ctx = (
+      await t.app.inject({ method: 'GET', url: `/tasks/${task}/context`, headers: bearer(t) })
+    ).json()
     expect(ctx.labels.map((l: { name: string }) => l.name)).toEqual(['infra'])
 
     const missing = await t.app.inject({
-      method: 'PUT', url: `/tasks/${task}/labels/l_ghost`, headers: bearer(t),
+      method: 'PUT',
+      url: `/tasks/${task}/labels/l_ghost`,
+      headers: bearer(t),
     })
     expect(missing.statusCode).toBe(404)
 
     const det = await t.app.inject({
-      method: 'DELETE', url: `/tasks/${task}/labels/${label.id}`, headers: bearer(t),
+      method: 'DELETE',
+      url: `/tasks/${task}/labels/${label.id}`,
+      headers: bearer(t),
     })
     expect(det.statusCode).toBe(204)
-    const after = (await t.app.inject({ method: 'GET', url: `/tasks/${task}/context`, headers: bearer(t) })).json()
+    const after = (
+      await t.app.inject({ method: 'GET', url: `/tasks/${task}/context`, headers: bearer(t) })
+    ).json()
     expect(after.labels).toEqual([])
     await t.close()
   })
@@ -5669,6 +6170,7 @@ git add -A && git commit -m "feat(rest): dependency and label routes"
 ### Task 16: Admin routes — actors, tokens, policy (human-only, decision D-h)
 
 **Files:**
+
 - Create: `src/adapters/rest/routes/admin.ts`
 - Modify: `src/adapters/rest/app.ts` (register)
 - Test: `src/adapters/rest/routes/admin.test.ts`
@@ -5774,19 +6276,25 @@ describe('admin routes (human-only, D-h)', () => {
     const t = await makeTestApp()
     const agent = (
       await t.app.inject({
-        method: 'POST', url: '/admin/actors', headers: bearer(t),
+        method: 'POST',
+        url: '/admin/actors',
+        headers: bearer(t),
         payload: { kind: 'agent', handle: 'hermes-1', display_name: 'Hermes' },
       })
     ).json()
     const issued = (
       await t.app.inject({
-        method: 'POST', url: `/admin/actors/${agent.id}/tokens`, headers: bearer(t), payload: { label: 'ci' },
+        method: 'POST',
+        url: `/admin/actors/${agent.id}/tokens`,
+        headers: bearer(t),
+        payload: { label: 'ci' },
       })
     ).json()
     expect(issued.raw_token).toMatch(/^[A-Za-z0-9_-]{43}$/)
 
     const forBidden = await t.app.inject({
-      method: 'GET', url: '/admin/actors',
+      method: 'GET',
+      url: '/admin/actors',
       headers: { authorization: `Bearer ${issued.raw_token}` },
     })
     expect(forBidden.statusCode).toBe(403)
@@ -5798,40 +6306,60 @@ describe('admin routes (human-only, D-h)', () => {
     const t = await makeTestApp()
     const agent = (
       await t.app.inject({
-        method: 'POST', url: '/admin/actors', headers: bearer(t),
+        method: 'POST',
+        url: '/admin/actors',
+        headers: bearer(t),
         payload: { kind: 'agent', handle: 'hermes-1', display_name: 'Hermes' },
       })
     ).json()
     const issued = (
       await t.app.inject({
-        method: 'POST', url: `/admin/actors/${agent.id}/tokens`, headers: bearer(t), payload: { label: 'ci' },
+        method: 'POST',
+        url: `/admin/actors/${agent.id}/tokens`,
+        headers: bearer(t),
+        payload: { label: 'ci' },
       })
     ).json()
     const agentHeaders = { authorization: `Bearer ${issued.raw_token}` }
 
     const task = (
       await t.app.inject({
-        method: 'POST', url: '/tasks', headers: bearer(t), payload: { title: 'x', status: 'todo' },
+        method: 'POST',
+        url: '/tasks',
+        headers: bearer(t),
+        payload: { title: 'x', status: 'todo' },
       })
     ).json()
     const claim = await t.app.inject({
-      method: 'POST', url: `/tasks/${task.id}/claim`, headers: agentHeaders,
+      method: 'POST',
+      url: `/tasks/${task.id}/claim`,
+      headers: agentHeaders,
     })
     expect(claim.statusCode).toBe(200)
 
     const revoke = await t.app.inject({
-      method: 'POST', url: `/admin/tokens/${issued.token_id}/revoke`, headers: bearer(t),
+      method: 'POST',
+      url: `/admin/tokens/${issued.token_id}/revoke`,
+      headers: bearer(t),
     })
     expect(revoke.statusCode).toBe(204)
 
     const after = await t.app.inject({
-      method: 'GET', url: '/audit', headers: agentHeaders,
+      method: 'GET',
+      url: '/audit',
+      headers: agentHeaders,
     })
     expect(after.statusCode).toBe(401)
     expect(after.json().code).toBe('unauthenticated')
 
     // audit recorded who issued/revoked which token (per-actor audit, spec §5)
-    const audit = (await t.app.inject({ method: 'GET', url: '/audit?entity_type=actor&limit=50', headers: bearer(t) })).json()
+    const audit = (
+      await t.app.inject({
+        method: 'GET',
+        url: '/audit?entity_type=actor&limit=50',
+        headers: bearer(t),
+      })
+    ).json()
     expect(audit.some((a: { action: string }) => a.action === 'token_created')).toBe(true)
     expect(audit.some((a: { action: string }) => a.action === 'token_revoked')).toBe(true)
     await t.close()
@@ -5840,7 +6368,9 @@ describe('admin routes (human-only, D-h)', () => {
   it('duplicate handle → 409 handle_taken; policy flip changes agent close behavior end-to-end', async () => {
     const t = await makeTestApp()
     const dup = await t.app.inject({
-      method: 'POST', url: '/admin/actors', headers: bearer(t),
+      method: 'POST',
+      url: '/admin/actors',
+      headers: bearer(t),
       payload: { kind: 'human', handle: 'nils', display_name: 'Other' },
     })
     expect(dup.statusCode).toBe(409)
@@ -5848,43 +6378,65 @@ describe('admin routes (human-only, D-h)', () => {
 
     const agent = (
       await t.app.inject({
-        method: 'POST', url: '/admin/actors', headers: bearer(t),
+        method: 'POST',
+        url: '/admin/actors',
+        headers: bearer(t),
         payload: { kind: 'agent', handle: 'hermes-2', display_name: 'H2' },
       })
     ).json()
     const issued = (
       await t.app.inject({
-        method: 'POST', url: `/admin/actors/${agent.id}/tokens`, headers: bearer(t), payload: { label: 'l' },
+        method: 'POST',
+        url: `/admin/actors/${agent.id}/tokens`,
+        headers: bearer(t),
+        payload: { label: 'l' },
       })
     ).json()
     const agentHeaders = { authorization: `Bearer ${issued.raw_token}` }
     const task = (
       await t.app.inject({
-        method: 'POST', url: '/tasks', headers: bearer(t), payload: { title: 'closey', status: 'todo' },
+        method: 'POST',
+        url: '/tasks',
+        headers: bearer(t),
+        payload: { title: 'closey', status: 'todo' },
       })
     ).json()
 
     const denied = await t.app.inject({
-      method: 'PATCH', url: `/tasks/${task.id}/status`, headers: agentHeaders,
+      method: 'PATCH',
+      url: `/tasks/${task.id}/status`,
+      headers: agentHeaders,
       payload: { status: 'done', reason: 'gate' },
     })
     expect(denied.statusCode).toBe(403)
 
     const off = await t.app.inject({
-      method: 'PUT', url: '/admin/policy/review_gate', headers: bearer(t), payload: { value: 'off' },
+      method: 'PUT',
+      url: '/admin/policy/review_gate',
+      headers: bearer(t),
+      payload: { value: 'off' },
     })
     expect(off.statusCode).toBe(200)
     const allowed = await t.app.inject({
-      method: 'PATCH', url: `/tasks/${task.id}/status`, headers: agentHeaders,
+      method: 'PATCH',
+      url: `/tasks/${task.id}/status`,
+      headers: agentHeaders,
       payload: { status: 'done', reason: 'gate off' },
     })
     expect(allowed.statusCode).toBe(200)
 
     const badPolicy = await t.app.inject({
-      method: 'PUT', url: '/admin/policy/review_gate', headers: bearer(t), payload: { value: 'maybe' },
+      method: 'PUT',
+      url: '/admin/policy/review_gate',
+      headers: bearer(t),
+      payload: { value: 'maybe' },
     })
     expect(badPolicy.statusCode).toBe(400)
-    const unknownKey = await t.app.inject({ method: 'GET', url: '/admin/policy/nope', headers: bearer(t) })
+    const unknownKey = await t.app.inject({
+      method: 'GET',
+      url: '/admin/policy/nope',
+      headers: bearer(t),
+    })
     expect(unknownKey.statusCode).toBe(404)
     await t.close()
   })
@@ -5903,11 +6455,12 @@ git add -A && git commit -m "feat(rest): admin routes for actors, tokens, policy
 ### Task 17: OpenAPI 3.1 contract — committed spec, public serve, drift test (decision D-k)
 
 **Files:**
+
 - Create: `openapi/openapi.yaml`
 - Modify: `src/adapters/rest/app.ts` (serve the spec)
 - Test: `src/adapters/rest/openapi-contract.test.ts`
 
-- [ ] **Step 17.1: Create `openapi/openapi.yaml`** (this file *is* the product contract — spec §7.1; any API change = committed diff here):
+- [ ] **Step 17.1: Create `openapi/openapi.yaml`** (this file _is_ the product contract — spec §7.1; any API change = committed diff here):
 
 ```yaml
 openapi: 3.1.0
@@ -6217,7 +6770,8 @@ paths:
               type: object
               required: [name]
               additionalProperties: false
-              properties: { name: { type: string, minLength: 1, maxLength: 60 }, color: { type: string } }
+              properties:
+                { name: { type: string, minLength: 1, maxLength: 60 }, color: { type: string } }
       responses:
         '201':
           description: label
@@ -6393,8 +6947,35 @@ components:
       type: object
       properties:
         task: { $ref: '#/components/schemas/Task' }
-        ancestors: { type: array, items: { type: object, properties: { id: { type: string }, title: { type: string }, status: { $ref: '#/components/schemas/TaskStatus' }, acceptance_criteria: { type: string } } } }
-        blockers: { type: array, items: { type: object, properties: { id: { type: string }, title: { type: string }, status: { $ref: '#/components/schemas/TaskStatus' } } } }
+        ancestors:
+          {
+            type: array,
+            items:
+              {
+                type: object,
+                properties:
+                  {
+                    id: { type: string },
+                    title: { type: string },
+                    status: { $ref: '#/components/schemas/TaskStatus' },
+                    acceptance_criteria: { type: string },
+                  },
+              },
+          }
+        blockers:
+          {
+            type: array,
+            items:
+              {
+                type: object,
+                properties:
+                  {
+                    id: { type: string },
+                    title: { type: string },
+                    status: { $ref: '#/components/schemas/TaskStatus' },
+                  },
+              },
+          }
         labels: { type: array, items: { $ref: '#/components/schemas/Label' } }
         open_questions: { type: array }
         links: { type: array }
@@ -6438,7 +7019,25 @@ components:
         status: { type: integer }
         code:
           type: string
-          enum: [not_found, forbidden, unauthenticated, invalid_request, internal_error, handle_taken, already_claimed, not_a_leaf, open_descendants, canceled_terminal, stale_lease, dependency_cycle, agent_close_forbidden, open_questions, threads_on_parent, idempotency_in_flight]
+          enum:
+            [
+              not_found,
+              forbidden,
+              unauthenticated,
+              invalid_request,
+              internal_error,
+              handle_taken,
+              already_claimed,
+              not_a_leaf,
+              open_descendants,
+              canceled_terminal,
+              stale_lease,
+              dependency_cycle,
+              agent_close_forbidden,
+              open_questions,
+              threads_on_parent,
+              idempotency_in_flight,
+            ]
         detail: { type: string }
 ```
 
@@ -6448,10 +7047,10 @@ components:
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 // …
-  server.get('/openapi.yaml', async (_request, reply) => {
-    const spec = await readFile(join(process.cwd(), 'openapi', 'openapi.yaml'), 'utf8')
-    return reply.type('application/yaml').send(spec)
-  })
+server.get('/openapi.yaml', async (_request, reply) => {
+  const spec = await readFile(join(process.cwd(), 'openapi', 'openapi.yaml'), 'utf8')
+  return reply.type('application/yaml').send(spec)
+})
 ```
 
 - [ ] **Step 17.3: Write the contract test** `src/adapters/rest/openapi-contract.test.ts`:
@@ -6486,7 +7085,9 @@ interface RouteNode {
 
 const routeKeys = (app: FastifyInstance): string[] => {
   const keys = new Set<string>()
-  const json = app.printRoutes({ commonPrefix: false, output: 'json' }) as unknown as { tree: RouteNode }
+  const json = app.printRoutes({ commonPrefix: false, output: 'json' }) as unknown as {
+    tree: RouteNode
+  }
   const walk = (node: RouteNode, prefix: string): void => {
     for (const [key, child] of Object.entries(node)) {
       if (SKIP_NODE_KEYS.has(key)) continue
@@ -6513,7 +7114,10 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
   })
 
   it('no drift: every documented path+method is served, every served route is documented', async () => {
-    const spec = parse(await readFile('openapi/openapi.yaml', 'utf8')) as { openapi: string; paths: Record<string, SpecPathItem> }
+    const spec = parse(await readFile('openapi/openapi.yaml', 'utf8')) as {
+      openapi: string
+      paths: Record<string, SpecPathItem>
+    }
     expect(spec.openapi).toBe('3.1.0')
 
     const t = await makeTestApp()
@@ -6538,6 +7142,7 @@ git add -A && git commit -m "feat(api): OpenAPI 3.1 contract, served spec, drift
 ### Task 18: Acceptance scenario (spec §14, agent-side) + final gate
 
 **Files:**
+
 - Test: `src/adapters/rest/scenarios.test.ts`
 
 - [ ] **Step 18.1: Write the acceptance test** `src/adapters/rest/scenarios.test.ts`:
@@ -6546,12 +7151,16 @@ git add -A && git commit -m "feat(api): OpenAPI 3.1 contract, served spec, drift
 import { describe, expect, it } from 'vitest'
 import { makeTestApp, type TestApp } from '#root/testing/test-app'
 
-const bearer = (t: TestApp, token: string): Record<string, string> => ({ authorization: `Bearer ${token}` })
+const bearer = (t: TestApp, token: string): Record<string, string> => ({
+  authorization: `Bearer ${token}`,
+})
 
 const createActor = async (t: TestApp, kind: 'human' | 'agent', handle: string): Promise<string> =>
   (
     await t.app.inject({
-      method: 'POST', url: '/admin/actors', headers: bearer(t, t.adminToken),
+      method: 'POST',
+      url: '/admin/actors',
+      headers: bearer(t, t.adminToken),
       payload: { kind, handle, display_name: handle },
     })
   ).json().id as string
@@ -6559,7 +7168,9 @@ const createActor = async (t: TestApp, kind: 'human' | 'agent', handle: string):
 const issueToken = async (t: TestApp, actorId: string): Promise<string> =>
   (
     await t.app.inject({
-      method: 'POST', url: `/admin/actors/${actorId}/tokens`, headers: bearer(t, t.adminToken),
+      method: 'POST',
+      url: `/admin/actors/${actorId}/tokens`,
+      headers: bearer(t, t.adminToken),
       payload: { label: 'acceptance' },
     })
   ).json().raw_token as string
@@ -6580,8 +7191,15 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
     // §14.2 — human files task with AC → todo (spec.md upload is Plan B)
     const task = (
       await t.app.inject({
-        method: 'POST', url: '/tasks', headers: nils,
-        payload: { title: 'Rate limiter', description: 'protect /api', acceptance_criteria: '429 under load', status: 'todo' },
+        method: 'POST',
+        url: '/tasks',
+        headers: nils,
+        payload: {
+          title: 'Rate limiter',
+          description: 'protect /api',
+          acceptance_criteria: '429 under load',
+          status: 'todo',
+        },
       })
     ).json()
 
@@ -6599,44 +7217,65 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
     // §14.4 — winner splits into 2 children; claim auto-released; claims a child
     const split = (
       await t.app.inject({
-        method: 'POST', url: `/tasks/${task.id}/split`, headers: bearer(t, sess1),
-        payload: { children: [
-          { title: 'redis window', acceptance_criteria: 'sliding', status: 'todo' },
-          { title: '429 payload', acceptance_criteria: 'RFC', status: 'todo' },
-        ] },
+        method: 'POST',
+        url: `/tasks/${task.id}/split`,
+        headers: bearer(t, sess1),
+        payload: {
+          children: [
+            { title: 'redis window', acceptance_criteria: 'sliding', status: 'todo' },
+            { title: '429 payload', acceptance_criteria: 'RFC', status: 'todo' },
+          ],
+        },
       })
     ).json()
-    const parentAfter = (await t.app.inject({ method: 'GET', url: `/tasks/${task.id}`, headers: nils })).json()
+    const parentAfter = (
+      await t.app.inject({ method: 'GET', url: `/tasks/${task.id}`, headers: nils })
+    ).json()
     expect(parentAfter.claim_token_id).toBeNull()
     const c1 = split.created[0].id as string
     const c2 = split.created[1].id as string
     expect(
-      (await t.app.inject({ method: 'POST', url: `/tasks/${c1}/claim`, headers: bearer(t, sess1) })).statusCode
+      (await t.app.inject({ method: 'POST', url: `/tasks/${c1}/claim`, headers: bearer(t, sess1) }))
+        .statusCode
     ).toBe(200)
 
     // §14.5 — question gate seam: no threads exist in Plan A, so review proceeds (gate wired in B)
 
     // §14.6 — second session claims the sibling; both reach in_review; humans close
     expect(
-      (await t.app.inject({ method: 'POST', url: `/tasks/${c2}/claim`, headers: bearer(t, sess2) })).statusCode
+      (await t.app.inject({ method: 'POST', url: `/tasks/${c2}/claim`, headers: bearer(t, sess2) }))
+        .statusCode
     ).toBe(200)
-    for (const [child, tok] of [[c1, sess1], [c2, sess2]] as const) {
-      const claim = await t.app.inject({ method: 'POST', url: `/tasks/${child}/claim`, headers: bearer(t, tok) })
+    for (const [child, tok] of [
+      [c1, sess1],
+      [c2, sess2],
+    ] as const) {
+      const claim = await t.app.inject({
+        method: 'POST',
+        url: `/tasks/${child}/claim`,
+        headers: bearer(t, tok),
+      })
       // first claim above may already hold it; only c1 double-claims — handle both outcomes:
       if (claim.statusCode === 409) continue
       const review = await t.app.inject({
-        method: 'PATCH', url: `/tasks/${child}/status`, headers: bearer(t, tok),
+        method: 'PATCH',
+        url: `/tasks/${child}/status`,
+        headers: bearer(t, tok),
         payload: { status: 'in_review', reason: 'PR ready', lease_token: claim.json().lease_token },
       })
       expect(review.statusCode).toBe(200)
     }
     // c1 review (holder is sess1 from §14.4 claim):
-    const c1Claim = (await t.app.inject({ method: 'GET', url: `/tasks/${c1}`, headers: nils })).json()
+    const c1Claim = (
+      await t.app.inject({ method: 'GET', url: `/tasks/${c1}`, headers: nils })
+    ).json()
     if (c1Claim.status !== 'in_review') {
       // re-claim was impossible (already claimed) — drive review with the live lease:
       const lease = `${c1}:${c1Claim.claim_generation}`
       const review = await t.app.inject({
-        method: 'PATCH', url: `/tasks/${c1}/status`, headers: bearer(t, sess1),
+        method: 'PATCH',
+        url: `/tasks/${c1}/status`,
+        headers: bearer(t, sess1),
         payload: { status: 'in_review', reason: 'PR ready', lease_token: lease },
       })
       expect(review.statusCode).toBe(200)
@@ -6646,7 +7285,9 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
     expect(
       (
         await t.app.inject({
-          method: 'PATCH', url: `/tasks/${c1}/status`, headers: bearer(t, sess1),
+          method: 'PATCH',
+          url: `/tasks/${c1}/status`,
+          headers: bearer(t, sess1),
           payload: { status: 'done', reason: 'nope' },
         })
       ).json().code
@@ -6656,7 +7297,9 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
       expect(
         (
           await t.app.inject({
-            method: 'PATCH', url: `/tasks/${child}/status`, headers: bearer(t, anaToken),
+            method: 'PATCH',
+            url: `/tasks/${child}/status`,
+            headers: bearer(t, anaToken),
             payload: { status: 'done', reason: 'reviewed, LGTM' },
           })
         ).statusCode
@@ -6665,33 +7308,54 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
     expect(
       (
         await t.app.inject({
-          method: 'PATCH', url: `/tasks/${task.id}/status`, headers: nils,
+          method: 'PATCH',
+          url: `/tasks/${task.id}/status`,
+          headers: nils,
           payload: { status: 'done', reason: 'all leaves done' },
         })
       ).statusCode
     ).toBe(200)
 
     // §14.7 — audit reconstructs the story; rollups visible; nothing hidden (ana sees nils' actions)
-    const audit = (await t.app.inject({ method: 'GET', url: `/audit?limit=200`, headers: bearer(t, anaToken) })).json()
+    const audit = (
+      await t.app.inject({ method: 'GET', url: `/audit?limit=200`, headers: bearer(t, anaToken) })
+    ).json()
     const story = audit.map((a: { action: string }) => a.action)
     expect(story).toEqual(
-      expect.arrayContaining(['actor_created', 'token_created', 'task_created', 'claim_acquired', 'already_claimed'.replace('already_claimed', 'claim_acquired')])
+      expect.arrayContaining([
+        'actor_created',
+        'token_created',
+        'task_created',
+        'claim_acquired',
+        'already_claimed'.replace('already_claimed', 'claim_acquired'),
+      ])
     )
     expect(story.filter((a: string) => a === 'claim_acquired').length).toBeGreaterThanOrEqual(3)
     expect(story).toContain('task_split')
     expect(story.filter((a: string) => a === 'status_changed').length).toBeGreaterThanOrEqual(5)
 
-    const board = (await t.app.inject({ method: 'GET', url: '/tasks', headers: bearer(t, anaToken) })).json()
+    const board = (
+      await t.app.inject({ method: 'GET', url: '/tasks', headers: bearer(t, anaToken) })
+    ).json()
     const parent = board.find((x: { id: string }) => x.id === task.id)
     expect(parent.status).toBe('done')
     expect(parent.child_count).toBe(2)
-    expect(board.filter((x: { parent_id: string | null }) => x.parent_id === task.id).every((x: { status: string }) => x.status === 'done')).toBe(true)
-    expect((await t.app.inject({ method: 'GET', url: '/tasks/next', headers: bearer(t, anaToken) })).json()).toEqual([])
+    expect(
+      board
+        .filter((x: { parent_id: string | null }) => x.parent_id === task.id)
+        .every((x: { status: string }) => x.status === 'done')
+    ).toBe(true)
+    expect(
+      (
+        await t.app.inject({ method: 'GET', url: '/tasks/next', headers: bearer(t, anaToken) })
+      ).json()
+    ).toEqual([])
 
     await t.close()
   })
 })
 ```
+
 **Implementer note:** the `already_claimed'.replace(...)` line is obfuscated noise — in the final file write `expect(story).toEqual(expect.arrayContaining(['actor_created', 'token_created', 'task_created', 'claim_acquired', 'claim_released', 'task_split', 'status_changed']))`. Also simplify the c1/c2 review dance: after the split, **release nothing** — sess1 still holds the child claims made in §14.4/§14.6, and each session patches `in_review` with its own live lease exactly once; drop the `if (claim.statusCode === 409) continue` fallback by claiming c1 in §14.4 and c2 in §14.6 only, then in_review each with that claim's returned `lease_token`. The final file must have zero branches on `claim.statusCode`.
 
 - [ ] **Step 18.2: Final gate.**
@@ -6702,6 +7366,7 @@ pnpm test:coverage   # global ≥85%, domain 100% — add tests to close gaps, n
 pnpm lint && pnpm typecheck
 pnpm build && node -e "console.log('build ok')"
 ```
+
 Expected: all green.
 
 - [ ] **Step 18.3: Commit.**
@@ -6716,22 +7381,22 @@ git add -A && git commit -m "test(acceptance): spec §14 agent-side end-to-end s
 
 **1. Spec coverage** — Plan A scope, requirement → implementing task:
 
-| Spec | Where |
-|---|---|
-| §5 actors, roles, hashed one-time tokens, per-actor audit | T2 (codes), T13 (auth/bootstrap), T16 (admin) |
-| §6.1 task fields incl. separate `acceptance_criteria`, soft-cancel-only | T2, T3 (schema), T9 (`canceled_terminal`) |
-| §6.2 split atomicity, claim auto-release, fencing generation bump | T8 (+ test asserts old lease dead) |
-| §6.3 blocks + cycle detection + `ready()` | T5 (cycle CTE), T11, T12, T15 |
-| §6.4 invariants 1–5, 7 | T10 (1,3,4), T9 (2,5), structural (7); #6 seam wired in T9, behavior in Plan B |
-| §6.7 audit append-only + activity search + machine reasons | T3 (no update/delete paths), T4, T13 (route) |
-| §7.1 contract-first | T17 |
-| §7.2 endpoints (non-Plan-B subset) | T14 (tasks/claim/…), T15, T16 |
-| §7.3 idempotency incl. replay + crash-retry | T6, T13 (middleware), T14 (replay test) |
-| §7.4 loop | T14 integration test |
-| §10 security (bearer, SHA-256 at rest, last-used, no bypass paths) | T13; rate-limit hook deferred (noted in header) |
-| §11 errors RFC 9457 + all stable codes | T2 codes, T13 handler, T14/T15/T16 assert each code |
-| §11 tests 1–3 (domain/property, API integration, contract) | T2/T10, T14/T18, T17; test 4 (MCP parity) is Plan D, test 5 (Playwright) is Plan E |
-| §14 acceptance agent-side | T18; OIDC-login half is Plan E |
+| Spec                                                                    | Where                                                                              |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| §5 actors, roles, hashed one-time tokens, per-actor audit               | T2 (codes), T13 (auth/bootstrap), T16 (admin)                                      |
+| §6.1 task fields incl. separate `acceptance_criteria`, soft-cancel-only | T2, T3 (schema), T9 (`canceled_terminal`)                                          |
+| §6.2 split atomicity, claim auto-release, fencing generation bump       | T8 (+ test asserts old lease dead)                                                 |
+| §6.3 blocks + cycle detection + `ready()`                               | T5 (cycle CTE), T11, T12, T15                                                      |
+| §6.4 invariants 1–5, 7                                                  | T10 (1,3,4), T9 (2,5), structural (7); #6 seam wired in T9, behavior in Plan B     |
+| §6.7 audit append-only + activity search + machine reasons              | T3 (no update/delete paths), T4, T13 (route)                                       |
+| §7.1 contract-first                                                     | T17                                                                                |
+| §7.2 endpoints (non-Plan-B subset)                                      | T14 (tasks/claim/…), T15, T16                                                      |
+| §7.3 idempotency incl. replay + crash-retry                             | T6, T13 (middleware), T14 (replay test)                                            |
+| §7.4 loop                                                               | T14 integration test                                                               |
+| §10 security (bearer, SHA-256 at rest, last-used, no bypass paths)      | T13; rate-limit hook deferred (noted in header)                                    |
+| §11 errors RFC 9457 + all stable codes                                  | T2 codes, T13 handler, T14/T15/T16 assert each code                                |
+| §11 tests 1–3 (domain/property, API integration, contract)              | T2/T10, T14/T18, T17; test 4 (MCP parity) is Plan D, test 5 (Playwright) is Plan E |
+| §14 acceptance agent-side                                               | T18; OIDC-login half is Plan E                                                     |
 
 **2. Placeholder scan:** every code step contains complete code; the three "implementer note" blocks mark deliberate scaffolding-in-test-drafts with their final form spelled out — no TBDs, no "similar to Task N".
 
