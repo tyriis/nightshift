@@ -1628,7 +1628,7 @@ describe('SqliteTaskRepo', () => {
     await seedToken(db, 'tok_gate', 'a_agent')
     await repo.create(draft('t_claimed', null, 4)) // claimed gate
     await sql`update tasks set claim_token_id = 'tok_gate' where id = 't_claimed'`.execute(db)
-    await repo.create(draft('t_gate_blocker', null, 6)) // stays backlog → unmet
+    await repo.create({ ...draft('t_gate_blocker', null, 6), status: 'backlog' }) // unmet blocker; todo would be a ready leaf under ruling A
     await repo.create(draft('t_depblocked', null, 5)) // dependency gate
     await sql`insert into dependencies (blocker_id, blocked_id)
               values ('t_gate_blocker', 't_depblocked')`.execute(db)
