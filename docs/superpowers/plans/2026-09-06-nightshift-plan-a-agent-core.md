@@ -1153,6 +1153,14 @@ git add -A && git commit -m "feat(infra): sqlite schema, in-code kysely migratio
 
 ### Task 4: Application ports + audit and task repositories
 
+> **Amendment (oracle ruling A, 2026-09-06):** spec §6.3 `ready()` has **no parent-status gate** —
+> a todo leaf under a live parent IS ready (required for the §7.4/§14 discovery flow: split children
+> must be discoverable while the parent is in progress). The original Task-4 and Task-12 test fixtures
+> had slips asserting the opposite; both are amended inline in this file. The committed `task-repo.ts`
+> additionally renders the raw predicates as typed `sql<SqlBool>` consts (`isLeaf`, `noUnmetBlockers`,
+> `hasLabel(label)`) passed bare to `.where()`, and uses `.selectAll('tasks')` instead of `sql<TaskRow>`
+> aliases (SQLite rejects `… as task`) — semantics identical to the blocks below.
+
 **Files:**
 
 - Create: `src/application/ports.ts`, `src/infra/sqlite/audit-repo.ts`, `src/infra/sqlite/task-repo.ts`, `src/testing/fixtures.ts`
@@ -1560,14 +1568,14 @@ const setup = async () => {
   return db
 }
 
-const draft = (id: string, parentId: string | null = null) => ({
+const draft = (id: string, parentId: string | null = null, position = 1) => ({
   id,
   parent_id: parentId,
   title: `Task ${id}`,
   description: 'd',
   acceptance_criteria: 'ac',
   status: 'todo' as const,
-  position: 1,
+  position,
   created_by: 'a_creator',
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
@@ -1609,16 +1617,19 @@ describe('SqliteTaskRepo', () => {
   it('listReady applies every gate and the label filter', async () => {
     const db = await setup()
     const repo = new SqliteTaskRepo(db)
-    await repo.create(draft('t_ready'))
-    await repo.create(draft('t_parent'))
-    await repo.create(draft('t_child', 't_parent'))
-    await repo.create({ ...draft('t_blocked'), status: 'backlog' })
+    // spec §6.3: NO parent-status gate — a todo leaf under a live todo parent is ready
+    // (oracle ruling A). Distinct positions make the ordered assertion deterministic,
+    // since positions are only unique per-parent.
+    await repo.create(draft('t_parent', null, 2))
+    await repo.create(draft('t_child', 't_parent', 1)) // todo leaf under live parent → ready
+    await repo.create({ ...draft('t_blocked', null, 1), status: 'backlog' }) // status gate
+    await repo.create(draft('t_ready', null, 3))
     await sql`insert into labels (id, name, color, created_at)
               values ('l_infra', 'infra', '#f00', '2026-01-01')`.execute(db)
     await sql`insert into task_labels (task_id, label_id) values ('t_ready', 'l_infra')`.execute(db)
 
     const all = await repo.listReady({ limit: 10 })
-    expect(all.map((r) => r.task.id)).toEqual(['t_ready'])
+    expect(all.map((r) => r.task.id)).toEqual(['t_child', 't_ready'])
     const labeled = await repo.listReady({ label: 'infra', limit: 10 })
     expect(labeled.map((r) => r.task.id)).toEqual(['t_ready'])
     const other = await repo.listReady({ label: 'ui', limit: 10 })
@@ -4233,20 +4244,23 @@ describe('GetNext (spec §7.2 ready-work query)', () => {
   it('returns only ready leaves, ordered by position, label-filterable, limit respected', async () => {
     const { db, uow, repos } = await setup()
     const create = new CreateTask(uow, fixedClock(), seqIds())
+    // oracle ruling A: spec §6.3 has NO parent gate — a todo leaf under a live todo
+    // parent IS ready. Parent created first so positions are deterministic:
+    // roots p=1, a=2, b=3, c=4(backlog); p1 = position 1 under p. Ready order: [p1, a, b].
+    const parent = await create.run({ ...human, title: 'p', status: 'todo' })
     const a = await create.run({ ...human, title: 'a', status: 'todo', labels: ['infra'] })
     const b = await create.run({ ...human, title: 'b', status: 'todo', labels: ['ui'] })
     const backlog = await create.run({ ...human, title: 'c' })
-    const parent = await create.run({ ...human, title: 'p', status: 'todo' })
-    await create.run({ ...human, title: 'p1', parent_id: parent.id, status: 'todo' })
+    const p1 = await create.run({ ...human, title: 'p1', parent_id: parent.id, status: 'todo' })
 
     const next = new GetNext(repos.tasks)
-    expect((await next.run({})).map((t) => t.task.id)).toEqual([a.id, b.id])
+    expect((await next.run({})).map((t) => t.task.id)).toEqual([p1.id, a.id, b.id])
     expect((await next.run({ label: 'ui' })).map((t) => t.task.id)).toEqual([b.id])
-    expect((await next.run({ limit: 1 })).map((t) => t.task.id)).toEqual([a.id])
+    expect((await next.run({ limit: 1 })).map((t) => t.task.id)).toEqual([p1.id])
 
     // claiming removes it from ready
     await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: a.id })
-    expect((await next.run({})).map((t) => t.task.id)).toEqual([b.id])
+    expect((await next.run({})).map((t) => t.task.id)).toEqual([p1.id, b.id])
     void backlog
     void parent
     await db.destroy()
