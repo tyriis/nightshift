@@ -2100,14 +2100,19 @@ export class SqliteDependencyRepo implements DependencyRepo {
   }
 
   async wouldCycle(blockerId: string, blockedId: string): Promise<boolean> {
-    // cycle iff `blockerId` already appears among the transitive blockers of `blockedId`
+    // Adding "blockerId blocks blockedId" closes a cycle iff blockedId ALREADY
+    // transitively blocks blockerId — i.e. blockedId appears among the transitive
+    // blockers of blockerId. (Plan verbatim had the two interpolations swapped, which
+    // detects "edge already transitively implied" instead — fails the plan's own
+    // cycle test.) Anchor + recursion stay on blocked_id so SQLite uses
+    // dependencies_blocked_idx.
     const r = await sql<{ hit: number }>`
       with recursive r(id) as (
-        select blocker_id from dependencies where blocked_id = ${blockedId}
+        select blocker_id from dependencies where blocked_id = ${blockerId}
         union
         select d.blocker_id from dependencies d join r on d.blocked_id = r.id
       )
-      select 1 as hit from r where r.id = ${blockerId} limit 1
+      select 1 as hit from r where r.id = ${blockedId} limit 1
     `.execute(this.db)
     return r.rows.length > 0
   }
