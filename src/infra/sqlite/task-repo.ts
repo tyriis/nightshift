@@ -39,14 +39,6 @@ const noUnmetBlockers = sql<SqlBool>`
                 join tasks b on b.id = d.blocker_id
                where d.blocked_id = tasks.id and b.status != 'done')`
 
-// A subtask joins the ready queue only once its parent is settled (done/canceled):
-// children of an open parent belong to that parent's claim while it is decomposed
-// (required by the plan's Task-4 listReady test and Task-12 GetNext test; the
-// open_descendants invariant guarantees settled parents have closed subtrees).
-const parentSettled = sql<SqlBool>`
-  not exists (select 1 from tasks p
-               where tasks.parent_id = p.id and p.status not in ('done','canceled'))`
-
 const hasLabel = (label: string): RawBuilder<SqlBool> => sql<SqlBool>`
   exists (select 1 from task_labels tl
             join labels l on l.id = tl.label_id
@@ -126,7 +118,6 @@ export class SqliteTaskRepo implements TaskRepo {
       .where('tasks.claim_token_id', 'is', null)
       .where(isLeaf)
       .where(noUnmetBlockers)
-      .where(parentSettled)
       .orderBy('tasks.position', 'asc')
     const query = filter.label ? base.where(hasLabel(filter.label)) : base
     const rows = await query.limit(filter.limit).execute()

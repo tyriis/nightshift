@@ -10,14 +10,14 @@ const setup = async () => {
   return db
 }
 
-const draft = (id: string, parentId: string | null = null) => ({
+const draft = (id: string, parentId: string | null = null, position = 1) => ({
   id,
   parent_id: parentId,
   title: `Task ${id}`,
   description: 'd',
   acceptance_criteria: 'ac',
   status: 'todo' as const,
-  position: 1,
+  position,
   created_by: 'a_creator',
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
@@ -59,31 +59,23 @@ describe('SqliteTaskRepo', () => {
   it('listReady applies every gate and the label filter', async () => {
     const db = await setup()
     const repo = new SqliteTaskRepo(db)
-    await repo.create(draft('t_ready'))
-    await repo.create(draft('t_parent'))
-    await repo.create(draft('t_child', 't_parent'))
-    await repo.create({ ...draft('t_blocked'), status: 'backlog' })
+    // spec §6.3: NO parent-status gate — a todo leaf under a live todo parent is ready
+    // (oracle ruling A). Distinct positions make the ordered assertion deterministic,
+    // since positions are only unique per-parent.
+    await repo.create(draft('t_parent', null, 2))
+    await repo.create(draft('t_child', 't_parent', 1)) // todo leaf under live parent → ready
+    await repo.create({ ...draft('t_blocked', null, 1), status: 'backlog' }) // status gate
+    await repo.create(draft('t_ready', null, 3))
     await sql`insert into labels (id, name, color, created_at)
               values ('l_infra', 'infra', '#f00', '2026-01-01')`.execute(db)
     await sql`insert into task_labels (task_id, label_id) values ('t_ready', 'l_infra')`.execute(db)
 
     const all = await repo.listReady({ limit: 10 })
-    expect(all.map((r) => r.task.id)).toEqual(['t_ready'])
+    expect(all.map((r) => r.task.id)).toEqual(['t_child', 't_ready'])
     const labeled = await repo.listReady({ label: 'infra', limit: 10 })
     expect(labeled.map((r) => r.task.id)).toEqual(['t_ready'])
     const other = await repo.listReady({ label: 'ui', limit: 10 })
     expect(other).toHaveLength(0)
-    await db.destroy()
-  })
-
-  it('a child enters the ready queue only after its parent settles', async () => {
-    const db = await setup()
-    const repo = new SqliteTaskRepo(db)
-    await repo.create(draft('t_parent'))
-    await repo.create(draft('t_child', 't_parent'))
-    expect((await repo.listReady({ limit: 10 })).map((r) => r.task.id)).toEqual([])
-    await repo.setStatus('t_parent', 'done', '2026-01-02T00:00:00.000Z')
-    expect((await repo.listReady({ limit: 10 })).map((r) => r.task.id)).toEqual(['t_child'])
     await db.destroy()
   })
 
