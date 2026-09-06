@@ -764,8 +764,10 @@ const ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
 export class RandomIdGen {
   newId(prefix: string): string {
-    const { randomBytes } = globalThis.crypto
-    const bytes = new Uint8Array(randomBytes(16))
+    // WebCrypto has NO randomBytes() — verified on Node 26.8: globalThis.crypto.randomBytes is
+    // undefined. getRandomValues is the CSPRNG that exists; fill a Uint8Array directly.
+    const bytes = new Uint8Array(16)
+    globalThis.crypto.getRandomValues(bytes)
     let out = ''
     for (const b of bytes) out += ALPHABET[b % ALPHABET.length]
     return `${prefix}_${out}`
@@ -809,8 +811,11 @@ describe('migrations', () => {
   it('creates all tables', async () => {
     const db = makeDb(':memory:')
     await migrateToLatest(db)
+    // 'sqlite%' filter required: the autoincrement columns in the migration itself create
+    // SQLite's internal sqlite_sequence table, which would otherwise fail this assertion.
     const rows = await sql<{ name: string }>`
-      select name from sqlite_master where type = 'table' and name not like 'kysely%'
+      select name from sqlite_master
+       where type = 'table' and name not like 'kysely%' and name not like 'sqlite%'
     `.execute(db)
     const names = rows.rows.map((r) => r.name).sort()
     expect(names).toEqual([...TABLES].sort())
