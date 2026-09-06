@@ -48,7 +48,7 @@ export class SqliteTaskRepo implements TaskRepo {
   constructor(private readonly db: Kysely<DB>) {}
 
   async create(draft: TaskDraft): Promise<TaskRecord> {
-    await this.db
+    const row = await this.db
       .insertInto('tasks')
       .values({
         id: draft.id,
@@ -67,8 +67,9 @@ export class SqliteTaskRepo implements TaskRepo {
         claim_generation: 0,
         last_heartbeat_at: null,
       })
-      .execute()
-    return (await this.findById(draft.id)) as TaskRecord
+      .returningAll()
+      .executeTakeFirstOrThrow()
+    return toRecord(row)
   }
 
   async findById(id: string): Promise<TaskRecord | null> {
@@ -179,7 +180,11 @@ export class SqliteTaskRepo implements TaskRepo {
     status: TaskStatus,
     updated_at: string
   ): Promise<{ generation: number } | null> {
-    const res = await this.db
+    // Single statement: UPDATE … RETURNING. The generation read must be ATOMIC with the
+    // CAS — a separate findById between the two awaits could surface a generation this
+    // claim never wrote when a split/release races the read. (Quality-review fix; Kysely
+    // 0.29.5 supports update…returning on current SQLite.)
+    const row = await this.db
       .updateTable('tasks')
       .set((eb) => ({
         claim_token_id: tokenId,
@@ -190,10 +195,9 @@ export class SqliteTaskRepo implements TaskRepo {
       }))
       .where('id', '=', taskId)
       .where('claim_token_id', 'is', null)
+      .returning('claim_generation')
       .executeTakeFirst()
-    if (Number(res.numUpdatedRows) !== 1) return null
-    const row = await this.findById(taskId)
-    return { generation: (row as TaskRecord).claim_generation }
+    return row ? { generation: row.claim_generation } : null
   }
 
   async clearClaim(taskId: string, updated_at: string): Promise<void> {

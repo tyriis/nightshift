@@ -32,8 +32,8 @@ export class SqliteAuditRepo implements AuditRepo {
     limit: number
   }): Promise<AuditRow[]> {
     let query = this.db.selectFrom('audit_log').selectAll().orderBy('id', 'desc').limit(q.limit)
-    if (q.entity_type) query = query.where('entity_type', '=', q.entity_type)
-    if (q.entity_id) query = query.where('entity_id', '=', q.entity_id)
+    if (q.entity_type !== undefined) query = query.where('entity_type', '=', q.entity_type)
+    if (q.entity_id !== undefined) query = query.where('entity_id', '=', q.entity_id)
     const rows = await query.execute()
     return rows.map((r: Row) => ({
       id: r.id,

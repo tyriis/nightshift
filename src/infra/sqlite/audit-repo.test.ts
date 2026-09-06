@@ -30,6 +30,19 @@ describe('SqliteAuditRepo', () => {
     await db.destroy()
   })
 
+  it('empty-string filters are applied, not silently ignored', async () => {
+    const db = await freshDb()
+    const repo = new SqliteAuditRepo(db)
+    // row matches the entity_id but has a non-empty entity_type
+    await repo.append({ ...entry('some-id'), entity_type: 'x' })
+
+    // entity_type: '' is a real filter value — it must MATCH NOTHING, not be dropped
+    // the way a truthy check (`if (q.entity_type)`) would drop it.
+    const rows = await repo.search({ entity_type: '', entity_id: 'some-id', limit: 10 })
+    expect(rows).toEqual([])
+    await db.destroy()
+  })
+
   it('round-trips before-payloads and defaults missing payloads/reason to null', async () => {
     const db = await freshDb()
     const repo = new SqliteAuditRepo(db)

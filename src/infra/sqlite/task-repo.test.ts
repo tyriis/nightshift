@@ -66,6 +66,16 @@ describe('SqliteTaskRepo', () => {
     await repo.create(draft('t_child', 't_parent', 1)) // todo leaf under live parent → ready
     await repo.create({ ...draft('t_blocked', null, 1), status: 'backlog' }) // status gate
     await repo.create(draft('t_ready', null, 3))
+    // the remaining §6.3 gates, seeded explicitly:
+    await seedToken(db, 'tok_gate', 'a_agent')
+    await repo.create(draft('t_claimed', null, 4)) // claimed gate
+    await sql`update tasks set claim_token_id = 'tok_gate' where id = 't_claimed'`.execute(db)
+    await repo.create({ ...draft('t_gate_blocker', null, 6), status: 'backlog' }) // stays backlog → unmet, itself not ready
+    await repo.create(draft('t_depblocked', null, 5)) // dependency gate
+    await sql`insert into dependencies (blocker_id, blocked_id)
+              values ('t_gate_blocker', 't_depblocked')`.execute(db)
+    await repo.create(draft('t_flagged', null, 7)) // blocked_flag gate
+    await sql`update tasks set blocked_flag = 1 where id = 't_flagged'`.execute(db)
     await sql`insert into labels (id, name, color, created_at)
               values ('l_infra', 'infra', '#f00', '2026-01-01')`.execute(db)
     await sql`insert into task_labels (task_id, label_id) values ('t_ready', 'l_infra')`.execute(db)
