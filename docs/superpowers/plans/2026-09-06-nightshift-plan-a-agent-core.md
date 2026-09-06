@@ -1533,8 +1533,8 @@ export class SqliteAuditRepo implements AuditRepo {
     limit: number
   }): Promise<AuditRow[]> {
     let query = this.db.selectFrom('audit_log').selectAll().orderBy('id', 'desc').limit(q.limit)
-    if (q.entity_type) query = query.where('entity_type', '=', q.entity_type)
-    if (q.entity_id) query = query.where('entity_id', '=', q.entity_id)
+    if (q.entity_type !== undefined) query = query.where('entity_type', '=', q.entity_type)
+    if (q.entity_id !== undefined) query = query.where('entity_id', '=', q.entity_id)
     const rows = await query.execute()
     return rows.map((r: Row) => ({
       id: r.id,
@@ -1624,6 +1624,16 @@ describe('SqliteTaskRepo', () => {
     await repo.create(draft('t_child', 't_parent', 1)) // todo leaf under live parent → ready
     await repo.create({ ...draft('t_blocked', null, 1), status: 'backlog' }) // status gate
     await repo.create(draft('t_ready', null, 3))
+    // the remaining §6.3 gates, seeded explicitly:
+    await seedToken(db, 'tok_gate', 'a_agent')
+    await repo.create(draft('t_claimed', null, 4)) // claimed gate
+    await sql`update tasks set claim_token_id = 'tok_gate' where id = 't_claimed'`.execute(db)
+    await repo.create(draft('t_gate_blocker', null, 6)) // stays backlog → unmet
+    await repo.create(draft('t_depblocked', null, 5)) // dependency gate
+    await sql`insert into dependencies (blocker_id, blocked_id)
+              values ('t_gate_blocker', 't_depblocked')`.execute(db)
+    await repo.create(draft('t_flagged', null, 7)) // blocked_flag gate
+    await sql`update tasks set blocked_flag = 1 where id = 't_flagged'`.execute(db)
     await sql`insert into labels (id, name, color, created_at)
               values ('l_infra', 'infra', '#f00', '2026-01-01')`.execute(db)
     await sql`insert into task_labels (task_id, label_id) values ('t_ready', 'l_infra')`.execute(db)
@@ -1785,7 +1795,7 @@ export class SqliteTaskRepo implements TaskRepo {
   constructor(private readonly db: Kysely<DB>) {}
 
   async create(draft: TaskDraft): Promise<TaskRecord> {
-    await this.db
+    const row = await this.db
       .insertInto('tasks')
       .values({
         id: draft.id,
@@ -1804,8 +1814,9 @@ export class SqliteTaskRepo implements TaskRepo {
         claim_generation: 0,
         last_heartbeat_at: null,
       })
-      .execute()
-    return (await this.findById(draft.id)) as TaskRecord
+      .returningAll()
+      .executeTakeFirstOrThrow()
+    return toRecord(row)
   }
 
   async findById(id: string): Promise<TaskRecord | null> {
@@ -1935,7 +1946,11 @@ export class SqliteTaskRepo implements TaskRepo {
     status: TaskStatus,
     updated_at: string
   ): Promise<{ generation: number } | null> {
-    const res = await this.db
+    // Single statement: UPDATE … RETURNING. The generation read must be ATOMIC with the
+    // CAS — a separate findById between the two awaits could surface a generation this
+    // claim never wrote when a split/release races the read. (Quality-review fix; Kysely
+    // 0.29.5 supports update…returning on current SQLite.)
+    const row = await this.db
       .updateTable('tasks')
       .set((eb) => ({
         claim_token_id: tokenId,
@@ -1946,10 +1961,9 @@ export class SqliteTaskRepo implements TaskRepo {
       }))
       .where('id', '=', taskId)
       .where('claim_token_id', 'is', null)
+      .returning('claim_generation')
       .executeTakeFirst()
-    if (Number(res.numUpdatedRows) !== 1) return null
-    const row = await this.findById(taskId)
-    return { generation: (row as TaskRecord).claim_generation }
+    return row ? { generation: row.claim_generation } : null
   }
 
   async clearClaim(taskId: string, updated_at: string): Promise<void> {
@@ -2473,6 +2487,26 @@ describe('SqliteUnitOfWork', () => {
     expect(await new SqliteTaskRepo(db).findById('t_kept')).not.toBeNull()
     await db.destroy()
   })
+
+  it('serializes concurrent transactions (no BEGIN-within-BEGIN)', async () => {
+    const db = await freshDb()
+    await seedActor(db, 'a_creator', 'human')
+    const uow = new SqliteUnitOfWork(db)
+    const results = await Promise.all([
+      uow.withTransaction(async (repos) => {
+        await repos.tasks.create(draft('t_c1'))
+        return 1
+      }),
+      uow.withTransaction(async (repos) => {
+        await repos.tasks.create(draft('t_c2'))
+        return 2
+      }),
+    ])
+    expect(results).toEqual([1, 2])
+    expect(await new SqliteTaskRepo(db).findById('t_c1')).not.toBeNull()
+    expect(await new SqliteTaskRepo(db).findById('t_c2')).not.toBeNull()
+    await db.destroy()
+  })
 })
 ```
 
@@ -2501,8 +2535,22 @@ export class SqliteUnitOfWork implements UnitOfWork {
     }
   }
 
+  // Kysely 0.29.5's SqliteDialect hands EVERY caller the same better-sqlite3 connection
+  // with no queueing (verified: the sqlite dialect does not use SingleConnectionProvider)
+  // — so two overlapping withTransaction() calls make the loser's BEGIN throw
+  // "cannot start a transaction within a transaction": a 500, not a domain code. Task 18's
+  // §14.3 two-session claim race goes through here. A promise-chain mutex serializes
+  // transactions on the single writer — correct and cheap at homelab scale.
+  private txQueue: Promise<unknown> = Promise.resolve()
+
   async withTransaction<T>(fn: (repos: Repos) => Promise<T>): Promise<T> {
-    return this.db.transaction().execute((trx) => fn(this.repos(trx)))
+    const run = (): Promise<T> => this.db.transaction().execute((trx) => fn(this.repos(trx)))
+    const result = this.txQueue.then(run, run)
+    this.txQueue = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
   }
 }
 ```
