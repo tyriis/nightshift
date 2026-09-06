@@ -848,6 +848,52 @@ describe('migrations', () => {
     ).rejects.toThrow(/FOREIGN KEY|foreign key/i)
     await db.destroy()
   })
+
+  // Constraint-contract tests: pin the CHECK/unique/index guarantees that later
+  // use-cases and repos rely on, so a silent DDL edit in a future migration fails CI.
+  const seedActorAndTask = async (db: ReturnType<typeof makeDb>): Promise<void> => {
+    await sql`insert into actors (id, kind, handle, display_name, description, created_at)
+              values ('a_x','human','x','X','','2026-01-01')`.execute(db)
+    await sql`insert into tasks (id, title, position, created_by, created_at, updated_at)
+              values ('t_x','x',1,'a_x','2026-01-01','2026-01-01')`.execute(db)
+  }
+
+  it('rejects invalid status, self-edges, duplicate handles, non-boolean flags', async () => {
+    const db = makeDb(':memory:')
+    await migrateToLatest(db)
+    await seedActorAndTask(db)
+    await expect(
+      sql`insert into tasks (id, title, position, status, created_by, created_at, updated_at)
+          values ('t_bad','x',1,'shipped','a_x','2026-01-01','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    await expect(
+      sql`insert into dependencies (blocker_id, blocked_id) values ('t_x','t_x')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    await expect(
+      sql`insert into actors (id, kind, handle, display_name, description, created_at)
+          values ('a_y','agent','x','Y','','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/UNIQUE/i)
+    await expect(
+      sql`insert into tasks (id, title, position, blocked_flag, created_by, created_at, updated_at)
+          values ('t_flag','x',1,2,'a_x','2026-01-01','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    await db.destroy()
+  })
+
+  it('indexes the hot dependency and audit query paths', async () => {
+    const db = makeDb(':memory:')
+    await migrateToLatest(db)
+    const r = await sql<{ name: string }>`
+      select name from sqlite_master
+       where type = 'index'
+         and name in ('dependencies_blocked_idx', 'audit_log_entity_idx')
+    `.execute(db)
+    expect(r.rows.map((x) => x.name).sort()).toEqual([
+      'audit_log_entity_idx',
+      'dependencies_blocked_idx',
+    ])
+    await db.destroy()
+  })
 })
 ```
 
@@ -1010,7 +1056,7 @@ const migrations: Record<string, Migration> = {
         acceptance_criteria text not null default '',
         status text not null default 'backlog'
           check (status in ('backlog','todo','in_progress','in_review','done','canceled')),
-        blocked_flag integer not null default 0,
+        blocked_flag integer not null default 0 check (blocked_flag in (0,1)),
         assignee_id text references actors(id),
         position real not null,
         created_by text not null references actors(id),
@@ -1030,6 +1076,10 @@ const migrations: Record<string, Migration> = {
         unique (blocker_id, blocked_id),
         check (blocker_id <> blocked_id)
       )`.execute(db)
+      -- blocked_id-leading index: wouldCycle CTE, unmetBlockers, the unmet-blocker correlated
+      -- subqueries and listReady's NOT EXISTS all filter by blocked_id alone (EXPLAIN-verified:
+      -- without it each is a full SCAN per candidate — get-next is the hot agent-poll path).
+      await sql`create index dependencies_blocked_idx on dependencies (blocked_id)`.execute(db)
 
       await sql`create table labels (
         id text primary key,
@@ -1056,6 +1106,9 @@ const migrations: Record<string, Migration> = {
         reason text,
         created_at text not null
       )`.execute(db)
+      -- entity_id index: audit is never purged (spec §6.7) and every entity/activity-tab read
+      -- filters entity_id order by id desc (EXPLAIN-verified: SCAN without this).
+      await sql`create index audit_log_entity_idx on audit_log (entity_id)`.execute(db)
 
       await sql`create table policy (key text primary key, value text not null)`.execute(db)
       await sql`insert into policy (key, value) values ('review_gate', 'on')`.execute(db)
