@@ -32,7 +32,7 @@ const migrations: Record<string, Migration> = {
         acceptance_criteria text not null default '',
         status text not null default 'backlog'
           check (status in ('backlog','todo','in_progress','in_review','done','canceled')),
-        blocked_flag integer not null default 0,
+        blocked_flag integer not null default 0 check (blocked_flag in (0,1)),
         assignee_id text references actors(id),
         position real not null,
         created_by text not null references actors(id),
@@ -52,6 +52,10 @@ const migrations: Record<string, Migration> = {
         unique (blocker_id, blocked_id),
         check (blocker_id <> blocked_id)
       )`.execute(db)
+      // blocked_id-leading index: wouldCycle CTE, unmetBlockers, the unmet-blocker correlated
+      // subqueries and listReady's NOT EXISTS all filter by blocked_id alone (EXPLAIN-verified:
+      // without it each is a full SCAN per candidate — get-next is the hot agent-poll path).
+      await sql`create index dependencies_blocked_idx on dependencies (blocked_id)`.execute(db)
 
       await sql`create table labels (
         id text primary key,
@@ -78,6 +82,9 @@ const migrations: Record<string, Migration> = {
         reason text,
         created_at text not null
       )`.execute(db)
+      // entity_id index: audit is never purged (spec §6.7) and every entity/activity-tab read
+      // filters entity_id order by id desc (EXPLAIN-verified: SCAN without this).
+      await sql`create index audit_log_entity_idx on audit_log (entity_id)`.execute(db)
 
       await sql`create table policy (key text primary key, value text not null)`.execute(db)
       await sql`insert into policy (key, value) values ('review_gate', 'on')`.execute(db)

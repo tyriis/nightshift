@@ -63,4 +63,50 @@ describe('migrations', () => {
     ).rejects.toThrow(/FOREIGN KEY|foreign key/i)
     await db.destroy()
   })
+
+  // Constraint-contract tests: pin the CHECK/unique/index guarantees that later
+  // use-cases and repos rely on, so a silent DDL edit in a future migration fails CI.
+  const seedActorAndTask = async (db: ReturnType<typeof makeDb>): Promise<void> => {
+    await sql`insert into actors (id, kind, handle, display_name, description, created_at)
+              values ('a_x','human','x','X','','2026-01-01')`.execute(db)
+    await sql`insert into tasks (id, title, position, created_by, created_at, updated_at)
+              values ('t_x','x',1,'a_x','2026-01-01','2026-01-01')`.execute(db)
+  }
+
+  it('rejects invalid status, self-edges, duplicate handles, non-boolean flags', async () => {
+    const db = makeDb(':memory:')
+    await migrateToLatest(db)
+    await seedActorAndTask(db)
+    await expect(
+      sql`insert into tasks (id, title, position, status, created_by, created_at, updated_at)
+          values ('t_bad','x',1,'shipped','a_x','2026-01-01','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    await expect(
+      sql`insert into dependencies (blocker_id, blocked_id) values ('t_x','t_x')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    await expect(
+      sql`insert into actors (id, kind, handle, display_name, description, created_at)
+          values ('a_y','agent','x','Y','','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/UNIQUE/i)
+    await expect(
+      sql`insert into tasks (id, title, position, blocked_flag, created_by, created_at, updated_at)
+          values ('t_flag','x',1,2,'a_x','2026-01-01','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    await db.destroy()
+  })
+
+  it('indexes the hot dependency and audit query paths', async () => {
+    const db = makeDb(':memory:')
+    await migrateToLatest(db)
+    const r = await sql<{ name: string }>`
+      select name from sqlite_master
+       where type = 'index'
+         and name in ('dependencies_blocked_idx', 'audit_log_entity_idx')
+    `.execute(db)
+    expect(r.rows.map((x) => x.name).sort()).toEqual([
+      'audit_log_entity_idx',
+      'dependencies_blocked_idx',
+    ])
+    await db.destroy()
+  })
 })
