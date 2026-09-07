@@ -32,11 +32,12 @@ export const sendProblem = (
 export const registerProblemHandlers = (app: FastifyInstance): void => {
   app.setErrorHandler((error: FastifyError, _request, reply) => {
     if (isDomainError(error)) {
-      // details carry machine-readable flags (e.g. stale_lease claimed:true/false)
+      // details carry machine-readable flags (e.g. stale_lease claimed:true/false);
+      // spread FIRST so fixed RFC fields can never be overridden by them
       return reply
         .code(error.status)
         .type('application/problem+json')
-        .send({ ...problem(error.status, error.code, error.message), ...(error.details ?? {}) })
+        .send({ ...(error.details ?? {}), ...problem(error.status, error.code, error.message) })
     }
     if ((error as FastifyError & { validation?: unknown }).validation) {
       return sendProblem(reply, 400, 'invalid_request', error.message)

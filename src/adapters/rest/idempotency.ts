@@ -20,10 +20,14 @@ export const registerIdempotency = (app: FastifyInstance, deps: AppDeps): void =
     })
     if (outcome.state === 'complete') {
       // replay the stored response verbatim; content-type pinned so the string
-      // payload is not downgraded to text/plain by content sniffing
+      // payload is not downgraded to text/plain by content sniffing — and pinned
+      // honestly: a stored 4xx problem+json replays as problem+json, not json
       return reply
         .code(outcome.status)
-        .header('content-type', 'application/json')
+        .header(
+          'content-type',
+          outcome.status >= 400 ? 'application/problem+json' : 'application/json'
+        )
         .send(outcome.body)
     }
     if (outcome.state === 'in_flight') {

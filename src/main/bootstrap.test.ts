@@ -6,6 +6,7 @@ import { hashToken } from '#root/infra/token-hash'
 import { freshDb } from '#root/testing/fixtures'
 
 const LONG = 'x'.repeat(48)
+const ROTATED = 'y'.repeat(48)
 
 describe('bootstrap admin', () => {
   it('does nothing without a token', async () => {
@@ -13,6 +14,30 @@ describe('bootstrap admin', () => {
     const deps: AppDeps = makeDepsFromDb(db, loadConfig({}))
     await ensureBootstrapAdmin(deps)
     expect(await deps.actorsRoot.findByHandle('bootstrap')).toBeNull()
+    await db.destroy()
+  })
+
+  it('re-activates the bootstrap token after revoke + next boot (env-as-truth upsert)', async () => {
+    const db = await freshDb()
+    const deps = makeDepsFromDb(db, loadConfig({ NS_BOOTSTRAP_TOKEN: LONG }))
+    await ensureBootstrapAdmin(deps)
+    await deps.actorsRoot.revokeToken('tok_bootstrap', deps.clock.now().toISOString())
+    expect(await deps.actorsRoot.findActiveTokenByHash(hashToken(LONG))).toBeNull()
+    await ensureBootstrapAdmin(deps) // next boot: env is truth
+    const hit = await deps.actorsRoot.findActiveTokenByHash(hashToken(LONG))
+    expect(hit?.actor.id).toBe('a_bootstrap')
+    expect(hit?.token.revoked_at).toBeNull()
+    await db.destroy()
+  })
+
+  it('rotates the token when NS_BOOTSTRAP_TOKEN changes (old hash stops resolving)', async () => {
+    const db = await freshDb()
+    await ensureBootstrapAdmin(makeDepsFromDb(db, loadConfig({ NS_BOOTSTRAP_TOKEN: LONG })))
+    const deps = makeDepsFromDb(db, loadConfig({ NS_BOOTSTRAP_TOKEN: ROTATED }))
+    await ensureBootstrapAdmin(deps) // no PK/UNIQUE crash
+    const hit = await deps.actorsRoot.findActiveTokenByHash(hashToken(ROTATED))
+    expect(hit?.actor.id).toBe('a_bootstrap')
+    expect(await deps.actorsRoot.findActiveTokenByHash(hashToken(LONG))).toBeNull()
     await db.destroy()
   })
 

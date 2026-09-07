@@ -20,6 +20,34 @@ describe('Idempotency-Key middleware (spec §7.3)', () => {
     await t.close()
   })
 
+  it('replays a stored 4xx problem body as application/problem+json, verbatim', async () => {
+    const t = await setup()
+    const body = JSON.stringify({
+      type: 'https://nightshift.local/errors/not_found',
+      title: 'not found',
+      status: 404,
+      code: 'not_found',
+      detail: 'route not found',
+    })
+    await t.deps.idemRoot.reserve({
+      actor_id: 'a_nils',
+      idem_key: 'k-404',
+      request_method: 'POST',
+      request_path: '/idem-echo',
+      created_at: new Date().toISOString(),
+    })
+    await t.deps.idemRoot.complete('a_nils', 'k-404', 404, body)
+    const replay = await t.app.inject({
+      method: 'POST',
+      url: '/idem-echo',
+      headers: { authorization: `Bearer ${t.adminToken}`, 'idempotency-key': 'k-404' },
+    })
+    expect(replay.statusCode).toBe(404)
+    expect(replay.headers['content-type']).toContain('application/problem+json')
+    expect(replay.body).toBe(body)
+    await t.close()
+  })
+
   it('different keys are independent; no key = no dedupe', async () => {
     const t = await setup()
     const base = { authorization: `Bearer ${t.adminToken}` }

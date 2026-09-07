@@ -4990,7 +4990,9 @@ export const ensureBootstrapAdmin = async (deps: AppDeps): Promise<void> => {
   const raw = deps.config.bootstrapToken
   if (!raw) return
   const now = deps.clock.now().toISOString()
-  if (await deps.actorsRoot.findActiveTokenByHash(hashToken(raw))) return
+  const hash = hashToken(raw)
+  // fresh-process fast path: an ACTIVE token already matches the env
+  if (await deps.actorsRoot.findActiveTokenByHash(hash)) return
   if (!(await deps.actorsRoot.findById('a_bootstrap'))) {
     await deps.actorsRoot.create({
       id: 'a_bootstrap',
@@ -5001,15 +5003,29 @@ export const ensureBootstrapAdmin = async (deps: AppDeps): Promise<void> => {
       created_at: now,
     })
   }
-  await deps.actorsRoot.insertToken({
-    id: 'tok_bootstrap',
-    actor_id: 'a_bootstrap',
-    token_hash: hashToken(raw),
-    label: 'bootstrap',
-    created_at: now,
-  })
+  // env-as-truth: NS_BOOTSTRAP_TOKEN defines the active bootstrap token on EVERY boot,
+  // so UPSERT the row onto it (a plain insert crashes boot on tokens.id/tokens.token_hash
+  // after RevokeToken or after rotating the env). Revoking the bootstrap token is
+  // therefore only durable across restarts by ALSO removing NS_BOOTSTRAP_TOKEN from env.
+  await deps.db
+    .insertInto('tokens')
+    .values({
+      id: 'tok_bootstrap',
+      actor_id: 'a_bootstrap',
+      token_hash: hash,
+      label: 'bootstrap',
+      created_at: now,
+    })
+    .onConflict((oc) =>
+      oc.column('id').doUpdateSet({ token_hash: hash, created_at: now, revoked_at: null })
+    )
+    .execute()
 }
 ```
+
+> **Amendment (Task 13 quality review, blocker):** the token write is an UPSERT, not an
+> insert — NS_BOOTSTRAP_TOKEN is the source of truth, and a plain `insertToken` bricks the
+> next boot (PK on `tok_bootstrap` / UNIQUE on `token_hash`) after a revoke or an env rotation.
 
 - [ ] **Step 13.8: Implement `src/adapters/rest/problem.ts`:**
 
@@ -5051,7 +5067,7 @@ export const registerProblemHandlers = (app: FastifyInstance): void => {
       return reply
         .code(error.status)
         .type('application/problem+json')
-        .send({ ...problem(error.status, error.code, error.message), ...(error.details ?? {}) })
+        .send({ ...(error.details ?? {}), ...problem(error.status, error.code, error.message) })
     }
     if ((error as FastifyError & { validation?: unknown }).validation) {
       return sendProblem(reply, 400, 'invalid_request', error.message)
@@ -5157,9 +5173,15 @@ export const registerIdempotency = (app: FastifyInstance, deps: AppDeps): void =
       created_at: deps.clock.now().toISOString(),
     })
     if (outcome.state === 'complete') {
+      // replay the stored response verbatim; content-type pinned so the string
+      // payload is not downgraded to text/plain by content sniffing — and pinned
+      // honestly: a stored 4xx problem+json replays as problem+json, not json
       return reply
         .code(outcome.status)
-        .header('content-type', 'application/json')
+        .header(
+          'content-type',
+          outcome.status >= 400 ? 'application/problem+json' : 'application/json'
+        )
         .send(outcome.body)
     }
     if (outcome.state === 'in_flight') {
