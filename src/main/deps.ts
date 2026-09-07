@@ -16,6 +16,7 @@ import { CreateTask } from '#root/application/usecases/create-task'
 import { GetContext } from '#root/application/usecases/get-context'
 import { GetNext } from '#root/application/usecases/get-next'
 import { Heartbeat } from '#root/application/usecases/heartbeat'
+import { AttachLabel, CreateLabel, DetachLabel } from '#root/application/usecases/labels'
 import { CreateActor, CreateToken, RevokeToken } from '#root/application/usecases/manage-actors'
 import { GetPolicy, SetPolicy } from '#root/application/usecases/manage-policy'
 import { ReleaseClaim } from '#root/application/usecases/release-claim'
@@ -49,6 +50,9 @@ export interface AppDeps {
     removeBlock: RemoveBlock
     getNext: GetNext
     getContext: GetContext
+    createLabel: CreateLabel
+    attachLabel: AttachLabel
+    detachLabel: DetachLabel
     createActor: CreateActor
     createToken: CreateToken
     revokeToken: RevokeToken
@@ -89,6 +93,9 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
         new SqliteDependencyRepo(db),
         new SqliteLabelRepo(db)
       ),
+      createLabel: new CreateLabel(uow, clock, ids),
+      attachLabel: new AttachLabel(uow, clock),
+      detachLabel: new DetachLabel(uow, clock),
       createActor: new CreateActor(uow, clock, ids),
       createToken: new CreateToken(uow, clock, ids),
       revokeToken: new RevokeToken(uow, clock),

@@ -118,6 +118,7 @@ export interface LabelRow {
 export interface LabelRepo {
   /** Create-or-get by name; returns the existing label when present. */
   ensure(input: { id: string; name: string; color: string; created_at: string }): Promise<LabelRow>
+  getById(id: string): Promise<LabelRow | null>
   list(): Promise<LabelRow[]>
   attach(taskId: string, labelId: string): Promise<void>
   detach(taskId: string, labelId: string): Promise<void>

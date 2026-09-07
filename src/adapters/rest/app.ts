@@ -4,6 +4,8 @@ import { registerProblemHandlers } from '#root/adapters/rest/problem'
 import { registerAuth } from '#root/adapters/rest/auth'
 import { registerIdempotency } from '#root/adapters/rest/idempotency'
 import { registerAuditRoutes } from '#root/adapters/rest/routes/audit'
+import { registerDependencyRoutes } from '#root/adapters/rest/routes/dependencies'
+import { registerLabelRoutes } from '#root/adapters/rest/routes/labels'
 import { registerTaskRoutes } from '#root/adapters/rest/routes/tasks'
 
 export interface BuildAppOptions {
@@ -26,6 +28,8 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
 
   registerAuditRoutes(server, deps)
   registerTaskRoutes(server, deps)
+  registerDependencyRoutes(server, deps)
+  registerLabelRoutes(server, deps)
 
   return server
 }

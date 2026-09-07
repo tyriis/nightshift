@@ -26,6 +26,11 @@ export class SqliteLabelRepo implements LabelRepo {
       .executeTakeFirstOrThrow()
   }
 
+  async getById(id: string): Promise<LabelRow | null> {
+    const r = await this.db.selectFrom('labels').selectAll().where('id', '=', id).executeTakeFirst()
+    return (r as LabelRow | undefined) ?? null
+  }
+
   async list(): Promise<LabelRow[]> {
     return this.db.selectFrom('labels').selectAll().orderBy('name', 'asc').execute()
   }
