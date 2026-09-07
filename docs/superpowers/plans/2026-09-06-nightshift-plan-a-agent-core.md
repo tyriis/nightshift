@@ -2133,6 +2133,9 @@ export class SqliteDependencyRepo implements DependencyRepo {
 
 `src/infra/sqlite/label-repo.test.ts`:
 
+Convergence sync (Task 15 review minor): a `getById` hit/miss test was added —
+repo-layer coverage for the method Step 15.1 introduces. Rest of the block verbatim.
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { SqliteLabelRepo } from '#root/infra/sqlite/label-repo'
@@ -2162,6 +2165,19 @@ describe('SqliteLabelRepo', () => {
     })
     expect(again.id).toBe(made.id)
     expect(await repo.list()).toHaveLength(1)
+    await db.destroy()
+  })
+
+  it('getById: hit returns the row, miss returns null', async () => {
+    const { db, repo } = await setup()
+    const label = await repo.ensure({
+      id: 'l_g',
+      name: 'g',
+      color: '#f00',
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
+    expect(await repo.getById(label.id)).toEqual(label)
+    expect(await repo.getById('l_ghost')).toBeNull()
     await db.destroy()
   })
 
@@ -5091,6 +5107,13 @@ export const registerProblemHandlers = (app: FastifyInstance): void => {
 
 - [ ] **Step 13.9: Implement `src/adapters/rest/auth.ts`:**
 
+Shipped delta (convergence sync after Task 15/16 review): `requireHuman` is now
+`async` — a sync-throwing bare `preHandler` never advances fastify's hook iterator
+(the R4 deadlock, proven live on the admin human path); the guard returns a
+rejecting Promise and the iterator advances via its thenable, so admin.ts wires it
+directly (no adapter). The `as string` cast on `request.url.split('?')[0]` was
+dropped at ship time and missed by the earlier sync.
+
 ```ts
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
@@ -5108,12 +5131,20 @@ declare module 'fastify' {
 
 export const PUBLIC_PATHS = new Set(['/ping', '/openapi.yaml'])
 
-export const requireHuman = (_request: FastifyRequest, _reply: FastifyReply): void => {
+// async on purpose: fastify's hook iterator advances via the hook's returned thenable,
+// so this guard is a real Promise; a sync-throwing preHandler would deadlock the
+// iterator (R4). Fixed at the source — routes wire requireHuman directly.
+export const requireHuman = async (
+  _request: FastifyRequest,
+  _reply: FastifyReply
+): Promise<void> => {
   if (!_request.actorRef || _request.actorRef.kind !== 'human') {
     throw new DomainError('forbidden', 'this endpoint requires a human actor (spec D-h)')
   }
 }
 
+// convention: when merging a request body into use-case input, spread actorCtx LAST —
+// trusted identity cannot be shadowed by body keys
 export const actorCtx = (request: FastifyRequest): { actor: ActorRef; tokenId: string | null } => {
   if (!request.actorRef) throw new DomainError('unauthenticated', 'authentication required')
   return { actor: request.actorRef, tokenId: request.tokenId }
@@ -5125,7 +5156,7 @@ export const registerAuth = (app: FastifyInstance, deps: AppDeps): void => {
   app.decorateRequest('idemKey', null)
 
   app.addHook('onRequest', async (request) => {
-    const path = request.url.split('?')[0] as string
+    const path = request.url.split('?')[0]
     if (PUBLIC_PATHS.has(path)) return
     const header = request.headers.authorization
     if (!header?.startsWith('Bearer ')) {
@@ -5412,10 +5443,18 @@ describe('app', () => {
 
 `src/adapters/rest/auth.test.ts`:
 
+Shipped delta (convergence sync): the draft block's last-used test carried placeholder
+probes (`__db` handles, `if (repo)` guards) that never shipped; the shipped file
+asserts `last_used_at` directly, adds the revoked-token 401 test and the
+problem+json pins, and the guard test uses the async rejects/resolves form
+(requireHuman is async — Step 13.9 delta above).
+
 ```ts
 import { describe, expect, it } from 'vitest'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import { makeTestApp } from '#root/testing/test-app'
 import { hashToken } from '#root/infra/token-hash'
+import { actorCtx, requireHuman } from '#root/adapters/rest/auth'
 
 describe('auth', () => {
   it('rejects missing, malformed, and unknown tokens with problem+json 401', async () => {
@@ -5427,36 +5466,64 @@ describe('auth', () => {
     ]) {
       const res = await t.app.inject({ method: 'GET', url: '/audit', headers })
       expect(res.statusCode).toBe(401)
+      expect(res.headers['content-type']).toContain('application/problem+json')
       expect(res.json().code).toBe('unauthenticated')
+      expect(res.json().status).toBe(401)
     }
     await t.close()
   })
 
   it('records token last-used on auth', async () => {
     const t = await makeTestApp()
-    await t.app.inject({
+    const res = await t.app.inject({
       method: 'GET',
       url: '/audit',
       headers: { authorization: `Bearer ${t.adminToken}` },
     })
-    // audit the touch indirectly: revoke via DB then re-auth fails
-    const db = (t as unknown as { app: unknown }) && null
-    void db
-    const before = await t.app.inject({
-      method: 'GET',
-      url: '/audit',
-      headers: { authorization: `Bearer ${t.adminToken}` },
-    })
-    expect(before.statusCode).toBe(200)
-    // direct check through the raw handle:
-    const { SqliteActorRepo } = await import('#root/infra/sqlite/actor-repo')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const repo = new SqliteActorRepo((t as any).__db ?? (null as never))
-    if (repo) {
-      const tok = await repo.findActiveTokenByHash(hashToken(t.adminToken))
-      expect(tok?.token.last_used_at).not.toBeNull()
-    }
+    expect(res.statusCode).toBe(200)
+    const tok = await t.deps.actorsRoot.findActiveTokenByHash(hashToken(t.adminToken))
+    expect(tok?.token.last_used_at).not.toBeNull()
     await t.close()
+  })
+
+  it('revoked tokens are rejected', async () => {
+    const t = await makeTestApp()
+    await t.deps.actorsRoot.revokeToken('tok_nils', new Date().toISOString())
+    const res = await t.app.inject({
+      method: 'GET',
+      url: '/audit',
+      headers: { authorization: `Bearer ${t.adminToken}` },
+    })
+    expect(res.statusCode).toBe(401)
+    expect(res.json().code).toBe('unauthenticated')
+    await t.close()
+  })
+})
+
+describe('auth guards', () => {
+  // stub requests: requireHuman/actorCtx only read actorRef/tokenId
+  const req = (actorRef: unknown, tokenId: string | null = null) =>
+    ({ actorRef, tokenId }) as unknown as FastifyRequest
+
+  it('requireHuman demands a human actor (spec D-h)', async () => {
+    const reply = {} as FastifyReply
+    await expect(requireHuman(req(null), reply)).rejects.toThrowError(
+      expect.objectContaining({ code: 'forbidden' })
+    )
+    await expect(
+      requireHuman(req({ id: 'a', kind: 'agent', handle: 'h', display_name: 'H' }), reply)
+    ).rejects.toThrowError(expect.objectContaining({ code: 'forbidden' }))
+    await expect(
+      requireHuman(req({ id: 'a', kind: 'human', handle: 'h', display_name: 'H' }), reply)
+    ).resolves.toBeUndefined()
+  })
+
+  it('actorCtx demands authentication and forwards the real tokenId', () => {
+    expect(() => actorCtx(req(null))).toThrowError(
+      expect.objectContaining({ code: 'unauthenticated' })
+    )
+    const actor = { id: 'a', kind: 'agent' as const, handle: 'h', display_name: 'H' }
+    expect(actorCtx(req(actor, 'tok_1'))).toEqual({ actor, tokenId: 'tok_1' })
   })
 })
 ```
@@ -5571,6 +5638,11 @@ git add -A && git commit -m "feat(rest): deps composition, bearer auth, problem+
 
 - [ ] **Step 14.1: Create `src/adapters/rest/dto.ts`** (public JSON shape; claim internals exposed deliberately — "nothing hidden", spec §5):
 
+Shipped delta (convergence sync): the "ONLY place tasks become public JSON"
+comment shipped but was missed by the earlier sync, and the no-op
+`status: row.task.status` line is deleted — the spread already carries it and
+`TaskStatus` assigns to `TaskDto.status: string` (typecheck-verified).
+
 ```ts
 import type { TaskWithCounts } from '#root/application/ports'
 
@@ -5594,15 +5666,21 @@ export interface TaskDto {
   unmet_blockers: number
 }
 
+// The ONLY place tasks become public JSON. Claim internals are exposed
+// deliberately — "nothing hidden" (spec §5).
 export const toTaskDto = (row: TaskWithCounts): TaskDto => ({
   ...row.task,
-  status: row.task.status,
   child_count: row.child_count,
   unmet_blockers: row.unmet_blockers,
 })
 ```
 
 - [ ] **Step 14.2: Implement `src/adapters/rest/routes/tasks.ts`:**
+
+Shipped delta (convergence sync, ora-21): POST `/tasks` now spreads
+`actorCtx(request)` AFTER the body — the last body-merge site still spreading it
+first; trusted identity must not be shadowable by body keys (matches labels.ts +
+admin.ts; param-only routes stay as-is — no merge, no risk).
 
 ```ts
 import type { FastifyInstance } from 'fastify'
@@ -5650,7 +5728,7 @@ export const registerTaskRoutes = (app: FastifyInstance, deps: AppDeps): void =>
     },
     async (request, reply) => {
       const body = request.body as CreateTaskBody
-      const task = await deps.useCases.createTask.run({ ...actorCtx(request), ...body })
+      const task = await deps.useCases.createTask.run({ ...body, ...actorCtx(request) })
       const withCounts = (await deps.tasksRoot.findWithCounts(task.id))!
       return reply.code(201).send(toTaskDto(withCounts))
     }
@@ -6240,10 +6318,13 @@ git add -A && git commit -m "feat(rest): task/claim/split/status routes with §7
 
 - [ ] **Step 15.1: Extend `LabelRepo`.** In `src/application/ports.ts` add to `interface LabelRepo`: `getById(id: string): Promise<LabelRow | null>`. In `src/infra/sqlite/label-repo.ts`:
 
+Ships as `return r ?? null` (Task 15 review: the cast is redundant — the
+actor-repo sibling method does exactly this).
+
 ```ts
   async getById(id: string): Promise<LabelRow | null> {
     const r = await this.db.selectFrom('labels').selectAll().where('id', '=', id).executeTakeFirst()
-    return (r as LabelRow | undefined) ?? null
+    return r ?? null
   }
 ```
 
@@ -6330,6 +6411,7 @@ export class DetachLabel {
       if (!(await repos.tasks.findById(input.taskId))) {
         throw new DomainError('not_found', `task ${input.taskId} not found`)
       }
+      // label side is idempotent: unknown label detaches nothing; task-side owns the 404
       await repos.labels.detach(input.taskId, input.labelId)
       await repos.audit.append({
         actor_id: input.actor.id,
@@ -6438,6 +6520,12 @@ open — 204 + Idempotency-Key replay on a real route (D-j), GET/POST `/labels`
 happy-path + rejection, and the not_found/invalid_request paths the block omitted.
 Note: fastify's default ajv (`removeAdditional`) strips unknown body props rather
 than rejecting, so the POST `/labels` 400 pin is the missing required `name`.
+
+Convergence (Task 15 review minors): the happy-attach test now asserts
+`label_attached` + `label_detached` surface in `GET /audit?entity_id=` output
+(T18 greps these strings), and the third test pins
+`DELETE /tasks/<real>/blocks/<ghost>` → 204 (block-side twin of the label
+idempotency pin).
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -6562,6 +6650,14 @@ describe('dependency + label routes', () => {
       await t.app.inject({ method: 'GET', url: `/tasks/${task}/context`, headers: bearer(t) })
     ).json()
     expect(after.labels).toEqual([])
+
+    // both label actions must surface in the audit feed (Task 18 greps these strings)
+    const audit = (
+      await t.app.inject({ method: 'GET', url: `/audit?entity_id=${task}`, headers: bearer(t) })
+    ).json()
+    const actions = audit.map((a: { action: string }) => a.action)
+    expect(actions).toContain('label_attached')
+    expect(actions).toContain('label_detached')
     await t.close()
   })
 
@@ -6642,6 +6738,13 @@ describe('dependency + label routes', () => {
     expect(delBlockGhostTask.statusCode).toBe(404)
     expect(delBlockGhostTask.json().code).toBe('not_found')
 
+    const delGhostBlocker = await t.app.inject({
+      method: 'DELETE',
+      url: `/tasks/${blocked}/blocks/t_ghost`,
+      headers: bearer(t),
+    })
+    expect(delGhostBlocker.statusCode).toBe(204) // block-side twin of the label idempotency pin
+
     const detached = await t.app.inject({
       method: 'DELETE',
       url: `/tasks/${blocked}/labels/l_ghost`,
@@ -6673,21 +6776,16 @@ git add -A && git commit -m "feat(rest): dependency and label routes"
 - [ ] **Step 16.1: Implement `src/adapters/rest/routes/admin.ts`:**
 
 ```ts
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import { actorCtx, requireHuman } from '#root/adapters/rest/auth'
 import type { ActorKind } from '#root/domain/task'
 
-// fastify's hook runner (lib/hooks.js) advances only on a returned thenable or a
-// done() call — the committed sync-void requireHuman deadlocks the human happy-path
-// when wired as a bare preHandler (plan blocks wrote preHandler: [requireHuman]).
-// This adapter delegates every request to requireHuman verbatim; its DomainError
-// (forbidden) propagates as a rejection and maps to 403 problem+json.
-const humanOnly = async (request: FastifyRequest, reply: FastifyReply): Promise<void> =>
-  requireHuman(request, reply)
+// human-only guard: requireHuman is async (auth.ts) — a sync-throwing preHandler would
+// deadlock fastify's hook iterator (R4); fixed at the source, so routes wire it directly.
 
 export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void => {
-  app.get('/admin/actors', { preHandler: [humanOnly] }, async () => deps.actorsRoot.list())
+  app.get('/admin/actors', { preHandler: [requireHuman] }, async () => deps.actorsRoot.list())
 
   // plan block embedded the async handler in the options object (non-compiling) and sent
   // createActor.run's promise un-awaited — fastify 5 has no thenable branch in
@@ -6697,7 +6795,7 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
   app.post(
     '/admin/actors',
     {
-      preHandler: [humanOnly],
+      preHandler: [requireHuman],
       schema: {
         body: {
           type: 'object',
@@ -6730,7 +6828,7 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
   app.post(
     '/admin/actors/:id/tokens',
     {
-      preHandler: [humanOnly],
+      preHandler: [requireHuman],
       schema: {
         body: {
           type: 'object',
@@ -6760,13 +6858,14 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
     }
   )
 
-  app.post('/admin/tokens/:id/revoke', { preHandler: [humanOnly] }, async (request, reply) => {
+  app.post('/admin/tokens/:id/revoke', { preHandler: [requireHuman] }, async (request, reply) => {
     const { id } = request.params as { id: string }
     await deps.useCases.revokeToken.run({ ...actorCtx(request), token_id: id })
     return reply.code(204).send()
   })
 
-  app.get('/admin/policy/:key', { preHandler: [humanOnly] }, async (request) => {
+  app.get('/admin/policy/:key', { preHandler: [requireHuman] }, async (request) => {
+    // read; no audit attribution needed
     const { key } = request.params as { key: string }
     return { key, value: await deps.useCases.getPolicy.run({ key }) }
   })
@@ -6777,7 +6876,7 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
   app.put(
     '/admin/policy/:key',
     {
-      preHandler: [humanOnly],
+      preHandler: [requireHuman],
       schema: {
         body: {
           type: 'object',

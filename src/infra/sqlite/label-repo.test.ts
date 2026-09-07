@@ -29,6 +29,19 @@ describe('SqliteLabelRepo', () => {
     await db.destroy()
   })
 
+  it('getById: hit returns the row, miss returns null', async () => {
+    const { db, repo } = await setup()
+    const label = await repo.ensure({
+      id: 'l_g',
+      name: 'g',
+      color: '#f00',
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
+    expect(await repo.getById(label.id)).toEqual(label)
+    expect(await repo.getById('l_ghost')).toBeNull()
+    await db.destroy()
+  })
+
   it('attach/detach and labelsFor', async () => {
     const { db, repo } = await setup()
     const label = await repo.ensure({

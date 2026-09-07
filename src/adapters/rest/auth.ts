@@ -14,12 +14,20 @@ declare module 'fastify' {
 
 export const PUBLIC_PATHS = new Set(['/ping', '/openapi.yaml'])
 
-export const requireHuman = (_request: FastifyRequest, _reply: FastifyReply): void => {
+// async on purpose: fastify's hook iterator advances via the hook's returned thenable,
+// so this guard is a real Promise; a sync-throwing preHandler would deadlock the
+// iterator (R4). Fixed at the source — routes wire requireHuman directly.
+export const requireHuman = async (
+  _request: FastifyRequest,
+  _reply: FastifyReply
+): Promise<void> => {
   if (!_request.actorRef || _request.actorRef.kind !== 'human') {
     throw new DomainError('forbidden', 'this endpoint requires a human actor (spec D-h)')
   }
 }
 
+// convention: when merging a request body into use-case input, spread actorCtx LAST —
+// trusted identity cannot be shadowed by body keys
 export const actorCtx = (request: FastifyRequest): { actor: ActorRef; tokenId: string | null } => {
   if (!request.actorRef) throw new DomainError('unauthenticated', 'authentication required')
   return { actor: request.actorRef, tokenId: request.tokenId }

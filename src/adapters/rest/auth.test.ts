@@ -53,17 +53,17 @@ describe('auth guards', () => {
   const req = (actorRef: unknown, tokenId: string | null = null) =>
     ({ actorRef, tokenId }) as unknown as FastifyRequest
 
-  it('requireHuman demands a human actor (spec D-h)', () => {
+  it('requireHuman demands a human actor (spec D-h)', async () => {
     const reply = {} as FastifyReply
-    expect(() => requireHuman(req(null), reply)).toThrowError(
+    await expect(requireHuman(req(null), reply)).rejects.toThrowError(
       expect.objectContaining({ code: 'forbidden' })
     )
-    expect(() =>
+    await expect(
       requireHuman(req({ id: 'a', kind: 'agent', handle: 'h', display_name: 'H' }), reply)
-    ).toThrowError(expect.objectContaining({ code: 'forbidden' }))
-    expect(() =>
+    ).rejects.toThrowError(expect.objectContaining({ code: 'forbidden' }))
+    await expect(
       requireHuman(req({ id: 'a', kind: 'human', handle: 'h', display_name: 'H' }), reply)
-    ).not.toThrow()
+    ).resolves.toBeUndefined()
   })
 
   it('actorCtx demands authentication and forwards the real tokenId', () => {

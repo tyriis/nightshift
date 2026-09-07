@@ -24,7 +24,6 @@ export interface TaskDto {
 // deliberately — "nothing hidden" (spec §5).
 export const toTaskDto = (row: TaskWithCounts): TaskDto => ({
   ...row.task,
-  status: row.task.status,
   child_count: row.child_count,
   unmet_blockers: row.unmet_blockers,
 })

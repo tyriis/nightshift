@@ -120,6 +120,14 @@ describe('dependency + label routes', () => {
       await t.app.inject({ method: 'GET', url: `/tasks/${task}/context`, headers: bearer(t) })
     ).json()
     expect(after.labels).toEqual([])
+
+    // both label actions must surface in the audit feed (Task 18 greps these strings)
+    const audit = (
+      await t.app.inject({ method: 'GET', url: `/audit?entity_id=${task}`, headers: bearer(t) })
+    ).json()
+    const actions = audit.map((a: { action: string }) => a.action)
+    expect(actions).toContain('label_attached')
+    expect(actions).toContain('label_detached')
     await t.close()
   })
 
@@ -199,6 +207,13 @@ describe('dependency + label routes', () => {
     })
     expect(delBlockGhostTask.statusCode).toBe(404)
     expect(delBlockGhostTask.json().code).toBe('not_found')
+
+    const delGhostBlocker = await t.app.inject({
+      method: 'DELETE',
+      url: `/tasks/${blocked}/blocks/t_ghost`,
+      headers: bearer(t),
+    })
+    expect(delGhostBlocker.statusCode).toBe(204) // block-side twin of the label idempotency pin
 
     const detached = await t.app.inject({
       method: 'DELETE',

@@ -74,6 +74,7 @@ export class DetachLabel {
       if (!(await repos.tasks.findById(input.taskId))) {
         throw new DomainError('not_found', `task ${input.taskId} not found`)
       }
+      // label side is idempotent: unknown label detaches nothing; task-side owns the 404
       await repos.labels.detach(input.taskId, input.labelId)
       await repos.audit.append({
         actor_id: input.actor.id,

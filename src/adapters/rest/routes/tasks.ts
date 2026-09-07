@@ -43,7 +43,7 @@ export const registerTaskRoutes = (app: FastifyInstance, deps: AppDeps): void =>
     },
     async (request, reply) => {
       const body = request.body as CreateTaskBody
-      const task = await deps.useCases.createTask.run({ ...actorCtx(request), ...body })
+      const task = await deps.useCases.createTask.run({ ...body, ...actorCtx(request) })
       const withCounts = (await deps.tasksRoot.findWithCounts(task.id))!
       return reply.code(201).send(toTaskDto(withCounts))
     }
