@@ -176,6 +176,25 @@ export interface ActorRepo {
   setPolicy(key: string, value: string): Promise<void>
 }
 
+// ---- idempotency (spec §7.3)
+
+export type IdempotencyOutcome =
+  | { state: 'complete'; status: number; body: string }
+  | { state: 'reserved' }
+  | { state: 'in_flight' }
+
+export interface IdempotencyRepo {
+  reserve(input: {
+    actor_id: string
+    idem_key: string
+    request_method: string
+    request_path: string
+    created_at: string
+  }): Promise<IdempotencyOutcome>
+  complete(actorId: string, key: string, status: number, body: string): Promise<void>
+  remove(actorId: string, key: string): Promise<void>
+}
+
 // ---- wiring seams
 
 export interface Repos {
