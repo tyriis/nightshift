@@ -1,0 +1,591 @@
+openapi: 3.1.0
+info:
+  title: nightshift
+  version: 0.1.0
+  description: >-
+    Self-hosted task board where humans and AI agents are first-class actors. Plan A surface: tasks, tree/split,
+    dependencies, claims with fencing tokens, audit, actor/token/policy administration. Threads/inbox/events arrive
+    in later plans.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+tags:
+  - name: meta
+  - name: tasks
+  - name: labels
+  - name: audit
+  - name: admin
+paths:
+  /ping:
+    get:
+      tags: [meta]
+      security: []
+      operationId: ping
+      responses:
+        "200":
+          description: liveness
+          content:
+            application/json:
+              schema: { type: object, properties: { pong: { type: string } } }
+  /openapi.yaml:
+    get:
+      tags: [meta]
+      security: []
+      operationId: getSpec
+      responses:
+        "200":
+          description: This contract
+          content:
+            application/yaml:
+              schema: { type: string }
+  /tasks:
+    get:
+      tags: [tasks]
+      operationId: listTasks
+      responses:
+        "200":
+          description: every task with rollup counts
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Task" } }
+    post:
+      tags: [tasks]
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              additionalProperties: false
+              properties:
+                title: { type: string, minLength: 1, maxLength: 300 }
+                description: { type: string }
+                acceptance_criteria: { type: string }
+                parent_id: { type: string }
+                status: { $ref: "#/components/schemas/TaskStatus" }
+                labels: { type: array, items: { type: string, minLength: 1 } }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/next:
+    get:
+      tags: [tasks]
+      operationId: getNextTasks
+      parameters:
+        - { name: label, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        "200":
+          description: ready leaves (spec §6.3)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Task" } }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    get:
+      tags: [tasks]
+      operationId: getTask
+      responses:
+        "200":
+          description: task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        default: { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [tasks]
+      operationId: patchTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                title: { type: string, minLength: 1, maxLength: 300 }
+                description: { type: string }
+                acceptance_criteria: { type: string }
+                blocked_flag: { type: boolean }
+                assignee_id: { type: ["string", "null"] }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/context:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    get:
+      tags: [tasks]
+      operationId: getTaskContext
+      responses:
+        "200":
+          description: one-call context bundle (spec §7.2); question/link/attachment arrays empty in Plan A
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContextBundle" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/status:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    patch:
+      tags: [tasks]
+      operationId: changeStatus
+      description: requires the current lease_token while the task is claimed (invariant 3)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              additionalProperties: false
+              properties:
+                status: { $ref: "#/components/schemas/TaskStatus" }
+                reason: { type: string, minLength: 1 }
+                lease_token: { type: string }
+      responses:
+        "200":
+          description: new task state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/split:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post:
+      tags: [tasks]
+      operationId: splitTask
+      description: atomic; releases any active claim and bumps the fencing generation (spec §6.2)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [children]
+              additionalProperties: false
+              properties:
+                children:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [title]
+                    additionalProperties: false
+                    properties:
+                      title: { type: string, minLength: 1, maxLength: 300 }
+                      description: { type: string }
+                      acceptance_criteria: { type: string }
+                      status: { $ref: "#/components/schemas/TaskStatus" }
+      responses:
+        "201":
+          # ora-20 (documented, not fixed): split passes the SplitTaskResult through un-DTO'd —
+          # `parent` is the NESTED {task, child_count, unmet_blockers} shape and `created` items are
+          # bare task rows, while the sibling task endpoints above return the flat Task DTO.
+          description: children created; see TaskWithCounts for the parent/created shape asymmetry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  parent: { $ref: "#/components/schemas/TaskWithCounts" }
+                  created: { type: array, items: { $ref: "#/components/schemas/TaskRecord" } }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/claim:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post:
+      tags: [tasks]
+      operationId: claimTask
+      description: atomic compare-and-swap; 409 already_claimed carries the holder's public identity
+      responses:
+        "200":
+          description: claimed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lease_token: { type: string }
+                  generation: { type: integer }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/release:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post:
+      tags: [tasks]
+      operationId: releaseTask
+      responses:
+        "200":
+          description: released
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/heartbeat:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post:
+      tags: [tasks]
+      operationId: heartbeatTask
+      description: liveness record only; keepalive enforcement is deferred (spec §12)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lease_token]
+              additionalProperties: false
+              properties: { lease_token: { type: string } }
+      responses:
+        "200":
+          description: liveness recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/blocks/{blockerId}:
+    parameters:
+      - { $ref: "#/components/parameters/TaskId" }
+      - { name: blockerId, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [tasks]
+      operationId: addBlock
+      description: blockerId blocks the task; 409 dependency_cycle on cycles
+      responses:
+        "204": { description: edge present }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [tasks]
+      operationId: removeBlock
+      responses:
+        "204": { description: edge absent }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/labels/{labelId}:
+    parameters:
+      - { $ref: "#/components/parameters/TaskId" }
+      - { name: labelId, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [labels]
+      operationId: attachLabel
+      responses:
+        "204": { description: attached }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [labels]
+      operationId: detachLabel
+      responses:
+        "204": { description: detached }
+        default: { $ref: "#/components/responses/Problem" }
+  /labels:
+    get:
+      tags: [labels]
+      operationId: listLabels
+      responses:
+        "200":
+          description: all labels
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Label" } }
+    post:
+      tags: [labels]
+      operationId: createLabel
+      description: create-or-get by name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 60 }
+                color: { type: string }
+      responses:
+        "201":
+          description: label
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Label" }
+        default: { $ref: "#/components/responses/Problem" }
+  /audit:
+    get:
+      tags: [audit]
+      operationId: searchAudit
+      description: append-only activity log; every authenticated actor may read everything
+      parameters:
+        - { name: entity_type, in: query, schema: { type: string } }
+        - { name: entity_id, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 500, default: 50 },
+          }
+      responses:
+        "200":
+          description: newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/actors:
+    get:
+      tags: [admin]
+      operationId: listActors
+      responses:
+        "200":
+          description: all actors
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Actor" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [admin]
+      operationId: createActor
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Actor" }
+        default: { $ref: "#/components/responses/Problem" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, handle, display_name]
+              additionalProperties: false
+              properties:
+                kind: { type: string, enum: [human, agent] }
+                handle: { type: string, minLength: 1, maxLength: 60 }
+                display_name: { type: string, minLength: 1, maxLength: 120 }
+                description: { type: string }
+  /admin/actors/{id}/tokens:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [admin]
+      operationId: createToken
+      description: raw_token shown exactly once; stored SHA-256 only (spec §5)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              additionalProperties: false
+              properties: { label: { type: string, minLength: 1, maxLength: 60 } }
+      responses:
+        "201":
+          description: issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token_id: { type: string }
+                  actor_id: { type: string }
+                  label: { type: string }
+                  created_at: { type: string }
+                  raw_token: { type: string }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/tokens/{id}/revoke:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [admin]
+      operationId: revokeToken
+      responses:
+        "204": { description: revoked }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/policy/{key}:
+    parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [admin]
+      operationId: getPolicy
+      responses:
+        "200":
+          description: policy value (allowlisted keys)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { key: { type: string }, value: { type: ["string", "null"] } }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [admin]
+      operationId: setPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              additionalProperties: false
+              properties: { value: { type: string, enum: ["on", "off"] } }
+      responses:
+        "200":
+          description: stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { key: { type: string }, value: { type: string } }
+        default: { $ref: "#/components/responses/Problem" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: agent tokens (and bootstrap admin) in Plan A; human cookie sessions arrive with OIDC in Plan E
+  parameters:
+    TaskId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+  responses:
+    Problem:
+      description: domain rejection — stable machine code, branch on it (spec §11)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    TaskStatus:
+      type: string
+      enum: [backlog, todo, in_progress, in_review, done, canceled]
+    TaskRecord:
+      # The task row itself. Public endpoints may wrap it (split, context);
+      # the flat Task DTO = TaskRecord + rollup counts.
+      type: object
+      properties:
+        id: { type: string }
+        parent_id: { type: ["string", "null"] }
+        title: { type: string }
+        description: { type: string }
+        acceptance_criteria: { type: string }
+        status: { $ref: "#/components/schemas/TaskStatus" }
+        blocked_flag: { type: boolean }
+        assignee_id: { type: ["string", "null"] }
+        position: { type: number }
+        created_by: { type: string }
+        created_at: { type: string }
+        updated_at: { type: string }
+        claim_token_id: { type: ["string", "null"] }
+        claim_generation: { type: integer }
+        last_heartbeat_at: { type: ["string", "null"] }
+    Task:
+      description: flat task DTO — the row plus its rollup counts (toTaskDto)
+      allOf:
+        - $ref: "#/components/schemas/TaskRecord"
+        - type: object
+          properties:
+            child_count: { type: integer }
+            unmet_blockers: { type: integer }
+    TaskWithCounts:
+      # The un-DTO'd repository shape (ports.ts): row nested under `task`, counts beside it.
+      # Served raw by split's parent (ora-20); task endpoints everywhere else use flat Task.
+      type: object
+      properties:
+        task: { $ref: "#/components/schemas/TaskRecord" }
+        child_count: { type: integer }
+        unmet_blockers: { type: integer }
+    ContextBundle:
+      type: object
+      properties:
+        task: { $ref: "#/components/schemas/TaskRecord" }
+        # ora-17: the bundle carries the rollup counts at top level, beside the seams
+        child_count: { type: integer }
+        unmet_blockers: { type: integer }
+        ancestors:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              status: { $ref: "#/components/schemas/TaskStatus" }
+              acceptance_criteria: { type: string }
+        blockers:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              status: { $ref: "#/components/schemas/TaskStatus" }
+        labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
+        open_questions: { type: array }
+        links: { type: array }
+        attachments: { type: array }
+    Label:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string }
+        created_at: { type: string }
+    Actor:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [human, agent] }
+        handle: { type: string }
+        display_name: { type: string }
+        description: { type: string }
+        created_at: { type: string }
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        actor_id: { type: ["string", "null"] }
+        token_id: { type: ["string", "null"] }
+        action: { type: string }
+        entity_type: { type: string }
+        entity_id: { type: string }
+        before: {}
+        after: {}
+        reason: { type: ["string", "null"] }
+        created_at: { type: string }
+    Problem:
+      type: object
+      description: RFC 9457; `already_claimed` additionally carries holder_handle/holder_display_name
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code:
+          type: string
+          enum:
+            [
+              not_found,
+              forbidden,
+              unauthenticated,
+              invalid_request,
+              internal_error,
+              handle_taken,
+              already_claimed,
+              not_a_leaf,
+              open_descendants,
+              canceled_terminal,
+              stale_lease,
+              dependency_cycle,
+              agent_close_forbidden,
+              open_questions,
+              threads_on_parent,
+              idempotency_in_flight,
+            ]
+        detail: { type: string }

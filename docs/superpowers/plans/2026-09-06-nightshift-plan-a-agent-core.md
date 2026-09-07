@@ -57,7 +57,7 @@ src/
   adapters/rest/
     app.ts                      buildApp(deps): FastifyInstance (Task 1→13)
     problem.ts                  RFC 9457 error/not-found handlers (Task 13)
-    auth.ts                     bearer middleware + humanOnly guard (Task 13)
+    auth.ts                     bearer middleware + requireHuman guard (Task 13)
     idempotency.ts              idempotency hooks (Task 14)
     routes/
       tasks.ts                  CRUD + status + split + context + next (Task 15)
@@ -7101,15 +7101,24 @@ git add -A && git commit -m "feat(rest): admin routes for actors, tokens, policy
 
 - [ ] **Step 17.1: Create `openapi/openapi.yaml`** (this file _is_ the product contract — spec §7.1; any API change = committed diff here):
 
+> **Amendment (Task 17, contract = shipped form):** the committed yaml describes the responses as
+> shipped: `Task` splits into `TaskRecord` +
+> rollup counts; `/tasks/{id}/split` passes the raw `SplitTaskResult` through (`parent` nested
+> `{task, child_count, unmet_blockers}`, `created` bare rows — ora-20 asymmetry documented, not
+> fixed); `ContextBundle` carries top-level `child_count`/`unmet_blockers` (ora-17); audit
+> `limit` documents the shipped `default: 50`; `POST /tasks` label items ship `minLength: 1`.
+> Block below is content-identical to `openapi/openapi.yaml` modulo quoting: prettier's
+> `*.yaml` override gives the file double quotes while md-embedded code keeps `singleQuote: true`.
+
 ```yaml
 openapi: 3.1.0
 info:
   title: nightshift
   version: 0.1.0
   description: >-
-    Self-hosted task board where humans and AI agents are first-class actors.
-    Plan A surface: tasks, tree/split, dependencies, claims with fencing tokens,
-    audit, actor/token/policy administration. Threads/inbox/events arrive in later plans.
+    Self-hosted task board where humans and AI agents are first-class actors. Plan A surface: tasks, tree/split,
+    dependencies, claims with fencing tokens, audit, actor/token/policy administration. Threads/inbox/events arrive
+    in later plans.
 servers:
   - url: /
 security:
@@ -7170,7 +7179,7 @@ paths:
                 acceptance_criteria: { type: string }
                 parent_id: { type: string }
                 status: { $ref: '#/components/schemas/TaskStatus' }
-                labels: { type: array, items: { type: string } }
+                labels: { type: array, items: { type: string, minLength: 1 } }
       responses:
         '201':
           description: created
@@ -7294,14 +7303,17 @@ paths:
                       status: { $ref: '#/components/schemas/TaskStatus' }
       responses:
         '201':
-          description: children created
+          # ora-20 (documented, not fixed): split passes the SplitTaskResult through un-DTO'd —
+          # `parent` is the NESTED {task, child_count, unmet_blockers} shape and `created` items are
+          # bare task rows, while the sibling task endpoints above return the flat Task DTO.
+          description: children created; see TaskWithCounts for the parent/created shape asymmetry
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  parent: { $ref: '#/components/schemas/Task' }
-                  created: { type: array, items: { $ref: '#/components/schemas/Task' } }
+                  parent: { $ref: '#/components/schemas/TaskWithCounts' }
+                  created: { type: array, items: { $ref: '#/components/schemas/TaskRecord' } }
         default: { $ref: '#/components/responses/Problem' }
   /tasks/{id}/claim:
     parameters: [{ $ref: '#/components/parameters/TaskId' }]
@@ -7410,7 +7422,8 @@ paths:
               required: [name]
               additionalProperties: false
               properties:
-                { name: { type: string, minLength: 1, maxLength: 60 }, color: { type: string } }
+                name: { type: string, minLength: 1, maxLength: 60 }
+                color: { type: string }
       responses:
         '201':
           description: label
@@ -7426,7 +7439,11 @@ paths:
       parameters:
         - { name: entity_type, in: query, schema: { type: string } }
         - { name: entity_id, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500 } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 500, default: 50 },
+          }
       responses:
         '200':
           description: newest first
@@ -7562,7 +7579,9 @@ components:
     TaskStatus:
       type: string
       enum: [backlog, todo, in_progress, in_review, done, canceled]
-    Task:
+    TaskRecord:
+      # The task row itself. Public endpoints may wrap it (split, context);
+      # the flat Task DTO = TaskRecord + rollup counts.
       type: object
       properties:
         id: { type: string }
@@ -7580,41 +7599,46 @@ components:
         claim_token_id: { type: ['string', 'null'] }
         claim_generation: { type: integer }
         last_heartbeat_at: { type: ['string', 'null'] }
+    Task:
+      description: flat task DTO — the row plus its rollup counts (toTaskDto)
+      allOf:
+        - $ref: '#/components/schemas/TaskRecord'
+        - type: object
+          properties:
+            child_count: { type: integer }
+            unmet_blockers: { type: integer }
+    TaskWithCounts:
+      # The un-DTO'd repository shape (ports.ts): row nested under `task`, counts beside it.
+      # Served raw by split's parent (ora-20); task endpoints everywhere else use flat Task.
+      type: object
+      properties:
+        task: { $ref: '#/components/schemas/TaskRecord' }
         child_count: { type: integer }
         unmet_blockers: { type: integer }
     ContextBundle:
       type: object
       properties:
-        task: { $ref: '#/components/schemas/Task' }
+        task: { $ref: '#/components/schemas/TaskRecord' }
+        # ora-17: the bundle carries the rollup counts at top level, beside the seams
+        child_count: { type: integer }
+        unmet_blockers: { type: integer }
         ancestors:
-          {
-            type: array,
-            items:
-              {
-                type: object,
-                properties:
-                  {
-                    id: { type: string },
-                    title: { type: string },
-                    status: { $ref: '#/components/schemas/TaskStatus' },
-                    acceptance_criteria: { type: string },
-                  },
-              },
-          }
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              status: { $ref: '#/components/schemas/TaskStatus' }
+              acceptance_criteria: { type: string }
         blockers:
-          {
-            type: array,
-            items:
-              {
-                type: object,
-                properties:
-                  {
-                    id: { type: string },
-                    title: { type: string },
-                    status: { $ref: '#/components/schemas/TaskStatus' },
-                  },
-              },
-          }
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              status: { $ref: '#/components/schemas/TaskStatus' }
         labels: { type: array, items: { $ref: '#/components/schemas/Label' } }
         open_questions: { type: array }
         links: { type: array }
@@ -7686,6 +7710,7 @@ components:
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 // …
+// the committed contract is served publicly (D-k); PUBLIC_PATHS already lists the path
 server.get('/openapi.yaml', async (_request, reply) => {
   const spec = await readFile(join(process.cwd(), 'openapi', 'openapi.yaml'), 'utf8')
   return reply.type('application/yaml').send(spec)
@@ -7693,6 +7718,12 @@ server.get('/openapi.yaml', async (_request, reply) => {
 ```
 
 - [ ] **Step 17.3: Write the contract test** `src/adapters/rest/openapi-contract.test.ts`:
+
+> **Amendment (Task 17 repair, fastify 5.12.3 / find-my-way 9.9.0):** the draft's
+> `printRoutes({ output: 'json' })` did not survive find-my-way 9 — the option is ignored at
+> runtime (return stays a string, `.tree` undefined) and `output` is not in fastify's
+> `PrintRoutesOptions`, so the draft does not even typecheck. The shipped test parses the
+> pretty tree, the only supported output; format facts are in the block's comments.
 
 ```ts
 import { readFile } from 'node:fs/promises'
@@ -7702,7 +7733,6 @@ import type { FastifyInstance } from 'fastify'
 import { makeTestApp } from '#root/testing/test-app'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
-const SKIP_NODE_KEYS = new Set(['meta', 'cors', 'preflight', 'wildcard', 'HEAD', 'version', '...'])
 
 interface SpecPathItem {
   [method: string]: unknown
@@ -7718,28 +7748,31 @@ const specKeys = (spec: { paths: Record<string, SpecPathItem> }): string[] => {
   return keys.sort()
 }
 
-interface RouteNode {
-  [key: string]: unknown
-}
+// The plan block walked printRoutes({ output: 'json' }) — fastify 5.12.3 ships
+// find-my-way 9.9.0, which has no JSON output: the option is ignored (return stays a
+// string, 'tree' is undefined) and the fastify types reject the key outright. Repaired
+// to parse the pretty tree, the only supported output. Format facts (lib/pretty-print.js):
+// nesting is 4 chars per level ('│   ' or '    '); with commonPrefix:false every leaf
+// line prints a leading-slash segment, so the indent stack reconstructs the full path.
+// A node whose methods differ in constraints serializes them as extra indented data
+// lines the regex below would silently drop — this app registers no route constraints;
+// if that ever changes, teach routeKeys to fold them before trusting the diff.
+const ROUTE_LINE = /^((?:│ {3}| {4})*)(?:├── |└── )(\/\S*) \(([^)]+)\)$/
 
 const routeKeys = (app: FastifyInstance): string[] => {
   const keys = new Set<string>()
-  const json = app.printRoutes({ commonPrefix: false, output: 'json' }) as unknown as {
-    tree: RouteNode
-  }
-  const walk = (node: RouteNode, prefix: string): void => {
-    for (const [key, child] of Object.entries(node)) {
-      if (SKIP_NODE_KEYS.has(key)) continue
-      if (METHODS.includes(key)) {
-        keys.add(`${key} ${prefix.replace(/:([^/]+)/g, '{$1}')}`)
-        continue
-      }
-      if (child && typeof child === 'object') {
-        walk(child as RouteNode, key === '' ? prefix : `${prefix}/${key}`)
-      }
+  const stack: string[] = []
+  for (const line of app.printRoutes({ commonPrefix: false }).split('\n')) {
+    const match = ROUTE_LINE.exec(line)
+    if (!match) continue
+    stack.length = match[1].length / 4
+    stack.push(match[2])
+    for (const method of match[3].split(', ')) {
+      // fastify answers HEAD wherever GET is registered; the contract documents GET
+      if (method === 'HEAD') continue
+      keys.add(`${method} ${stack.join('').replace(/:([^/]+)/g, '{$1}')}`)
     }
   }
-  walk(json.tree, '')
   return [...keys].sort()
 }
 

@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import Fastify, { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import { registerProblemHandlers } from '#root/adapters/rest/problem'
@@ -21,6 +23,12 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   // fastify accepts a plain object return just the same
   server.get('/ping', () => {
     return { pong: 'it worked!' }
+  })
+
+  // the committed contract is served publicly (D-k); PUBLIC_PATHS already lists the path
+  server.get('/openapi.yaml', async (_request, reply) => {
+    const spec = await readFile(join(process.cwd(), 'openapi', 'openapi.yaml'), 'utf8')
+    return reply.type('application/yaml').send(spec)
   })
 
   // hook order matters: auth resolves the actor, then idempotency reserves per-actor keys
