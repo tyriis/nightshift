@@ -26,9 +26,11 @@ const specKeys = (spec: { paths: Record<string, SpecPathItem> }): string[] => {
 // to parse the pretty tree, the only supported output. Format facts (lib/pretty-print.js):
 // nesting is 4 chars per level ('│   ' or '    '); with commonPrefix:false every leaf
 // line prints a leading-slash segment, so the indent stack reconstructs the full path.
-// A node whose methods differ in constraints serializes them as extra indented data
-// lines the regex below would silently drop — this app registers no route constraints;
-// if that ever changes, teach routeKeys to fold them before trusting the diff.
+// Lines shaped like tree nodes but outside this grammar all fail LOUD, never drop
+// silently: a wildcard route prints (commonPrefix:false) as a bare `── * (GET, HEAD)`
+// leaf with no path segment; method-varying constraints print as extra data lines; a
+// find-my-way format change shifts every other shape. This app registers neither — if
+// that ever changes, teach the grammar before trusting the diff.
 const ROUTE_LINE = /^((?:│ {3}| {4})*)(?:├── |└── )(\/\S*) \(([^)]+)\)$/
 
 const routeKeys = (app: FastifyInstance): string[] => {
@@ -36,7 +38,18 @@ const routeKeys = (app: FastifyInstance): string[] => {
   const stack: string[] = []
   for (const line of app.printRoutes({ commonPrefix: false }).split('\n')) {
     const match = ROUTE_LINE.exec(line)
-    if (!match) continue
+    if (!match) {
+      // fail LOUD, never silent: any tree-shaped line the regex cannot parse means the
+      // grammar missed a class (wildcard leaf, constraint data line, format drift).
+      if (line.includes('── ')) {
+        throw new Error(
+          `routeKeys: unparseable route-tree line ${JSON.stringify(line)} — ROUTE_LINE covers only ` +
+            'plain "/segment (METHOD)" leaves; wildcards (── *), method constraints, or a ' +
+            'find-my-way format change land here — teach the grammar before trusting the diff'
+        )
+      }
+      continue
+    }
     stack.length = match[1].length / 4
     stack.push(match[2])
     for (const method of match[3].split(', ')) {
@@ -70,5 +83,15 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
     await t.close()
 
     expect(documented).toEqual(served)
+  })
+
+  it('routeKeys fails loudly on tree shapes outside the grammar', () => {
+    // Live capture (find-my-way 9.9.0): registering GET /wildcard-probe/* prints a bare
+    // wildcard leaf with no path segment — the silent skip this replaced read as false
+    // GREEN (reviewer exp-15). Stubbing printRoutes is the pin's injection point: fastify
+    // refuses route registration after boot, so the wildcard shape stays out of the app.
+    const tree = '├── /tasks (POST, GET, HEAD)\n└── * (GET, HEAD)\n'
+    const app = { printRoutes: () => tree } as unknown as FastifyInstance
+    expect(() => routeKeys(app)).toThrow('── * (GET, HEAD)')
   })
 })
