@@ -20,18 +20,21 @@ export class SqliteUnitOfWork implements UnitOfWork {
     }
   }
 
-  // Kysely 0.29.5's SqliteDialect hands EVERY caller the same better-sqlite3 connection
-  // with no queueing (verified: the sqlite dialect does not use SingleConnectionProvider)
-  // — so two overlapping withTransaction() calls make the loser's BEGIN throw
-  // "cannot start a transaction within a transaction": a 500, not a domain code. Task 18's
-  // §14.3 two-session claim race goes through here. A promise-chain mutex serializes
-  // transactions on the single writer — correct and cheap at homelab scale.
+  // Kysely 0.29.5 already serializes connection acquisition for SQLite
+  // (RuntimeDriver wraps the single connection in its own ConnectionMutex, held from
+  // BEGIN through COMMIT/ROLLBACK), so overlapping transactions do NOT error. This
+  // promise-chain queue adds STRICT FIFO fairness on the single writer and keeps
+  // ordering deterministic if a pooled or multi-connection dialect ever replaces
+  // SqliteDialect.
   //
-  // NOT reentrant: calling withTransaction from inside fn() would enqueue behind itself
-  // and deadlock — use-cases own transactions; repos must never call withTransaction.
+  // NOT reentrant: never touch the root db from inside fn — neither a nested
+  // withTransaction nor a plain root-db query. Kysely's own connection mutex is held
+  // for the whole transaction, so an inner acquisition waits FOREVER (silent deadlock,
+  // no error, no timeout). Use-cases own transactions; repos receive the tx and never
+  // start their own or capture the root db.
   //
-  // Scope is PER-INSTANCE: serialization only holds between callers of this same UoW
-  // object; the wiring provides one singleton SqliteUnitOfWork per Kysely/db.
+  // FIFO scope is per-instance; SAFETY is global (Kysely's driver mutex), so multiple
+  // UoW instances over one db cannot corrupt anything — they only lose shared ordering.
   private txQueue: Promise<unknown> = Promise.resolve()
 
   async withTransaction<T>(fn: (repos: Repos) => Promise<T>): Promise<T> {

@@ -44,7 +44,7 @@ export class SqliteDependencyRepo implements DependencyRepo {
       select b.id, b.title, b.status
         from dependencies d join tasks b on b.id = d.blocker_id
        where d.blocked_id = ${taskId} and b.status != 'done'
-       order by b.title
+       order by b.title, b.id
     `.execute(this.db)
     return r.rows
   }

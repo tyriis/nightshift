@@ -46,7 +46,7 @@ describe('SqliteUnitOfWork', () => {
     await db.destroy()
   })
 
-  it('serializes concurrent transactions (no BEGIN-within-BEGIN)', async () => {
+  it('runs transactions one after another on the single writer', async () => {
     const db = await freshDb()
     await seedActor(db, 'a_creator', 'human')
     const uow = new SqliteUnitOfWork(db)
