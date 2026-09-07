@@ -3072,6 +3072,14 @@ git add -A && git commit -m "feat(usecases): CreateTask, UpdateTask with audit t
 
 ### Task 8: Use-case — SplitTask (atomic split, auto-release under claim, spec §6.2)
 
+> **Execution note (orchestrator, 2026-09-07):** Tasks 8–10 are dispatched as ONE combined implementer run
+> because their test blocks import each other's modules (Task 8's test uses `ClaimTask`; Task 9's uses
+> `ClaimTask`+`SplitTask`; Task 10's uses `UpdateStatus`+`SplitTask`) — a sequential per-task "verify green"
+> is impossible. Inside the run: write Task 8's test first (RED: missing modules), then implement
+> Step 10.1 (ports + `findActorByTokenId`) and the five use-case modules (split/claim/release/heartbeat,
+> then update-status), keeping each task's test file verbatim; commit(s) note the merge. Task content,
+> APIs and invariants are unchanged.
+
 **Files:**
 
 - Create: `src/application/usecases/split-task.ts`
