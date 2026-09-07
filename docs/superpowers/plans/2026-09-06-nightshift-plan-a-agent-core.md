@@ -7900,6 +7900,27 @@ git add -A && git commit -m "feat(api): OpenAPI 3.1 contract, served spec, drift
 
 - [ ] **Step 18.1: Write the acceptance test** `src/adapters/rest/scenarios.test.ts`:
 
+> **Amendment (Task 18, sync = shipped form):** the block below is byte-identical to
+> `src/adapters/rest/scenarios.test.ts`. The draft’s own implementer note is executed as written:
+> the `‘already_claimed’.replace(‘already_claimed’, ‘claim_acquired’)` noise line becomes a plain
+> `claim_released` arrayContaining entry, and the c1/c2 dance has zero branches on `claim.statusCode`
+> — c1 is claimed only in §14.4, c2 only in §14.6, and each session patches `in_review` exactly once
+> with that claim’s returned `lease_token` (nothing is released after the split). Two repairs beyond
+> the note, quoted from `git show 54683f0:` (plan lines 7938, 7965):
+>
+> - `expect(anaId).toMatch(/^a_seq/)` — `makeTestApp` runs the app, so actor ids come from
+>   `RandomIdGen` (`a_[a-z0-9]{16}` — `ids.ts`, pinned in `ids.test.ts`); a seq-shaped id is only
+>   reachable in seq-minted fixtures (M-1 — not applicable: nothing here mints ids). Shipped:
+>   `expect(anaId).toMatch(/^a_[a-z0-9]{16}$/)`.
+> - `const winner = r1.statusCode === 200 ? r1 : r2` was dead in the draft; shipped asserts the
+>   winner’s lease: ``expect(winner.json().lease_token).toBe(`${task.id}:1`)`` (first claim ⇒
+>   generation 1; mirrors the race idiom of `tasks.test.ts`).
+>
+> Per the ora-21 forward-pin the release reasons `claim released by split` /
+> `claim released on review` are asserted grep-exact from the audit rows; audit counts stay
+> lower bounds — STATE reconstruction (statuses, claims, rollups) reads the tables through the
+> GET endpoints. Prettier normalizes the `` `/audit?limit=200` `` template url to a plain string.
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { makeTestApp, type TestApp } from '#root/testing/test-app'
@@ -7935,7 +7956,7 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
 
     // §14.1 — admin enables a second human + creates agent hermes-1 (two tokens = two sessions)
     const anaId = await createActor(t, 'human', 'ana')
-    expect(anaId).toMatch(/^a_seq/)
+    expect(anaId).toMatch(/^a_[a-z0-9]{16}$/)
     const anaToken = await issueToken(t, anaId)
     const hermes = await createActor(t, 'agent', 'hermes-1')
     const sess1 = await issueToken(t, hermes)
@@ -7964,6 +7985,7 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
     expect([r1.statusCode, r2.statusCode].sort()).toEqual([200, 409])
     const winner = r1.statusCode === 200 ? r1 : r2
     const loser = r1.statusCode === 200 ? r2 : r1
+    expect(winner.json().lease_token).toBe(`${task.id}:1`) // first claim ⇒ generation 1
     expect(loser.json().code).toBe('already_claimed')
     expect(loser.json().holder_handle).toBe('hermes-1')
 
@@ -7987,51 +8009,36 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
     expect(parentAfter.claim_token_id).toBeNull()
     const c1 = split.created[0].id as string
     const c2 = split.created[1].id as string
-    expect(
-      (await t.app.inject({ method: 'POST', url: `/tasks/${c1}/claim`, headers: bearer(t, sess1) }))
-        .statusCode
-    ).toBe(200)
+    const c1Claim = await t.app.inject({
+      method: 'POST',
+      url: `/tasks/${c1}/claim`,
+      headers: bearer(t, sess1),
+    })
+    expect(c1Claim.statusCode).toBe(200)
 
     // §14.5 — question gate seam: no threads exist in Plan A, so review proceeds (gate wired in B)
 
-    // §14.6 — second session claims the sibling; both reach in_review; humans close
-    expect(
-      (await t.app.inject({ method: 'POST', url: `/tasks/${c2}/claim`, headers: bearer(t, sess2) }))
-        .statusCode
-    ).toBe(200)
-    for (const [child, tok] of [
-      [c1, sess1],
-      [c2, sess2],
+    // §14.6 — second session claims the sibling; each session reviews with its own live lease
+    const c2Claim = await t.app.inject({
+      method: 'POST',
+      url: `/tasks/${c2}/claim`,
+      headers: bearer(t, sess2),
+    })
+    expect(c2Claim.statusCode).toBe(200)
+    for (const [child, tok, lease] of [
+      [c1, sess1, c1Claim.json().lease_token as string],
+      [c2, sess2, c2Claim.json().lease_token as string],
     ] as const) {
-      const claim = await t.app.inject({
-        method: 'POST',
-        url: `/tasks/${child}/claim`,
-        headers: bearer(t, tok),
-      })
-      // first claim above may already hold it; only c1 double-claims — handle both outcomes:
-      if (claim.statusCode === 409) continue
-      const review = await t.app.inject({
-        method: 'PATCH',
-        url: `/tasks/${child}/status`,
-        headers: bearer(t, tok),
-        payload: { status: 'in_review', reason: 'PR ready', lease_token: claim.json().lease_token },
-      })
-      expect(review.statusCode).toBe(200)
-    }
-    // c1 review (holder is sess1 from §14.4 claim):
-    const c1Claim = (
-      await t.app.inject({ method: 'GET', url: `/tasks/${c1}`, headers: nils })
-    ).json()
-    if (c1Claim.status !== 'in_review') {
-      // re-claim was impossible (already claimed) — drive review with the live lease:
-      const lease = `${c1}:${c1Claim.claim_generation}`
-      const review = await t.app.inject({
-        method: 'PATCH',
-        url: `/tasks/${c1}/status`,
-        headers: bearer(t, sess1),
-        payload: { status: 'in_review', reason: 'PR ready', lease_token: lease },
-      })
-      expect(review.statusCode).toBe(200)
+      expect(
+        (
+          await t.app.inject({
+            method: 'PATCH',
+            url: `/tasks/${child}/status`,
+            headers: bearer(t, tok),
+            payload: { status: 'in_review', reason: 'PR ready', lease_token: lease },
+          })
+        ).statusCode
+      ).toBe(200)
     }
 
     // agents still cannot close:
@@ -8071,7 +8078,7 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
 
     // §14.7 — audit reconstructs the story; rollups visible; nothing hidden (ana sees nils' actions)
     const audit = (
-      await t.app.inject({ method: 'GET', url: `/audit?limit=200`, headers: bearer(t, anaToken) })
+      await t.app.inject({ method: 'GET', url: '/audit?limit=200', headers: bearer(t, anaToken) })
     ).json()
     const story = audit.map((a: { action: string }) => a.action)
     expect(story).toEqual(
@@ -8080,11 +8087,18 @@ describe('acceptance (spec §14 — agent side; human OIDC login and threads arr
         'token_created',
         'task_created',
         'claim_acquired',
-        'already_claimed'.replace('already_claimed', 'claim_acquired'),
+        'claim_released',
+        'task_split',
+        'status_changed',
       ])
     )
+    // release reasons pinned at use-case level (grep-exact — do not paraphrase):
+    expect(audit.some((a: { reason: string }) => a.reason === 'claim released by split')).toBe(true)
+    expect(audit.some((a: { reason: string }) => a.reason === 'claim released on review')).toBe(
+      true
+    )
+    // lower bounds only — STATE is reconstructed from the tables below, never from audit counts
     expect(story.filter((a: string) => a === 'claim_acquired').length).toBeGreaterThanOrEqual(3)
-    expect(story).toContain('task_split')
     expect(story.filter((a: string) => a === 'status_changed').length).toBeGreaterThanOrEqual(5)
 
     const board = (
