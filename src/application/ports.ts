@@ -208,3 +208,11 @@ export interface Repos {
 export interface UnitOfWork {
   withTransaction<T>(fn: (repos: Repos) => Promise<T>): Promise<T>
 }
+
+// ---- actor context passed into every use-case invocation
+
+export interface ActorContext {
+  actor: ActorRef
+  /** id of the authenticated token performing the request (audit attribution, spec §5) */
+  tokenId: string | null
+}
