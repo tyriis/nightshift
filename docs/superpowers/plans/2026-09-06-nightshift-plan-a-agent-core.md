@@ -6249,17 +6249,13 @@ git add -A && git commit -m "feat(rest): task/claim/split/status routes with §7
 
 - [ ] **Step 15.2: Implement `src/application/usecases/labels.ts`:**
 
+Shipped delta (Task 15 sync): the block's `import type` list also named `LabelRepo`
+and `TaskRepo`, which no code in the block uses — `@typescript-eslint/no-unused-vars`
+(lint gate) errored on both, so the shipped import is the narrowed list below.
+
 ```ts
 import { DomainError } from '#root/domain/errors'
-import type {
-  ActorContext,
-  Clock,
-  IdGen,
-  LabelRepo,
-  LabelRow,
-  TaskRepo,
-  UnitOfWork,
-} from '#root/application/ports'
+import type { ActorContext, Clock, IdGen, LabelRow, UnitOfWork } from '#root/application/ports'
 
 export interface CreateLabelInput extends ActorContext {
   name: string
@@ -6378,6 +6374,12 @@ export const registerDependencyRoutes = (app: FastifyInstance, deps: AppDeps): v
 
 `src/adapters/rest/routes/labels.ts`:
 
+Shipped deltas (Task 15 sync): the block registered POST `/labels` as a 2-arg call
+with the async handler embedded in the options object — invalid syntax (`'{' expected`,
+no overload matches); shipped as the 3-arg schema'd registration matching `tasks.ts`.
+The handler also awaits the use-case before `send`, and spreads the trusted auth
+context LAST (Task 14 quality-review defense; the body schema is `additionalProperties:false`).
+
 ```ts
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
@@ -6386,20 +6388,32 @@ import { actorCtx } from '#root/adapters/rest/auth'
 export const registerLabelRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   app.get('/labels', async () => deps.labelsRoot.list())
 
-  app.post('/labels', {
-    schema: {
-      body: {
-        type: 'object',
-        required: ['name'],
-        additionalProperties: false,
-        properties: { name: { type: 'string', minLength: 1, maxLength: 60 }, color: { type: 'string' } },
+  // plan block wrote this as a 2-arg call with the async handler embedded in the
+  // options object (non-compiling); shipped as the 3-arg schema'd registration,
+  // matching tasks.ts (Task 14 sync).
+  app.post(
+    '/labels',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name'],
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 60 },
+            color: { type: 'string' },
+          },
+        },
       },
     },
     async (request, reply) => {
       const body = request.body as { name: string; color?: string }
-      return reply.code(201).send(deps.useCases.createLabel.run({ ...actorCtx(request), ...body }))
-    },
-  })
+      // Task 14 review defense: trusted auth context spread LAST, after the
+      // schema-validated body (additionalProperties:false already fences it).
+      const label = await deps.useCases.createLabel.run({ ...body, ...actorCtx(request) })
+      return reply.code(201).send(label)
+    }
+  )
 
   app.put('/tasks/:id/labels/:labelId', async (request, reply) => {
     const { id, labelId } = request.params as { id: string; labelId: string }
@@ -6418,6 +6432,12 @@ export const registerLabelRoutes = (app: FastifyInstance, deps: AppDeps): void =
 Register both in `buildApp` (after `registerTaskRoutes`).
 
 - [ ] **Step 15.4: Write API test** `src/adapters/rest/routes/deps-labels.test.ts`:
+
+Shipped delta (Task 15 sync): a third test was added covering what the block left
+open — 204 + Idempotency-Key replay on a real route (D-j), GET/POST `/labels`
+happy-path + rejection, and the not_found/invalid_request paths the block omitted.
+Note: fastify's default ajv (`removeAdditional`) strips unknown body props rather
+than rejecting, so the POST `/labels` 400 pin is the missing required `name`.
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -6542,6 +6562,92 @@ describe('dependency + label routes', () => {
       await t.app.inject({ method: 'GET', url: `/tasks/${task}/context`, headers: bearer(t) })
     ).json()
     expect(after.labels).toEqual([])
+    await t.close()
+  })
+
+  // Coverage the plan block left open (Task 15 brief): 204+Idempotency-Key replay on
+  // a real route, GET/POST /labels happy + rejection, not_found on the task-side paths.
+  it('204 replays via Idempotency-Key; remaining routes and 404/400 shapes', async () => {
+    const t = await makeTestApp()
+    const blocker = await mkTask(t, 'idem-blocker')
+    const blocked = await mkTask(t, 'idem-blocked')
+
+    const idemHeaders = { ...bearer(t), 'idempotency-key': 'k-block' }
+    const first = await t.app.inject({
+      method: 'PUT',
+      url: `/tasks/${blocked}/blocks/${blocker}`,
+      headers: idemHeaders,
+    })
+    expect(first.statusCode).toBe(204)
+    const replay = await t.app.inject({
+      method: 'PUT',
+      url: `/tasks/${blocked}/blocks/${blocker}`,
+      headers: idemHeaders,
+    })
+    expect(replay.statusCode).toBe(204) // key completed, not stranded in flight (D-j)
+    expect(replay.body).toBe('') // 204 replays carry no body
+
+    const created = await t.app.inject({
+      method: 'POST',
+      url: '/labels',
+      headers: bearer(t),
+      payload: { name: 'ops', color: '#ff8800' },
+    })
+    expect(created.statusCode).toBe(201)
+    const labelId = created.json().id as string
+
+    const listed = (
+      await t.app.inject({ method: 'GET', url: '/labels', headers: bearer(t) })
+    ).json()
+    expect(listed.map((l: { name: string }) => l.name)).toEqual(['ops'])
+    expect(listed[0].color).toBe('#ff8800')
+
+    const unauth = await t.app.inject({ method: 'GET', url: '/labels' })
+    expect(unauth.statusCode).toBe(401)
+    expect(unauth.headers['content-type']).toContain('application/problem+json')
+    expect(unauth.json().code).toBe('unauthenticated')
+
+    // fastify's default ajv strips unknown props (removeAdditional), so the 400
+    // pin is the missing required 'name', not an unknown key
+    const bad = await t.app.inject({
+      method: 'POST',
+      url: '/labels',
+      headers: bearer(t),
+      payload: { color: '#ffffff', extra: true },
+    })
+    expect(bad.statusCode).toBe(400)
+    expect(bad.json().code).toBe('invalid_request')
+
+    const putGhostTask = await t.app.inject({
+      method: 'PUT',
+      url: `/tasks/t_ghost/labels/${labelId}`,
+      headers: bearer(t),
+    })
+    expect(putGhostTask.statusCode).toBe(404)
+    expect(putGhostTask.json().code).toBe('not_found')
+
+    const delGhostTask = await t.app.inject({
+      method: 'DELETE',
+      url: `/tasks/t_ghost/labels/${labelId}`,
+      headers: bearer(t),
+    })
+    expect(delGhostTask.statusCode).toBe(404)
+    expect(delGhostTask.json().code).toBe('not_found')
+
+    const delBlockGhostTask = await t.app.inject({
+      method: 'DELETE',
+      url: `/tasks/t_ghost/blocks/${blocker}`,
+      headers: bearer(t),
+    })
+    expect(delBlockGhostTask.statusCode).toBe(404)
+    expect(delBlockGhostTask.json().code).toBe('not_found')
+
+    const detached = await t.app.inject({
+      method: 'DELETE',
+      url: `/tasks/${blocked}/labels/l_ghost`,
+      headers: bearer(t),
+    })
+    expect(detached.statusCode).toBe(204) // detach is idempotent; task-side owns the 404
     await t.close()
   })
 })
