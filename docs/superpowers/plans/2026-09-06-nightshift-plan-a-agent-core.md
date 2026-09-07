@@ -3019,7 +3019,8 @@ export class UpdateTask {
     return this.uow.withTransaction(async (repos) => {
       const before = await repos.tasks.findById(input.taskId)
       if (!before) throw new DomainError('not_found', `task ${input.taskId} not found`)
-      if (input.patch.assignee_id) {
+      // M-3 hardening (ora-12): existence check runs on any non-null SET — catches ''
+      if (input.patch.assignee_id !== undefined && input.patch.assignee_id !== null) {
         const assignee = await repos.actors.findById(input.patch.assignee_id)
         if (!assignee) {
           throw new DomainError('not_found', `assignee ${input.patch.assignee_id} not found`)
