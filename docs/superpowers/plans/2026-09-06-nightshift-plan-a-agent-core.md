@@ -2681,7 +2681,9 @@ export class SqliteIdempotencyRepo implements IdempotencyRepo {
       .values({ ...input, status: null, body: null })
       .onConflict((oc) => oc.columns(['actor_id', 'idem_key']).doNothing())
       .executeTakeFirst()
-    if (Number(res.numInsertedRows) === 1) return { state: 'reserved' }
+    // Kysely 0.29.5 InsertResult exposes numInsertedOrUpdatedRows (not numInsertedRows);
+    // with onConflict doNothing a racer's no-op yields 0.
+    if (Number(res.numInsertedOrUpdatedRows) === 1) return { state: 'reserved' }
 
     const row = await this.db
       .selectFrom('idempotency_keys')
