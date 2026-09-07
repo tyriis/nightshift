@@ -18,7 +18,7 @@ export class UpdateTask {
     return this.uow.withTransaction(async (repos) => {
       const before = await repos.tasks.findById(input.taskId)
       if (!before) throw new DomainError('not_found', `task ${input.taskId} not found`)
-      if (input.patch.assignee_id) {
+      if (input.patch.assignee_id !== undefined && input.patch.assignee_id !== null) {
         const assignee = await repos.actors.findById(input.patch.assignee_id)
         if (!assignee) {
           throw new DomainError('not_found', `assignee ${input.patch.assignee_id} not found`)
@@ -36,12 +36,14 @@ export class UpdateTask {
           entity_id: input.taskId,
           before: {
             title: before.title,
+            description: before.description,
             blocked_flag: before.blocked_flag,
             assignee_id: before.assignee_id,
             acceptance_criteria: before.acceptance_criteria,
           },
           after: {
             title: after.title,
+            description: after.description,
             blocked_flag: after.blocked_flag,
             assignee_id: after.assignee_id,
             acceptance_criteria: after.acceptance_criteria,

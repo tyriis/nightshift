@@ -62,6 +62,54 @@ describe('UpdateTask (content patch, decision D-e)', () => {
     await db.destroy()
   })
 
+  it('rejects empty-string assignee with not_found (M-3: SET always existence-checks)', async () => {
+    const { db, uow } = await buildUow()
+    const created = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
+    const uc = new UpdateTask(uow, fixedClock())
+    await expect(
+      uc.run({ ...human, taskId: created.id, patch: { assignee_id: '' } })
+    ).rejects.toMatchObject({ code: 'not_found' })
+    await db.destroy()
+  })
+
+  it('assignee_id null clears assignee without existence check (documented)', async () => {
+    const { db, uow } = await buildUow()
+    await seedActor(db, 'a_agent', 'agent', 'hermes-1')
+    const created = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
+    const uc = new UpdateTask(uow, fixedClock())
+    await uc.run({ ...human, taskId: created.id, patch: { assignee_id: 'a_agent' } })
+    const cleared = await uc.run({ ...human, taskId: created.id, patch: { assignee_id: null } })
+    expect(cleared.assignee_id).toBeNull()
+    await db.destroy()
+  })
+
+  it('audit snapshot includes description before/after (I-1)', async () => {
+    const { db, uow } = await buildUow()
+    const created = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'x',
+      description: 'old desc',
+    })
+    await new UpdateTask(uow, fixedClock()).run({
+      ...human,
+      taskId: created.id,
+      patch: { description: 'new desc' },
+    })
+    const auditRows = await new SqliteAuditRepo(db).search({
+      entity_type: 'task',
+      entity_id: created.id,
+      limit: 5,
+    })
+    const row = auditRows.find((r) => r.action === 'task_updated')
+    expect(row).toBeDefined()
+    const before = row?.before as { description?: string }
+    const after = row?.after as { description?: string }
+    expect(before?.description).not.toBe(after?.description)
+    expect(before?.description).toBe('old desc')
+    expect(after?.description).toBe('new desc')
+    await db.destroy()
+  })
+
   it('rejects unknown task with not_found', async () => {
     const { db, uow } = await buildUow()
     const uc = new UpdateTask(uow, fixedClock())
