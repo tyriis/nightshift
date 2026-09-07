@@ -185,8 +185,8 @@ paths:
                     additionalProperties: false
                     properties:
                       title: { type: string, minLength: 1, maxLength: 300 }
-                      description: { type: string }
-                      acceptance_criteria: { type: string }
+                      description: { type: string, description: Markdown (spec §6.1) }
+                      acceptance_criteria: { type: string, description: Markdown (spec §6.1) }
                       status: { $ref: "#/components/schemas/TaskStatus" }
       responses:
         "201":
@@ -470,12 +470,31 @@ components:
       # The task row itself. Public endpoints may wrap it (split, context);
       # the flat Task DTO = TaskRecord + rollup counts.
       type: object
+      # every property is always serialized: the DTO spreads the full sqlite row (dto.ts)
+      required:
+        [
+          id,
+          parent_id,
+          title,
+          description,
+          acceptance_criteria,
+          status,
+          blocked_flag,
+          assignee_id,
+          position,
+          created_by,
+          created_at,
+          updated_at,
+          claim_token_id,
+          claim_generation,
+          last_heartbeat_at,
+        ]
       properties:
         id: { type: string }
         parent_id: { type: ["string", "null"] }
         title: { type: string }
-        description: { type: string }
-        acceptance_criteria: { type: string }
+        description: { type: string, description: Markdown (spec §6.1) }
+        acceptance_criteria: { type: string, description: Markdown (spec §6.1) }
         status: { $ref: "#/components/schemas/TaskStatus" }
         blocked_flag: { type: boolean }
         assignee_id: { type: ["string", "null"] }

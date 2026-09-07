@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import type { FastifyInstance } from 'fastify'
 import { makeTestApp } from '#root/testing/test-app'
+import { DOMAIN_ERROR_STATUS } from '#root/domain/errors'
+import { TASK_STATUSES } from '#root/domain/task'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
@@ -83,6 +85,25 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
     await t.close()
 
     expect(documented).toEqual(served)
+  })
+
+  it('pins schema enums to the domain single sources (no stale-enum drift)', async () => {
+    // Derived from the domain single source, never re-listed: a new TASK_STATUSES or DomainErrorCode
+    // member joins the expected set the moment it lands in the domain and stays RED until the yaml
+    // enum catches up — the mechanism closing the false-GREEN class one layer below path×method.
+    // internal_error is problem.ts's adapter catch-all, not a domain member — unioned explicitly.
+    const spec = parse(await readFile('openapi/openapi.yaml', 'utf8')) as {
+      components: {
+        schemas: {
+          TaskStatus: { enum: string[] }
+          Problem: { properties: { code: { enum: string[] } } }
+        }
+      }
+    }
+    // statuses: order-sensitive exact; codes: sorted for set equality — exact, no superset tolerance
+    expect(spec.components.schemas.TaskStatus.enum).toEqual([...TASK_STATUSES])
+    const domainCodes = Object.keys(DOMAIN_ERROR_STATUS).concat('internal_error').sort()
+    expect(spec.components.schemas.Problem.properties.code.enum.sort()).toEqual(domainCodes)
   })
 
   it('routeKeys fails loudly on tree shapes outside the grammar', () => {

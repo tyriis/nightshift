@@ -7298,8 +7298,8 @@ paths:
                     additionalProperties: false
                     properties:
                       title: { type: string, minLength: 1, maxLength: 300 }
-                      description: { type: string }
-                      acceptance_criteria: { type: string }
+                      description: { type: string, description: Markdown (spec §6.1) }
+                      acceptance_criteria: { type: string, description: Markdown (spec §6.1) }
                       status: { $ref: '#/components/schemas/TaskStatus' }
       responses:
         '201':
@@ -7583,12 +7583,31 @@ components:
       # The task row itself. Public endpoints may wrap it (split, context);
       # the flat Task DTO = TaskRecord + rollup counts.
       type: object
+      # every property is always serialized: the DTO spreads the full sqlite row (dto.ts)
+      required:
+        [
+          id,
+          parent_id,
+          title,
+          description,
+          acceptance_criteria,
+          status,
+          blocked_flag,
+          assignee_id,
+          position,
+          created_by,
+          created_at,
+          updated_at,
+          claim_token_id,
+          claim_generation,
+          last_heartbeat_at,
+        ]
       properties:
         id: { type: string }
         parent_id: { type: ['string', 'null'] }
         title: { type: string }
-        description: { type: string }
-        acceptance_criteria: { type: string }
+        description: { type: string, description: Markdown (spec §6.1) }
+        acceptance_criteria: { type: string, description: Markdown (spec §6.1) }
         status: { $ref: '#/components/schemas/TaskStatus' }
         blocked_flag: { type: boolean }
         assignee_id: { type: ['string', 'null'] }
@@ -7732,12 +7751,25 @@ server.get('/openapi.yaml', async (_request, reply) => {
 > fail loud), and a pin feeds the captured wildcard leaf through a stubbed `printRoutes` — the
 > wildcard itself is never registered: fastify refuses route registration after boot.
 
+> **Amendment (Task 17 quality review, contract enums):** path×method drift does not see enums —
+> new `TASK_STATUSES`/`DomainErrorCode` members reach the fastify schemas (routes single-source
+> them) while the yaml enums go silently stale: the same false-GREEN class one layer down. The
+> shipped test additionally pins `TaskStatus.enum` to `TASK_STATUSES` (order-sensitive, exact) and
+> `Problem.properties.code.enum` to the complete domain set — `Object.keys(DOMAIN_ERROR_STATUS)`
+> plus `internal_error` (problem.ts's adapter catch-all) — both sides sorted, exact equality, no
+> superset tolerance; derived from the domain, never re-listed, so a new member is RED until the
+> yaml catches up. The pin is why `DOMAIN_ERROR_STATUS` is now `export`ed in `src/domain/errors.ts`
+> — the minimal additive export, and this note is its mirror: Step 2.8's block stays draft-state,
+> like the union additions before it.
+
 ```ts
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import type { FastifyInstance } from 'fastify'
 import { makeTestApp } from '#root/testing/test-app'
+import { DOMAIN_ERROR_STATUS } from '#root/domain/errors'
+import { TASK_STATUSES } from '#root/domain/task'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
@@ -7818,6 +7850,25 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
     await t.close()
 
     expect(documented).toEqual(served)
+  })
+
+  it('pins schema enums to the domain single sources (no stale-enum drift)', async () => {
+    // Derived from the domain single source, never re-listed: a new TASK_STATUSES or DomainErrorCode
+    // member joins the expected set the moment it lands in the domain and stays RED until the yaml
+    // enum catches up — the mechanism closing the false-GREEN class one layer below path×method.
+    // internal_error is problem.ts's adapter catch-all, not a domain member — unioned explicitly.
+    const spec = parse(await readFile('openapi/openapi.yaml', 'utf8')) as {
+      components: {
+        schemas: {
+          TaskStatus: { enum: string[] }
+          Problem: { properties: { code: { enum: string[] } } }
+        }
+      }
+    }
+    // statuses: order-sensitive exact; codes: sorted for set equality — exact, no superset tolerance
+    expect(spec.components.schemas.TaskStatus.enum).toEqual([...TASK_STATUSES])
+    const domainCodes = Object.keys(DOMAIN_ERROR_STATUS).concat('internal_error').sort()
+    expect(spec.components.schemas.Problem.properties.code.enum.sort()).toEqual(domainCodes)
   })
 
   it('routeKeys fails loudly on tree shapes outside the grammar', () => {

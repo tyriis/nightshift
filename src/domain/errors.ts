@@ -15,7 +15,8 @@ export type DomainErrorCode =
   | 'idempotency_in_flight'
   | 'unauthenticated'
 
-const DOMAIN_ERROR_STATUS: Record<DomainErrorCode, number> = {
+// exported so the OpenAPI contract test can pin Problem.code to the complete domain set
+export const DOMAIN_ERROR_STATUS: Record<DomainErrorCode, number> = {
   not_found: 404,
   forbidden: 403,
   invalid_request: 400,
