@@ -171,6 +171,7 @@ export interface ActorRepo {
     created_at: string
   }): Promise<void>
   findActiveTokenByHash(hash: string): Promise<TokenLookup | null>
+  findTokenById(id: string): Promise<TokenRow | null>
   revokeToken(id: string, at: string): Promise<void>
   touchToken(id: string, at: string): Promise<void>
   listTokensForActor(actorId: string): Promise<TokenRow[]>

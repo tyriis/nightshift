@@ -13,6 +13,7 @@ export type DomainErrorCode =
   | 'threads_on_parent'
   | 'canceled_terminal'
   | 'idempotency_in_flight'
+  | 'unauthenticated'
 
 const DOMAIN_ERROR_STATUS: Record<DomainErrorCode, number> = {
   not_found: 404,
@@ -29,6 +30,7 @@ const DOMAIN_ERROR_STATUS: Record<DomainErrorCode, number> = {
   threads_on_parent: 409,
   canceled_terminal: 409,
   idempotency_in_flight: 409,
+  unauthenticated: 401,
 }
 
 export class DomainError extends Error {

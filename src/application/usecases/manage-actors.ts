@@ -1,0 +1,136 @@
+import type { ActorKind } from '#root/domain/task'
+import { DomainError } from '#root/domain/errors'
+// Utility import (pure node:crypto, no DB/adapter/transport) — sanctioned as
+// plan-verbatim by orchestrator ruling; the hexagonal no-infra rule targets repo/adapter layers.
+import { generateRawToken, hashToken } from '#root/infra/token-hash'
+import type {
+  ActorContext,
+  ActorRow,
+  Clock,
+  IdGen,
+  TokenRow,
+  UnitOfWork,
+} from '#root/application/ports'
+
+export interface CreateActorInput extends ActorContext {
+  kind: ActorKind
+  handle: string
+  display_name: string
+  description?: string
+}
+
+export class CreateActor {
+  constructor(
+    private readonly uow: UnitOfWork,
+    private readonly clock: Clock,
+    private readonly ids: IdGen
+  ) {}
+
+  async run(input: CreateActorInput): Promise<ActorRow> {
+    const now = this.clock.now().toISOString()
+    return this.uow.withTransaction(async (repos) => {
+      if (await repos.actors.findByHandle(input.handle)) {
+        throw new DomainError('handle_taken', `handle '${input.handle}' already exists`)
+      }
+      const actor = await repos.actors.create({
+        id: this.ids.newId('a'),
+        kind: input.kind,
+        handle: input.handle,
+        display_name: input.display_name,
+        description: input.description ?? '',
+        created_at: now,
+      })
+      await repos.audit.append({
+        actor_id: input.actor.id,
+        token_id: input.tokenId,
+        action: 'actor_created',
+        entity_type: 'actor',
+        entity_id: actor.id,
+        after: { kind: actor.kind, handle: actor.handle },
+        reason: 'actor created',
+        created_at: now,
+      })
+      return actor
+    })
+  }
+}
+
+export interface CreateTokenInput extends ActorContext {
+  actor_id: string
+  label: string
+}
+
+export interface IssuedToken {
+  raw_token: string
+  token: TokenRow
+}
+
+export class CreateToken {
+  constructor(
+    private readonly uow: UnitOfWork,
+    private readonly clock: Clock,
+    private readonly ids: IdGen
+  ) {}
+
+  /** Raw token is returned exactly once; only its SHA-256 is stored (spec §5). */
+  async run(input: CreateTokenInput): Promise<IssuedToken> {
+    const now = this.clock.now().toISOString()
+    return this.uow.withTransaction(async (repos) => {
+      const actor = await repos.actors.findById(input.actor_id)
+      if (!actor) throw new DomainError('not_found', `actor ${input.actor_id} not found`)
+      const raw = generateRawToken()
+      const id = this.ids.newId('tok')
+      await repos.actors.insertToken({
+        id,
+        actor_id: input.actor_id,
+        token_hash: hashToken(raw),
+        label: input.label,
+        created_at: now,
+      })
+      await repos.audit.append({
+        actor_id: input.actor.id,
+        token_id: input.tokenId,
+        action: 'token_created',
+        entity_type: 'actor',
+        entity_id: input.actor_id,
+        after: { token_id: id, label: input.label },
+        reason: 'token issued',
+        created_at: now,
+      })
+      // Plan-verbatim cast: the row was inserted on this very transaction, so the
+      // null arm of findTokenById is unreachable here.
+      const token = (await repos.actors.findTokenById(id)) as TokenRow
+      return { raw_token: raw, token }
+    })
+  }
+}
+
+export interface RevokeTokenInput extends ActorContext {
+  token_id: string
+}
+
+export class RevokeToken {
+  constructor(
+    private readonly uow: UnitOfWork,
+    private readonly clock: Clock
+  ) {}
+
+  async run(input: RevokeTokenInput): Promise<void> {
+    const now = this.clock.now().toISOString()
+    return this.uow.withTransaction(async (repos) => {
+      const token = await repos.actors.findTokenById(input.token_id)
+      if (!token) throw new DomainError('not_found', `token ${input.token_id} not found`)
+      await repos.actors.revokeToken(input.token_id, now)
+      await repos.audit.append({
+        actor_id: input.actor.id,
+        token_id: input.tokenId,
+        action: 'token_revoked',
+        entity_type: 'actor',
+        entity_id: token.actor_id,
+        after: { token_id: input.token_id },
+        reason: 'token revoked',
+        created_at: now,
+      })
+    })
+  }
+}

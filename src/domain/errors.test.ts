@@ -16,6 +16,7 @@ describe('DomainError', () => {
     ['open_questions', 409],
     ['threads_on_parent', 409],
     ['idempotency_in_flight', 409],
+    ['unauthenticated', 401],
   ])('maps %s to HTTP %i', (code, status) => {
     const err = new DomainError(code, `boom: ${code}`)
     expect(err.code).toBe(code)

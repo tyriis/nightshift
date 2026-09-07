@@ -96,6 +96,20 @@ export class SqliteActorRepo implements ActorRepo {
     return { token, actor }
   }
 
+  async findTokenById(id: string): Promise<TokenRow | null> {
+    const r = await this.db.selectFrom('tokens').selectAll().where('id', '=', id).executeTakeFirst()
+    if (!r) return null
+    // map strips token_hash so the secret never leaks into returned rows
+    return {
+      id: r.id,
+      actor_id: r.actor_id,
+      label: r.label,
+      created_at: r.created_at,
+      last_used_at: r.last_used_at,
+      revoked_at: r.revoked_at,
+    }
+  }
+
   async revokeToken(id: string, at: string): Promise<void> {
     await this.db.updateTable('tokens').set({ revoked_at: at }).where('id', '=', id).execute()
   }
