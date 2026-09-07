@@ -22,6 +22,8 @@ describe('actor & token management', () => {
       create.run({ ...human, kind: 'agent', handle: 'hermes-1', display_name: 'dup' })
     ).rejects.toMatchObject({ code: 'handle_taken' })
 
+    const plain = await create.run({ ...human, kind: 'human', handle: 'plain', display_name: 'P' })
+    expect(plain.description).toBe('') // description defaults to ''
     const issued = await new CreateToken(uow, fixedClock(), ids).run({
       ...human,
       actor_id: agent.id,

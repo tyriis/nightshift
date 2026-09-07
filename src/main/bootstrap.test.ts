@@ -16,6 +16,26 @@ describe('bootstrap admin', () => {
     await db.destroy()
   })
 
+  it('reuses an existing a_bootstrap actor when no active token exists', async () => {
+    const db = await freshDb()
+    await db
+      .insertInto('actors')
+      .values({
+        id: 'a_bootstrap',
+        kind: 'human',
+        handle: 'bootstrap',
+        display_name: 'Bootstrap Admin',
+        description: '',
+        created_at: new Date().toISOString(),
+      })
+      .execute()
+    const deps = makeDepsFromDb(db, loadConfig({ NS_BOOTSTRAP_TOKEN: LONG }))
+    await ensureBootstrapAdmin(deps)
+    const hit = await deps.actorsRoot.findActiveTokenByHash(hashToken(LONG))
+    expect(hit?.actor.id).toBe('a_bootstrap')
+    await db.destroy()
+  })
+
   it('ensures a human admin + token, idempotently', async () => {
     const db = await freshDb()
     const deps = makeDepsFromDb(db, loadConfig({ NS_BOOTSTRAP_TOKEN: LONG }))
