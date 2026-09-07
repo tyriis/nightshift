@@ -30,6 +30,22 @@ export class SqliteActorRepo implements ActorRepo {
     return r ?? null
   }
 
+  async findActorByTokenId(tokenId: string): Promise<ActorRow | null> {
+    // Deviation from the plan block (which used unqualified selectAll() + an
+    // `as ActorRow | undefined ?? null` cast): with a join, unqualified selectAll() emits
+    // SELECT * and better-sqlite3 lets duplicate column names (id, created_at) resolve to
+    // the LAST occurrence — the returned row carried tokens.id in `id`. selectAll('actors')
+    // restricts to actor columns, is exactly ActorRow-typed (no cast needed), same idiom as
+    // findActiveTokenByHash.
+    const r = await this.db
+      .selectFrom('actors')
+      .selectAll('actors')
+      .innerJoin('tokens', 'tokens.actor_id', 'actors.id')
+      .where('tokens.id', '=', tokenId)
+      .executeTakeFirst()
+    return r ?? null
+  }
+
   async list(): Promise<ActorRow[]> {
     return this.db.selectFrom('actors').selectAll().orderBy('handle', 'asc').execute()
   }

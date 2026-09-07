@@ -160,6 +160,8 @@ export interface ActorRepo {
   }): Promise<ActorRow>
   findByHandle(handle: string): Promise<ActorRow | null>
   findById(id: string): Promise<ActorRow | null>
+  /** Actor that owns the given token id (for exposing a claim holder's public identity). */
+  findActorByTokenId(tokenId: string): Promise<ActorRow | null>
   list(): Promise<ActorRow[]>
   insertToken(input: {
     id: string

@@ -47,6 +47,22 @@ describe('SqliteActorRepo', () => {
     await db.destroy()
   })
 
+  it('findActorByTokenId resolves the owning actor; strips join bleed-through', async () => {
+    const { db, repo } = await seed()
+    await repo.insertToken({
+      id: 'tok_1',
+      actor_id: 'a_1',
+      token_hash: 'deadbeef',
+      label: 'ci',
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
+    const holder = await repo.findActorByTokenId('tok_1')
+    // id must be the ACTOR's id even though tokens.id collides in the join
+    expect(holder).toMatchObject({ id: 'a_1', kind: 'agent', handle: 'hermes-1' })
+    expect(await repo.findActorByTokenId('tok_ghost')).toBeNull()
+    await db.destroy()
+  })
+
   it('policy get/set with upsert', async () => {
     const { db, repo } = await seed()
     expect(await repo.getPolicy('review_gate')).toBe('on')
