@@ -105,8 +105,7 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
       },
     })
     expect(split.statusCode).toBe(201)
-    // (the plan block conflated this `created` destructure with the step-7 audit
-    // fetch — transcription bug; the fetch belongs at step 7, see there)
+    // child ids come straight from the split response (audit fetch lives at step 7 below)
     const [c1, c2] = split.json().created
     const afterSplit = (
       await t.app.inject({ method: 'GET', url: `/tasks/${task.id}`, headers: bearer(t) })
@@ -208,8 +207,7 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
     expect(parentDone.statusCode).toBe(200)
 
     // 7. the audit log reconstructs the story; board rollup is computable
-    // (fetched here, at its step-7 point of use: the plan's merged one-liner would
-    // have read the log right after the split, missing every later status_changed)
+    // (audit fetched at the end of the loop so all status_changed entries are present)
     const audit = (
       await t.app.inject({
         method: 'GET',

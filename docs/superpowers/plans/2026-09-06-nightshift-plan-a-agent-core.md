@@ -5607,137 +5607,175 @@ export const toTaskDto = (row: TaskWithCounts): TaskDto => ({
 ```ts
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
+import type { TaskPatch } from '#root/application/ports'
+import type { SplitChildDraft } from '#root/application/usecases/split-task'
+import type { TaskStatus } from '#root/domain/task'
 import { actorCtx } from '#root/adapters/rest/auth'
 import { toTaskDto } from '#root/adapters/rest/dto'
+import { DomainError } from '#root/domain/errors'
 import { TASK_STATUSES } from '#root/domain/task'
 
 const statusEnum = { type: 'string', enum: TASK_STATUSES } as const
 
+// M-2 (Task 7 review): the route schema, NOT the use-case, owns title length
+// validation — minLength/maxLength on every title entry point below.
+interface CreateTaskBody {
+  title: string
+  description?: string
+  acceptance_criteria?: string
+  parent_id?: string
+  status?: TaskStatus
+  labels?: string[]
+}
+
 export const registerTaskRoutes = (app: FastifyInstance, deps: AppDeps): void => {
-  app.post('/tasks', {
-    schema: {
-      body: {
-        type: 'object',
-        required: ['title'],
-        additionalProperties: false,
-        properties: {
-          title: { type: 'string', minLength: 1, maxLength: 300 },
-          description: { type: 'string' },
-          acceptance_criteria: { type: 'string' },
-          parent_id: { type: 'string' },
-          status: statusEnum,
-          labels: { type: 'array', items: { type: 'string', minLength: 1 } },
+  app.post(
+    '/tasks',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['title'],
+          additionalProperties: false,
+          properties: {
+            title: { type: 'string', minLength: 1, maxLength: 300 },
+            description: { type: 'string' },
+            acceptance_criteria: { type: 'string' },
+            parent_id: { type: 'string' },
+            status: statusEnum,
+            labels: { type: 'array', items: { type: 'string', minLength: 1 } },
+          },
         },
       },
     },
     async (request, reply) => {
-      const body = request.body as Parameters<typeof deps.useCases.createTask.run>[0] extends infer I
-        ? Omit<I, 'actor' | 'tokenId'>
-        : never
+      const body = request.body as CreateTaskBody
       const task = await deps.useCases.createTask.run({ ...actorCtx(request), ...body })
       const withCounts = (await deps.tasksRoot.findWithCounts(task.id))!
       return reply.code(201).send(toTaskDto(withCounts))
-    },
-  })
+    }
+  )
 
   app.get('/tasks', async () => (await deps.tasksRoot.listAllWithCounts()).map(toTaskDto))
 
-  app.get('/tasks/next', {
-    schema: {
-      querystring: {
-        type: 'object',
-        properties: {
-          label: { type: 'string' },
-          limit: { type: 'integer', minimum: 1, maximum: 100 },
+  app.get(
+    '/tasks/next',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            label: { type: 'string' },
+            limit: { type: 'integer', minimum: 1, maximum: 100 },
+          },
         },
       },
     },
     async (request) => {
       const q = request.query as { label?: string; limit?: number }
       return (await deps.useCases.getNext.run({ label: q.label, limit: q.limit })).map(toTaskDto)
-    },
-  })
+    }
+  )
 
   app.get('/tasks/:id', async (request) => {
     const { id } = request.params as { id: string }
     const row = await deps.tasksRoot.findWithCounts(id)
-    if (!row) {
-      const { DomainError } = await import('#root/domain/errors')
-      throw new DomainError('not_found', `task ${id} not found`)
-    }
+    if (!row) throw new DomainError('not_found', `task ${id} not found`)
     return toTaskDto(row)
   })
 
+  // The context bundle's shape is fixed by spec §7.2 (get-context.ts), so it passes
+  // through as the use-case composed it; flat task JSON everywhere else goes toTaskDto.
   app.get('/tasks/:id/context', async (request) => {
     const { id } = request.params as { id: string }
     return deps.useCases.getContext.run({ taskId: id })
   })
 
-  app.patch('/tasks/:id', {
-    schema: {
-      body: {
-        type: 'object',
-        minProperties: 1,
-        additionalProperties: false,
-        properties: {
-          title: { type: 'string', minLength: 1, maxLength: 300 },
-          description: { type: 'string' },
-          acceptance_criteria: { type: 'string' },
-          blocked_flag: { type: 'boolean' },
-          assignee_id: { type: ['string', 'null'] },
+  app.patch(
+    '/tasks/:id',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          minProperties: 1,
+          additionalProperties: false,
+          properties: {
+            title: { type: 'string', minLength: 1, maxLength: 300 },
+            description: { type: 'string' },
+            acceptance_criteria: { type: 'string' },
+            blocked_flag: { type: 'boolean' },
+            assignee_id: { type: ['string', 'null'] },
+          },
         },
       },
     },
     async (request) => {
       const { id } = request.params as { id: string }
       const { actor, tokenId } = actorCtx(request)
-      await deps.useCases.updateTask.run({ actor, tokenId, taskId: id, patch: request.body as object })
+      await deps.useCases.updateTask.run({
+        actor,
+        tokenId,
+        taskId: id,
+        patch: request.body as TaskPatch,
+      })
       return toTaskDto((await deps.tasksRoot.findWithCounts(id))!)
-    },
-  })
+    }
+  )
 
-  app.patch('/tasks/:id/status', {
-    schema: {
-      body: {
-        type: 'object',
-        required: ['status', 'reason'],
-        additionalProperties: false,
-        properties: {
-          status: statusEnum,
-          reason: { type: 'string', minLength: 1 },
-          lease_token: { type: 'string' },
+  app.patch(
+    '/tasks/:id/status',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['status', 'reason'],
+          additionalProperties: false,
+          properties: {
+            status: statusEnum,
+            reason: { type: 'string', minLength: 1 },
+            lease_token: { type: 'string' },
+          },
         },
       },
     },
     async (request) => {
       const { id } = request.params as { id: string }
-      const body = request.body as { status: never; reason: string; lease_token?: string }
+      const body = request.body as { status: TaskStatus; reason: string; lease_token?: string }
       const task = await deps.useCases.updateStatus.run({
-        ...actorCtx(request), taskId: id, to: body.status, reason: body.reason, lease_token: body.lease_token,
+        ...actorCtx(request),
+        taskId: id,
+        to: body.status,
+        reason: body.reason,
+        lease_token: body.lease_token,
       })
       return toTaskDto((await deps.tasksRoot.findWithCounts(task.id))!)
-    },
-  })
+    }
+  )
 
-  app.post('/tasks/:id/split', {
-    schema: {
-      body: {
-        type: 'object',
-        required: ['children'],
-        additionalProperties: false,
-        properties: {
-          children: {
-            type: 'array',
-            minItems: 1,
-            items: {
-              type: 'object',
-              required: ['title'],
-              additionalProperties: false,
-              properties: {
-                title: { type: 'string', minLength: 1, maxLength: 300 },
-                description: { type: 'string' },
-                acceptance_criteria: { type: 'string' },
-                status: statusEnum,
+  // SplitTaskResult's shape ({parent, created}) is pinned by spec §7.4 step 4 and the
+  // integration test below; like the context bundle it passes through un-DTO'd.
+  app.post(
+    '/tasks/:id/split',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['children'],
+          additionalProperties: false,
+          properties: {
+            children: {
+              type: 'array',
+              minItems: 1,
+              items: {
+                type: 'object',
+                required: ['title'],
+                additionalProperties: false,
+                properties: {
+                  title: { type: 'string', minLength: 1, maxLength: 300 },
+                  description: { type: 'string' },
+                  acceptance_criteria: { type: 'string' },
+                  status: statusEnum,
+                },
               },
             },
           },
@@ -5746,10 +5784,15 @@ export const registerTaskRoutes = (app: FastifyInstance, deps: AppDeps): void =>
     },
     async (request, reply) => {
       const { id } = request.params as { id: string }
-      const { children } = request.body as { children: never[] }
-      return reply.code(201).send(deps.useCases.splitTask.run({ ...actorCtx(request), taskId: id, children }))
-    },
-  })
+      const { children } = request.body as { children: SplitChildDraft[] }
+      const result = await deps.useCases.splitTask.run({
+        ...actorCtx(request),
+        taskId: id,
+        children,
+      })
+      return reply.code(201).send(result)
+    }
+  )
 
   app.post('/tasks/:id/claim', async (request) => {
     const { id } = request.params as { id: string }
@@ -5762,17 +5805,29 @@ export const registerTaskRoutes = (app: FastifyInstance, deps: AppDeps): void =>
     return toTaskDto((await deps.tasksRoot.findWithCounts(task.id))!)
   })
 
-  app.post('/tasks/:id/heartbeat', {
-    schema: {
-      body: { type: 'object', required: ['lease_token'], additionalProperties: false, properties: { lease_token: { type: 'string' } } },
+  app.post(
+    '/tasks/:id/heartbeat',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['lease_token'],
+          additionalProperties: false,
+          properties: { lease_token: { type: 'string' } },
+        },
+      },
     },
     async (request) => {
       const { id } = request.params as { id: string }
       const { lease_token } = request.body as { lease_token: string }
-      const task = await deps.useCases.heartbeat.run({ ...actorCtx(request), taskId: id, lease_token })
+      const task = await deps.useCases.heartbeat.run({
+        ...actorCtx(request),
+        taskId: id,
+        lease_token,
+      })
       return toTaskDto((await deps.tasksRoot.findWithCounts(task.id))!)
-    },
-  })
+    }
+  )
 }
 ```
 
@@ -5875,7 +5930,7 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
     const hb = await t.app.inject({
       method: 'POST',
       url: `/tasks/${task.id}/heartbeat`,
-      headers: winner.headers.authorization ? asAgent(ra.statusCode === 200 ? tokenA : tokenB) : {},
+      headers: asAgent(ra.statusCode === 200 ? tokenA : tokenB),
       payload: { lease_token: lease },
     })
     expect(hb.statusCode).toBe(200)
@@ -5909,6 +5964,14 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
     })
     expect(stale.statusCode).toBe(412)
     expect(stale.json().code).toBe('stale_lease')
+    // (pin addition: shipped-code sync from Task 14 spec review)
+    // full problem shape through the route (Task 13 pin: details spread FIRST, so
+    // `claimed` survives; app.test.ts only proves this on a probe route)
+    expect(stale.headers['content-type']).toContain('application/problem+json')
+    expect(stale.json().claimed).toBe(false) // claim was already released by the split
+    expect(stale.json().type).toBe('https://nightshift.local/errors/stale_lease')
+    expect(stale.json().title).toBe('stale lease')
+    expect(stale.json().status).toBe(412)
 
     // parent with children is not claimable
     const notLeaf = await t.app.inject({
@@ -5938,6 +6001,8 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
         payload: { status: 'in_review', reason: 'pr up' },
       })
       expect(noLease.statusCode).toBe(412)
+      // (pin addition: shipped-code sync from Task 14 spec review)
+      expect(noLease.json().claimed).toBe(true) // still-claimed sibling of the stale case
       const review = await t.app.inject({
         method: 'PATCH',
         url: `/tasks/${child.id}/status`,
@@ -6030,6 +6095,46 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
     expect(bad.statusCode).toBe(400)
     expect(bad.json().code).toBe('invalid_request')
 
+    // (pin addition: shipped-code sync from Task 14 spec review — M-2 / AJV route-schema validation)
+    // M-2 pin: the ROUTE schema, not the use-case, owns title length validation —
+    // empty and over-long titles die at AJV (the use-case deliberately does not check)
+    const emptyTitle = await t.app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: bearer(t),
+      payload: { title: '' },
+    })
+    expect(emptyTitle.statusCode).toBe(400)
+    expect(emptyTitle.json().code).toBe('invalid_request')
+    const longTitle = await t.app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: bearer(t),
+      payload: { title: 'x'.repeat(301) },
+    })
+    expect(longTitle.statusCode).toBe(400)
+    expect(longTitle.json().code).toBe('invalid_request')
+
+    // pin: unknown status is an AJV 400 problem, never the use-case's invalid_request
+    const badStatus = await t.app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: bearer(t),
+      payload: { title: 'ok', status: 'banana' },
+    })
+    expect(badStatus.statusCode).toBe(400)
+    expect(badStatus.json().code).toBe('invalid_request')
+    expect(badStatus.json().detail).not.toContain("unknown status 'banana'")
+    const badStatusPatch = await t.app.inject({
+      method: 'PATCH',
+      url: '/tasks/t_nope/status',
+      headers: bearer(t),
+      payload: { status: 'banana', reason: 'x' },
+    })
+    expect(badStatusPatch.statusCode).toBe(400)
+    expect(badStatusPatch.json().code).toBe('invalid_request')
+    expect(badStatusPatch.json().detail).not.toContain("unknown status 'banana'")
+
     const headers = { ...bearer(t), 'idempotency-key': 'file-1' }
     const a = await t.app.inject({
       method: 'POST',
@@ -6044,6 +6149,69 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
       payload: { title: 'dup-safe' },
     })
     expect(a.body).toBe(b.body) // replay — no double-file (spec §7.3)
+
+    await t.close()
+  })
+
+  // (coverage-rule addition: shipped-code sync from Task 14 spec review)
+  // The §7.4 loop leaves these two handlers untouched (it never PATCHes content or
+  // releases manually); the new-file coverage rule demands they be exercised.
+  it('content patch and manual release work over HTTP', async () => {
+    const t = await makeTestApp()
+    const filed = await t.app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: bearer(t),
+      payload: { title: 'patchable', acceptance_criteria: 'old', status: 'todo' },
+    })
+    expect(filed.statusCode).toBe(201)
+    const id = filed.json().id
+
+    const patched = await t.app.inject({
+      method: 'PATCH',
+      url: `/tasks/${id}`,
+      headers: bearer(t),
+      payload: { title: 'patched', acceptance_criteria: 'new', blocked_flag: true },
+    })
+    expect(patched.statusCode).toBe(200)
+    expect(patched.json().title).toBe('patched')
+    expect(patched.json().acceptance_criteria).toBe('new')
+    expect(patched.json().blocked_flag).toBe(true)
+    expect(patched.json().child_count).toBe(0) // DTO, not raw record
+
+    // M-2 again on the PATCH side: empty title dies at the route schema
+    const emptyPatch = await t.app.inject({
+      method: 'PATCH',
+      url: `/tasks/${id}`,
+      headers: bearer(t),
+      payload: { title: '' },
+    })
+    expect(emptyPatch.statusCode).toBe(400)
+    expect(emptyPatch.json().code).toBe('invalid_request')
+
+    const token = await newAgent(t, 'release-bot')
+    const claim = await t.app.inject({
+      method: 'POST',
+      url: `/tasks/${id}/claim`,
+      headers: asAgent(token),
+    })
+    expect(claim.statusCode).toBe(200)
+    const released = await t.app.inject({
+      method: 'POST',
+      url: `/tasks/${id}/release`,
+      headers: asAgent(token),
+    })
+    expect(released.statusCode).toBe(200)
+    expect(released.json().claim_token_id).toBeNull()
+
+    // route-composed DomainError (not a use-case throw) still maps to problem+json
+    const ghost = await t.app.inject({
+      method: 'GET',
+      url: '/tasks/t_ghost',
+      headers: bearer(t),
+    })
+    expect(ghost.statusCode).toBe(404)
+    expect(ghost.json().code).toBe('not_found')
 
     await t.close()
   })
