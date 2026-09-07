@@ -250,89 +250,111 @@ describe('claim/release/status interleavings (model-based, spec §6.4.3/4)', () 
         ),
         async (ops) => {
           const { db, uow, task } = await setup()
-          const claimants: Record<'A' | 'B', ActorContext> = { A: agentA, B: agentB }
-          const claimUc = new ClaimTask(uow, fixedClock())
-          const releaseUc = new ReleaseClaim(uow, fixedClock())
-          const statusUc = new UpdateStatus(uow, fixedClock())
+          // ora-14 M-7b: destroy even on assertion failure — a leaking in-memory db per
+          // shrunk run starves the property of runs.
+          try {
+            const claimants: Record<'A' | 'B', ActorContext> = { A: agentA, B: agentB }
+            const claimUc = new ClaimTask(uow, fixedClock())
+            const releaseUc = new ReleaseClaim(uow, fixedClock())
+            const statusUc = new UpdateStatus(uow, fixedClock())
 
-          let holder: 'A' | 'B' | null = null
-          let generation = 0
-          let liveToken = ''
-          let oldToken = ''
+            let holder: 'A' | 'B' | null = null
+            let generation = 0
+            let liveToken = ''
+            let oldToken = ''
 
-          for (const op of ops) {
-            if (op === 'claimA' || op === 'claimB') {
-              const who = op === 'claimA' ? ('A' as const) : ('B' as const)
-              if (holder === null) {
-                const res = await claimUc.run({ ...claimants[who], taskId: task.id })
-                generation += 1
-                expect(res.generation).toBe(generation)
-                expect(res.lease_token).toBe(formatLeaseToken(task.id, generation))
-                if (liveToken) oldToken = liveToken
-                holder = who
-                liveToken = res.lease_token
+            for (const op of ops) {
+              if (op === 'claimA' || op === 'claimB') {
+                const who = op === 'claimA' ? ('A' as const) : ('B' as const)
+                if (holder === null) {
+                  const res = await claimUc.run({ ...claimants[who], taskId: task.id })
+                  generation += 1
+                  expect(res.generation).toBe(generation)
+                  expect(res.lease_token).toBe(formatLeaseToken(task.id, generation))
+                  if (liveToken) oldToken = liveToken
+                  holder = who
+                  liveToken = res.lease_token
+                } else {
+                  const loser = who === 'A' ? 'B' : 'A'
+                  await expect(
+                    claimUc.run({ ...claimants[loser], taskId: task.id })
+                  ).rejects.toMatchObject({ code: 'already_claimed' })
+                }
+              } else if (op === 'releaseHolder') {
+                if (holder === null) {
+                  await expect(releaseUc.run({ ...agentA, taskId: task.id })).rejects.toMatchObject(
+                    {
+                      code: 'stale_lease',
+                    }
+                  )
+                } else {
+                  await releaseUc.run({ ...claimants[holder], taskId: task.id })
+                  oldToken = liveToken
+                  liveToken = ''
+                  holder = null
+                  generation += 1
+                }
+              } else if (op === 'statusWithOldToken') {
+                if (holder !== null && oldToken) {
+                  await expect(
+                    statusUc.run({
+                      ...claimants[holder],
+                      taskId: task.id,
+                      to: 'in_progress',
+                      reason: 'zombie',
+                      lease_token: oldToken,
+                    })
+                  ).rejects.toMatchObject({ code: 'stale_lease' })
+                } else if (holder === null) {
+                  if (oldToken) {
+                    // ora-14 M-4 (Dev-1 pin): on an UNCLAIMED task a PRESENTED old token is
+                    // rejected as a zombie (claimed:false) — it must never morph into the
+                    // tokenless human op that an ABSENT lease permits (D-c).
+                    await expect(
+                      statusUc.run({
+                        ...human,
+                        taskId: task.id,
+                        to: 'in_progress',
+                        reason: 'zombie',
+                        lease_token: oldToken,
+                      })
+                    ).rejects.toMatchObject({ code: 'stale_lease', details: { claimed: false } })
+                  } else {
+                    await statusUc.run({
+                      ...human,
+                      taskId: task.id,
+                      to: 'in_progress',
+                      reason: 'by hand',
+                    })
+                  }
+                }
               } else {
-                const loser = who === 'A' ? 'B' : 'A'
-                await expect(
-                  claimUc.run({ ...claimants[loser], taskId: task.id })
-                ).rejects.toMatchObject({ code: 'already_claimed' })
-              }
-            } else if (op === 'releaseHolder') {
-              if (holder === null) {
-                await expect(releaseUc.run({ ...agentA, taskId: task.id })).rejects.toMatchObject({
-                  code: 'stale_lease',
-                })
-              } else {
-                await releaseUc.run({ ...claimants[holder], taskId: task.id })
-                oldToken = liveToken
-                liveToken = ''
-                holder = null
-                generation += 1
-              }
-            } else if (op === 'statusWithOldToken') {
-              if (holder !== null && oldToken) {
-                await expect(
-                  statusUc.run({
+                // statusWithLiveToken
+                if (holder !== null) {
+                  await statusUc.run({
                     ...claimants[holder],
                     taskId: task.id,
                     to: 'in_progress',
-                    reason: 'zombie',
-                    lease_token: oldToken,
+                    reason: 'progress',
+                    lease_token: liveToken,
                   })
-                ).rejects.toMatchObject({ code: 'stale_lease' })
-              } else if (holder === null) {
-                await statusUc.run({
-                  ...human,
-                  taskId: task.id,
-                  to: 'in_progress',
-                  reason: 'by hand',
-                })
-              }
-            } else {
-              // statusWithLiveToken
-              if (holder !== null) {
-                await statusUc.run({
-                  ...claimants[holder],
-                  taskId: task.id,
-                  to: 'in_progress',
-                  reason: 'progress',
-                  lease_token: liveToken,
-                })
-              } else {
-                await statusUc.run({
-                  ...human,
-                  taskId: task.id,
-                  to: 'in_progress',
-                  reason: 'by hand',
-                })
+                } else {
+                  await statusUc.run({
+                    ...human,
+                    taskId: task.id,
+                    to: 'in_progress',
+                    reason: 'by hand',
+                  })
+                }
               }
             }
-          }
 
-          const final = await new SqliteTaskRepo(db).findById(task.id)
-          expect(final?.claim_generation).toBe(generation)
-          expect(final?.claim_token_id !== null).toBe(holder !== null)
-          await db.destroy()
+            const final = await new SqliteTaskRepo(db).findById(task.id)
+            expect(final?.claim_generation).toBe(generation)
+            expect(final?.claim_token_id !== null).toBe(holder !== null)
+          } finally {
+            await db.destroy()
+          }
         }
       ),
       { numRuns: 40 }

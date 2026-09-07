@@ -1,4 +1,4 @@
-import type { TaskRecord, TaskStatus } from '#root/domain/task'
+import { TASK_STATUSES, type TaskRecord, type TaskStatus } from '#root/domain/task'
 import { parseLeaseToken } from '#root/domain/claim'
 import { DomainError } from '#root/domain/errors'
 import type { ActorContext, Clock, UnitOfWork } from '#root/application/ports'
@@ -20,6 +20,11 @@ export class UpdateStatus {
     const now = this.clock.now().toISOString()
     if (!input.reason || input.reason.trim() === '') {
       throw new DomainError('invalid_request', 'status changes require a reason (spec §6.7)')
+    }
+    // ora-14 M-5: uniform input validation with the sibling use-cases (create/split) — a
+    // bogus `to` is rejected as invalid_request, not left to SQLite or silent acceptance.
+    if (!TASK_STATUSES.includes(input.to)) {
+      throw new DomainError('invalid_request', `unknown status '${input.to}'`)
     }
     return this.uow.withTransaction(async (repos) => {
       const task = await repos.tasks.findById(input.taskId)

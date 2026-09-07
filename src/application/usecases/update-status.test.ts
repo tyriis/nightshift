@@ -280,4 +280,22 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       })
     ).rejects.toMatchObject({ code: 'agent_close_forbidden' })
   })
+
+  it('bogus target status → invalid_request, uniform with create/split (ora-14 M-5)', async () => {
+    const { db, uow } = await withAgent()
+    const task = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'x',
+      status: 'todo',
+    })
+    await expect(
+      new UpdateStatus(uow, fixedClock()).run({
+        ...human,
+        taskId: task.id,
+        to: 'shipped' as never, // documented as-cast idiom for adversarial input
+        reason: 'chaos',
+      })
+    ).rejects.toMatchObject({ code: 'invalid_request' })
+    await db.destroy()
+  })
 })

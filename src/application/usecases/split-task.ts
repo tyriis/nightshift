@@ -38,9 +38,10 @@ export class SplitTask {
       throw new DomainError('invalid_request', 'split requires at least one child')
     }
     for (const child of input.children) {
-      const status = child.status ?? 'backlog'
-      if (!TASK_STATUSES.includes(status)) {
-        throw new DomainError('invalid_request', `unknown status '${status}'`)
+      // ora-14 M-2: validate the PROVIDED status only — no fabricated default here (the
+      // real default lives in the create call below, per Dev-2 derivation).
+      if (child.status !== undefined && !TASK_STATUSES.includes(child.status)) {
+        throw new DomainError('invalid_request', `unknown status '${child.status}'`)
       }
     }
     return this.uow.withTransaction(async (repos) => {

@@ -41,7 +41,12 @@ export class ClaimTask {
       }
 
       const alreadyClaimed = async (): Promise<DomainError> => {
-        const holder = await repos.actors.findActorByTokenId(task.claim_token_id as string)
+        // ora-14 M-1: FRESH re-read — after a lost CAS the current row, not the first read's
+        // claim_token_id, is the truth about who holds the claim today.
+        const fresh = await repos.tasks.findById(input.taskId)
+        const holder = fresh?.claim_token_id
+          ? await repos.actors.findActorByTokenId(fresh.claim_token_id)
+          : null
         return new DomainError(
           'already_claimed',
           `task is claimed by ${holder?.display_name ?? 'another actor'}`,

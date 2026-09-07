@@ -6,6 +6,9 @@ export interface ReleaseClaimInput extends ActorContext {
   taskId: string
 }
 
+// Three auth models in the claim family (deliberate asymmetry, ora-14 M-3): claim = exclusivity
+// CAS (first writer wins); update-status/heartbeat = capability (lease_token string: taskId +
+// generation); release = identity (tokenId === claim_token_id) — release has no lease_token field.
 export class ReleaseClaim {
   constructor(
     private readonly uow: UnitOfWork,
