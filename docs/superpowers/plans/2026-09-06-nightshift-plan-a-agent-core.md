@@ -3279,7 +3279,11 @@ export class SplitTask {
           title: child.title,
           description: child.description ?? '',
           acceptance_criteria: child.acceptance_criteria ?? '',
-          status: child.status ?? 'backlog',
+          // Dev-2 (spec-review ruling): children of an ACTIVE (non-backlog) parent default to
+          // 'todo' so "the ex-claimant continues by claiming one of the children" (spec §6.2)
+          // is immediately claimable; backlog parents spawn backlog children. Explicit status
+          // always wins. This is a DEFAULT derivation, never a gate — Ruling A unaffected.
+          status: child.status ?? (parent.status === 'backlog' ? 'backlog' : 'todo'),
           position,
           created_by: input.actor.id,
           created_at: now,
@@ -3561,6 +3565,15 @@ export class UpdateStatus {
             claimed: true,
           })
         }
+        // Dev-1 (spec-review ruling): a lease presented on an UNCLAIMED task is a zombie
+        // (released by split/review) — D-b: "an old token can never validate again". The
+        // plan's original silent-accept contradicted Task 8's own 'old lease can never be
+        // used again' test. An ABSENT lease on an unclaimed task stays allowed (D-c human
+        // closes).
+      } else if (input.lease_token !== undefined) {
+        throw new DomainError('stale_lease', 'task is not claimed; lease token is stale', {
+          claimed: false,
+        })
       }
 
       if (input.to === 'done') {
