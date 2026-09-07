@@ -4587,6 +4587,7 @@ In `src/infra/sqlite/actor-repo.ts` implement:
   async findTokenById(id: string): Promise<TokenRow | null> {
     const r = await this.db.selectFrom('tokens').selectAll().where('id', '=', id).executeTakeFirst()
     if (!r) return null
+    // map strips token_hash so the secret never leaks into returned rows
     return {
       id: r.id,
       actor_id: r.actor_id,
@@ -4600,17 +4601,25 @@ In `src/infra/sqlite/actor-repo.ts` implement:
 
 - [ ] **Step 13.2: Write failing manage-actors/policy test** `src/application/usecases/manage-actors.test.ts`:
 
+Shipped delta (Task 13 hygiene sync): shipped shares one IdGen per test across
+use-case constructions and imports `hashToken` statically instead of `await import(...)`
+(both 5b4024a — M-1 pin), and pins three behaviors the draft left uncovered: `description`
+defaults to `''` (added at ship, 8de7904), token issue against an unknown actor is
+`not_found`, and `getPolicy` on an unknown key is `not_found` (5b4024a).
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { CreateActor, CreateToken, RevokeToken } from '#root/application/usecases/manage-actors'
 import { GetPolicy, SetPolicy } from '#root/application/usecases/manage-policy'
 import { buildUow, fixedClock, human, seqIds } from '#root/application/usecases/create-task.test'
 import { SqliteActorRepo } from '#root/infra/sqlite/actor-repo'
+import { hashToken } from '#root/infra/token-hash'
 
 describe('actor & token management', () => {
   it('creates agent, issues token shown once, auth lookup finds it, revoke kills it', async () => {
     const { db, uow } = await buildUow()
-    const create = new CreateActor(uow, fixedClock(), seqIds())
+    const ids = seqIds() // one IdGen per test, shared across use-case constructions (M-1)
+    const create = new CreateActor(uow, fixedClock(), ids)
     const agent = await create.run({
       ...human,
       kind: 'agent',
@@ -4623,7 +4632,9 @@ describe('actor & token management', () => {
       create.run({ ...human, kind: 'agent', handle: 'hermes-1', display_name: 'dup' })
     ).rejects.toMatchObject({ code: 'handle_taken' })
 
-    const issued = await new CreateToken(uow, fixedClock(), seqIds()).run({
+    const plain = await create.run({ ...human, kind: 'human', handle: 'plain', display_name: 'P' })
+    expect(plain.description).toBe('') // description defaults to ''
+    const issued = await new CreateToken(uow, fixedClock(), ids).run({
       ...human,
       actor_id: agent.id,
       label: 'ci',
@@ -4632,15 +4643,25 @@ describe('actor & token management', () => {
     expect(issued.token.id).toMatch(/^tok_seq/)
 
     const actors = new SqliteActorRepo(db)
-    const hit = await actors.findActiveTokenByHash(
-      (await import('#root/infra/token-hash')).hashToken(issued.raw_token)
-    )
+    const hit = await actors.findActiveTokenByHash(hashToken(issued.raw_token))
     expect(hit?.actor.handle).toBe('hermes-1')
 
     await new RevokeToken(uow, fixedClock()).run({ ...human, token_id: issued.token.id })
     expect(await actors.findActiveTokenByHash('whatever')).toBeNull()
     await expect(
       new RevokeToken(uow, fixedClock()).run({ ...human, token_id: 'tok_ghost' })
+    ).rejects.toMatchObject({ code: 'not_found' })
+    await db.destroy()
+  })
+
+  it('token issue against an unknown actor is not_found', async () => {
+    const { db, uow } = await buildUow()
+    await expect(
+      new CreateToken(uow, fixedClock(), seqIds()).run({
+        ...human,
+        actor_id: 'a_ghost',
+        label: 'ci',
+      })
     ).rejects.toMatchObject({ code: 'not_found' })
     await db.destroy()
   })
@@ -4657,6 +4678,7 @@ describe('actor & token management', () => {
     await expect(
       new SetPolicy(uow, fixedClock()).run({ ...human, key: 'review_gate', value: 'maybe' })
     ).rejects.toMatchObject({ code: 'invalid_request' })
+    await expect(get.run({ key: 'evil' })).rejects.toMatchObject({ code: 'not_found' })
     await db.destroy()
   })
 })
@@ -4667,6 +4689,8 @@ describe('actor & token management', () => {
 ```ts
 import type { ActorKind } from '#root/domain/task'
 import { DomainError } from '#root/domain/errors'
+// Utility import (pure node:crypto, no DB/adapter/transport) — sanctioned as
+// plan-verbatim by orchestrator ruling; the hexagonal no-infra rule targets repo/adapter layers.
 import { generateRawToken, hashToken } from '#root/infra/token-hash'
 import type {
   ActorContext,
@@ -4762,6 +4786,8 @@ export class CreateToken {
         reason: 'token issued',
         created_at: now,
       })
+      // Plan-verbatim cast: the row was inserted on this very transaction, so the
+      // null arm of findTokenById is unreachable here.
       const token = (await repos.actors.findTokenById(id)) as TokenRow
       return { raw_token: raw, token }
     })
@@ -4859,6 +4885,10 @@ export class SetPolicy {
 
 - [ ] **Step 13.5: Implement `src/main/deps.ts`:**
 
+Shipped delta (Task 13 hygiene sync): Task 15 grew the composition root with
+`createLabel`/`attachLabel`/`detachLabel` (19aa15d); the Task 15 sync (b259f2d) rewrote
+Task 15's own blocks only, so this block still carried the Task 13 shape.
+
 ```ts
 import type { Kysely } from 'kysely'
 import type { Config } from '#root/main/config'
@@ -4878,6 +4908,7 @@ import { CreateTask } from '#root/application/usecases/create-task'
 import { GetContext } from '#root/application/usecases/get-context'
 import { GetNext } from '#root/application/usecases/get-next'
 import { Heartbeat } from '#root/application/usecases/heartbeat'
+import { AttachLabel, CreateLabel, DetachLabel } from '#root/application/usecases/labels'
 import { CreateActor, CreateToken, RevokeToken } from '#root/application/usecases/manage-actors'
 import { GetPolicy, SetPolicy } from '#root/application/usecases/manage-policy'
 import { ReleaseClaim } from '#root/application/usecases/release-claim'
@@ -4911,6 +4942,9 @@ export interface AppDeps {
     removeBlock: RemoveBlock
     getNext: GetNext
     getContext: GetContext
+    createLabel: CreateLabel
+    attachLabel: AttachLabel
+    detachLabel: DetachLabel
     createActor: CreateActor
     createToken: CreateToken
     revokeToken: RevokeToken
@@ -4951,6 +4985,9 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
         new SqliteDependencyRepo(db),
         new SqliteLabelRepo(db)
       ),
+      createLabel: new CreateLabel(uow, clock, ids),
+      attachLabel: new AttachLabel(uow, clock),
+      detachLabel: new DetachLabel(uow, clock),
       createActor: new CreateActor(uow, clock, ids),
       createToken: new CreateToken(uow, clock, ids),
       revokeToken: new RevokeToken(uow, clock),
@@ -4963,6 +5000,12 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
 
 - [ ] **Step 13.6: Write failing bootstrap test** `src/main/bootstrap.test.ts`:
 
+Shipped delta (Task 13 hygiene sync): the shipped suite adds `reuses an existing
+a_bootstrap actor when no active token exists` (8de7904) plus the two env-as-truth pins
+from the Task 13 quality-review blocker — revoke + next boot re-activates the token, and
+rotating `NS_BOOTSTRAP_TOKEN` rotates the row without a PK/UNIQUE crash (6fcee92, the
+amendment above).
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { loadConfig } from '#root/main/config'
@@ -4972,6 +5015,7 @@ import { hashToken } from '#root/infra/token-hash'
 import { freshDb } from '#root/testing/fixtures'
 
 const LONG = 'x'.repeat(48)
+const ROTATED = 'y'.repeat(48)
 
 describe('bootstrap admin', () => {
   it('does nothing without a token', async () => {
@@ -4979,6 +5023,50 @@ describe('bootstrap admin', () => {
     const deps: AppDeps = makeDepsFromDb(db, loadConfig({}))
     await ensureBootstrapAdmin(deps)
     expect(await deps.actorsRoot.findByHandle('bootstrap')).toBeNull()
+    await db.destroy()
+  })
+
+  it('re-activates the bootstrap token after revoke + next boot (env-as-truth upsert)', async () => {
+    const db = await freshDb()
+    const deps = makeDepsFromDb(db, loadConfig({ NS_BOOTSTRAP_TOKEN: LONG }))
+    await ensureBootstrapAdmin(deps)
+    await deps.actorsRoot.revokeToken('tok_bootstrap', deps.clock.now().toISOString())
+    expect(await deps.actorsRoot.findActiveTokenByHash(hashToken(LONG))).toBeNull()
+    await ensureBootstrapAdmin(deps) // next boot: env is truth
+    const hit = await deps.actorsRoot.findActiveTokenByHash(hashToken(LONG))
+    expect(hit?.actor.id).toBe('a_bootstrap')
+    expect(hit?.token.revoked_at).toBeNull()
+    await db.destroy()
+  })
+
+  it('rotates the token when NS_BOOTSTRAP_TOKEN changes (old hash stops resolving)', async () => {
+    const db = await freshDb()
+    await ensureBootstrapAdmin(makeDepsFromDb(db, loadConfig({ NS_BOOTSTRAP_TOKEN: LONG })))
+    const deps = makeDepsFromDb(db, loadConfig({ NS_BOOTSTRAP_TOKEN: ROTATED }))
+    await ensureBootstrapAdmin(deps) // no PK/UNIQUE crash
+    const hit = await deps.actorsRoot.findActiveTokenByHash(hashToken(ROTATED))
+    expect(hit?.actor.id).toBe('a_bootstrap')
+    expect(await deps.actorsRoot.findActiveTokenByHash(hashToken(LONG))).toBeNull()
+    await db.destroy()
+  })
+
+  it('reuses an existing a_bootstrap actor when no active token exists', async () => {
+    const db = await freshDb()
+    await db
+      .insertInto('actors')
+      .values({
+        id: 'a_bootstrap',
+        kind: 'human',
+        handle: 'bootstrap',
+        display_name: 'Bootstrap Admin',
+        description: '',
+        created_at: new Date().toISOString(),
+      })
+      .execute()
+    const deps = makeDepsFromDb(db, loadConfig({ NS_BOOTSTRAP_TOKEN: LONG }))
+    await ensureBootstrapAdmin(deps)
+    const hit = await deps.actorsRoot.findActiveTokenByHash(hashToken(LONG))
+    expect(hit?.actor.id).toBe('a_bootstrap')
     await db.destroy()
   })
 
@@ -5080,6 +5168,8 @@ export const sendProblem = (
 export const registerProblemHandlers = (app: FastifyInstance): void => {
   app.setErrorHandler((error: FastifyError, _request, reply) => {
     if (isDomainError(error)) {
+      // details carry machine-readable flags (e.g. stale_lease claimed:true/false);
+      // spread FIRST so fixed RFC fields can never be overridden by them
       return reply
         .code(error.status)
         .type('application/problem+json')
@@ -5100,6 +5190,8 @@ export const registerProblemHandlers = (app: FastifyInstance): void => {
   })
 
   app.setNotFoundHandler((_request, reply) => {
+    // owns 404 AND method-mismatch (fastify 5 answers 405 with 404 by design,
+    // fastify#862) — both become problem+json instead of the fastify default
     sendProblem(reply, 404, 'not_found', 'route not found')
   })
 }
@@ -5183,6 +5275,14 @@ export const registerAuth = (app: FastifyInstance, deps: AppDeps): void => {
 
 - [ ] **Step 13.10: Implement `src/adapters/rest/idempotency.ts`** (decision D-j):
 
+Shipped delta (Task 13 hygiene sync): three shipped points the draft predated, all
+codified at ship (8de7904): `request_path` carries no `as string` cast (dropped at ship —
+the same drop the auth.ts note above records); `onSend` COMPLETEs every non-5xx response,
+because the D-j crash-window pin (decision text added in 3892c61) demands a 204's empty
+payload be stored as `''` rather than strand the key in flight, with Buffers stored as
+utf8 — the draft's else-if chain silently skipped both; and the hook-order comment. The
+replay media-type line had already been synced in 6fcee92 (blocker round).
+
 ```ts
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
@@ -5192,6 +5292,7 @@ const MUTATING = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
 
 export const registerIdempotency = (app: FastifyInstance, deps: AppDeps): void => {
   app.addHook('onRequest', async (request, reply) => {
+    // registers AFTER registerAuth: reservation is per-actor and needs the resolved actor
     if (!MUTATING.has(request.method) || !request.actorRef) return
     const key = request.headers['idempotency-key']
     if (typeof key !== 'string' || key.length === 0 || key.length > 200) return
@@ -5200,7 +5301,7 @@ export const registerIdempotency = (app: FastifyInstance, deps: AppDeps): void =
       actor_id: request.actorRef.id,
       idem_key: key,
       request_method: request.method,
-      request_path: request.url.split('?')[0] as string,
+      request_path: request.url.split('?')[0],
       created_at: deps.clock.now().toISOString(),
     })
     if (outcome.state === 'complete') {
@@ -5226,13 +5327,21 @@ export const registerIdempotency = (app: FastifyInstance, deps: AppDeps): void =
 
   app.addHook('onSend', async (request, reply, payload) => {
     if (!request.idemKey || !request.actorRef) return payload
-    const idem = { actor: request.actorRef.id, key: request.idemKey }
+    const actor = request.actorRef.id
+    const key = request.idemKey
     if (reply.statusCode >= 500) {
-      await deps.idemRoot.remove(idem.actor, idem.key) // 5xx must be retryable (D-j)
-    } else if (typeof payload === 'string') {
-      await deps.idemRoot.complete(idem.actor, idem.key, reply.statusCode, payload)
-    } else if (Buffer.isBuffer(payload)) {
-      await deps.idemRoot.complete(idem.actor, idem.key, reply.statusCode, payload.toString('utf8'))
+      await deps.idemRoot.remove(actor, key) // 5xx must be retryable (D-j)
+    } else {
+      // A 204 reaches onSend with a null/undefined payload; it must still COMPLETE,
+      // never strand the key in flight (D-j review pin). No route streams today;
+      // a non-string payload is stored as '' rather than stranding the key.
+      const body =
+        typeof payload === 'string'
+          ? payload
+          : Buffer.isBuffer(payload)
+            ? payload.toString('utf8')
+            : ''
+      await deps.idemRoot.complete(actor, key, reply.statusCode, body)
     }
     return payload
   })
@@ -5246,6 +5355,7 @@ import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 
 export const registerAuditRoutes = (app: FastifyInstance, deps: AppDeps): void => {
+  // "nothing hidden": any authenticated actor may read the audit log (spec §5/§6.7)
   app.get(
     '/audit',
     {
@@ -5276,13 +5386,25 @@ export const registerAuditRoutes = (app: FastifyInstance, deps: AppDeps): void =
 
 `src/adapters/rest/app.ts`:
 
+Shipped delta (Task 13 hygiene sync): the block now mirrors shipped — `/ping` is
+non-async (require-await lint, 8de7904) and later tasks registered their routes here:
+tasks (ff463d9, Task 14), dependencies + labels (19aa15d, Task 15), admin (4f58b6b,
+Task 16), and the public `/openapi.yaml` serve (148d5cf, Task 17); each family's
+canonical text lives in its own section's synced blocks.
+
 ```ts
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import Fastify, { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import { registerProblemHandlers } from '#root/adapters/rest/problem'
 import { registerAuth } from '#root/adapters/rest/auth'
 import { registerIdempotency } from '#root/adapters/rest/idempotency'
+import { registerAdminRoutes } from '#root/adapters/rest/routes/admin'
 import { registerAuditRoutes } from '#root/adapters/rest/routes/audit'
+import { registerDependencyRoutes } from '#root/adapters/rest/routes/dependencies'
+import { registerLabelRoutes } from '#root/adapters/rest/routes/labels'
+import { registerTaskRoutes } from '#root/adapters/rest/routes/tasks'
 
 export interface BuildAppOptions {
   logger?: boolean
@@ -5292,8 +5414,16 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   const server: FastifyInstance = Fastify({ logger: opts.logger ?? false })
 
   registerProblemHandlers(server)
-  server.get('/ping', async () => {
+  // plan block wrote this async; lint (require-await) rejects an await-less async —
+  // fastify accepts a plain object return just the same
+  server.get('/ping', () => {
     return { pong: 'it worked!' }
+  })
+
+  // the committed contract is served publicly (D-k); PUBLIC_PATHS already lists the path
+  server.get('/openapi.yaml', async (_request, reply) => {
+    const spec = await readFile(join(process.cwd(), 'openapi', 'openapi.yaml'), 'utf8')
+    return reply.type('application/yaml').send(spec)
   })
 
   // hook order matters: auth resolves the actor, then idempotency reserves per-actor keys
@@ -5301,12 +5431,22 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerIdempotency(server, deps)
 
   registerAuditRoutes(server, deps)
+  registerTaskRoutes(server, deps)
+  registerDependencyRoutes(server, deps)
+  registerLabelRoutes(server, deps)
+  registerAdminRoutes(server, deps)
 
   return server
 }
 ```
 
 `src/index.ts` (agent-test graceful-shutdown pattern):
+
+Shipped delta (Task 13 hygiene sync): shipped wraps the whole startup in the try
+(migrate/purge/bootstrap/listen failure = `console.error` + `exit 1`, never a bare
+unhandled rejection), runs the D-j startup purge of unresolved reservations — mandated by
+the crash-window decision text (3892c61), shipped in 8de7904 — and guards shutdown with a
+module-level double-signal latch added by the Task 13 quality review (6fcee92).
 
 ```ts
 import { loadConfig } from '#root/main/config'
@@ -5318,28 +5458,39 @@ import { buildApp } from '#root/adapters/rest/app'
 
 const config = loadConfig()
 
-const start = async (): Promise<void> => {
-  const db = makeDb(config.dbPath)
-  await migrateToLatest(db)
-  const deps = makeDepsFromDb(db, config)
-  await ensureBootstrapAdmin(deps)
-  const server = buildApp(deps, { logger: true })
+// module-level double-signal guard: a second SIGTERM/SIGINT while close() is
+// already running must be a no-op, not a re-entrant shutdown
+let closing = false
 
+const start = async (): Promise<void> => {
   try {
+    const db = makeDb(config.dbPath)
+    await migrateToLatest(db)
+    // D-j startup purge: reservations (status IS NULL) left behind by a crash can
+    // never complete — a fresh process has nothing in flight, so clear them and
+    // leave those keys retryable.
+    await db.deleteFrom('idempotency_keys').where('status', 'is', null).execute()
+    const deps = makeDepsFromDb(db, config)
+    await ensureBootstrapAdmin(deps)
+    const server = buildApp(deps, { logger: true })
     await server.listen({ port: config.port, host: '0.0.0.0' })
+
+    const shutdown = async (): Promise<void> => {
+      if (closing) return
+      closing = true
+      server.log.info('Graceful shutdown signal received')
+      await server.close()
+      await db.destroy()
+      process.exit(0)
+    }
+    process.on('SIGTERM', () => void shutdown())
+    process.on('SIGINT', () => void shutdown())
   } catch (err) {
-    server.log.error(err)
+    // startup failure (migrate/purge/bootstrap/listen) = clean exit(1),
+    // not a bare unhandled rejection
+    console.error(err)
     process.exit(1)
   }
-
-  const shutdown = async (): Promise<void> => {
-    server.log.info('Graceful shutdown signal received')
-    await server.close()
-    await db.destroy()
-    process.exit(0)
-  }
-  process.on('SIGTERM', () => void shutdown())
-  process.on('SIGINT', () => void shutdown())
 }
 
 void start()
@@ -5347,11 +5498,16 @@ void start()
 
 `src/testing/test-app.ts`:
 
+Shipped delta (Task 13 hygiene sync): shipped exposes `deps` on `TestApp` (the
+implementer note below anticipated this) and deliberately does NOT `ready()` the app —
+tests attach probe routes before their first inject and fastify refuses registration
+after boot (both 8de7904; this block was never synced).
+
 ```ts
 import { randomBytes } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { loadConfig } from '#root/main/config'
-import { makeDepsFromDb } from '#root/main/deps'
+import { makeDepsFromDb, type AppDeps } from '#root/main/deps'
 import { makeDb } from '#root/infra/sqlite/db'
 import { migrateToLatest } from '#root/infra/sqlite/migrations'
 import { hashToken } from '#root/infra/token-hash'
@@ -5359,6 +5515,7 @@ import { buildApp } from '#root/adapters/rest/app'
 
 export interface TestApp {
   app: FastifyInstance
+  deps: AppDeps
   adminToken: string
   close(): Promise<void>
 }
@@ -5393,9 +5550,13 @@ export const makeTestApp = async (): Promise<TestApp> => {
     })
     .execute()
   const app = buildApp(deps)
-  await app.ready()
+  // Deliberately NOT app.ready()-ed here: tests attach probe routes (e.g. /idem-echo)
+  // before their first inject, and fastify refuses route registration after boot
+  // ("Root plugin has already booted"). inject() boots on demand — the ephemeral
+  // :memory: db never needs the D-j startup purge (nothing can be in flight).
   return {
     app,
+    deps,
     adminToken,
     close: async () => {
       await app.close()
@@ -5407,9 +5568,15 @@ export const makeTestApp = async (): Promise<TestApp> => {
 
 `src/adapters/rest/app.test.ts`:
 
+Shipped delta (Task 13 hygiene sync): the shipped suite (8de7904, unsynced until now)
+pins the whole problem+json error surface: unknown-route AND method-mismatch 404,
+DomainError `details` spread with no 500 cause leak, bare statusError 401 pass-through,
+and malformed-JSON / schema-validation 400s.
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { makeTestApp } from '#root/testing/test-app'
+import { DomainError } from '#root/domain/errors'
 
 describe('app', () => {
   it('answers ping without auth', async () => {
@@ -5434,6 +5601,90 @@ describe('app', () => {
     })
     expect(ok.statusCode).toBe(200)
     expect(ok.json()).toEqual([])
+    await t.close()
+  })
+
+  it('answers unknown routes with a problem+json 404 (never the fastify default)', async () => {
+    const t = await makeTestApp()
+    const headers = { authorization: `Bearer ${t.adminToken}` }
+    const missing = await t.app.inject({ method: 'GET', url: '/nope', headers })
+    expect(missing.statusCode).toBe(404)
+    expect(missing.headers['content-type']).toContain('application/problem+json')
+    expect(missing.json().code).toBe('not_found')
+
+    // fastify 5 answers method mismatch with 404 by design (fastify#862):
+    // the not-found handler still owns the response, so it is problem+json too.
+    const mismatch = await t.app.inject({ method: 'DELETE', url: '/ping', headers })
+    expect(mismatch.statusCode).toBe(404)
+    expect(mismatch.headers['content-type']).toContain('application/problem+json')
+    expect(mismatch.json().code).toBe('not_found')
+    await t.close()
+  })
+
+  it('spreads DomainError details into the problem body and never leaks 500 causes', async () => {
+    const t = await makeTestApp()
+    // probe routes (registered before the first inject boots the app)
+    t.app.get('/p-stale', async () => {
+      throw new DomainError('stale_lease', 'lease lost', { claimed: false })
+    })
+    t.app.get('/p-boom', async () => {
+      throw new Error('super secret connection string')
+    })
+    const headers = { authorization: `Bearer ${t.adminToken}` }
+    const stale = await t.app.inject({ method: 'GET', url: '/p-stale', headers })
+    expect(stale.statusCode).toBe(412)
+    expect(stale.json().code).toBe('stale_lease')
+    expect(stale.json().claimed).toBe(false) // Task 14/17 assert this flag
+    const boom = await t.app.inject({ method: 'GET', url: '/p-boom', headers })
+    expect(boom.statusCode).toBe(500)
+    expect(boom.json().code).toBe('internal_error')
+    expect(boom.json().detail).toBe('internal error') // cause stays server-side
+    expect(boom.body).not.toContain('secret')
+    await t.close()
+  })
+
+  it('passes through plugin-style statusErrors (bare 401) as problem+json', async () => {
+    const t = await makeTestApp()
+    t.app.get('/p-401', async () => {
+      // Plan E session plugins will throw plain statusErrors, not DomainErrors
+      throw Object.assign(new Error('session expired'), { statusCode: 401 })
+    })
+    const res = await t.app.inject({
+      method: 'GET',
+      url: '/p-401',
+      headers: { authorization: `Bearer ${t.adminToken}` },
+    })
+    expect(res.statusCode).toBe(401)
+    expect(res.json().code).toBe('unauthenticated')
+    expect(res.json().detail).toBe('session expired')
+    await t.close()
+  })
+
+  it('maps malformed JSON bodies to 400 invalid_request (bare statusError path)', async () => {
+    const t = await makeTestApp()
+    t.app.post('/p-json', async () => ({ ok: true }))
+    const res = await t.app.inject({
+      method: 'POST',
+      url: '/p-json',
+      headers: { authorization: `Bearer ${t.adminToken}`, 'content-type': 'application/json' },
+      body: '{oops',
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.headers['content-type']).toContain('application/problem+json')
+    expect(res.json().code).toBe('invalid_request')
+    await t.close()
+  })
+
+  it('maps schema validation failures to 400 invalid_request problem+json', async () => {
+    const t = await makeTestApp()
+    const res = await t.app.inject({
+      method: 'GET',
+      url: '/audit?limit=0', // schema minimum is 1
+      headers: { authorization: `Bearer ${t.adminToken}` },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.headers['content-type']).toContain('application/problem+json')
+    expect(res.json().code).toBe('invalid_request')
     await t.close()
   })
 })
@@ -5539,6 +5790,11 @@ and delete the `SqliteActorRepo` scaffolding lines from the final file.
 
 `src/adapters/rest/idempotency.test.ts`:
 
+Shipped delta (Task 13 hygiene sync): the shipped suite adds the replay content-type
+pins, the blank/oversized-key bypass, the D-j 204-completion and Buffer-payload pins, and
+no-key non-dedupe (all 8de7904), plus the blocker round's stored-4xx-problem+json
+verbatim replay test (6fcee92).
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { makeTestApp } from '#root/testing/test-app'
@@ -5546,6 +5802,7 @@ import { makeTestApp } from '#root/testing/test-app'
 describe('Idempotency-Key middleware (spec §7.3)', () => {
   const setup = async () => {
     const t = await makeTestApp()
+    // routes are added before the first inject, which is what boots the app
     t.app.post('/idem-echo', async () => ({ ok: true, stamp: Math.random() }))
     return t
   }
@@ -5557,6 +5814,35 @@ describe('Idempotency-Key middleware (spec §7.3)', () => {
     const second = await t.app.inject({ method: 'POST', url: '/idem-echo', headers })
     expect(second.statusCode).toBe(first.statusCode)
     expect(second.body).toBe(first.body) // byte-identical replay
+    expect(second.headers['content-type']).toContain('application/json')
+    await t.close()
+  })
+
+  it('replays a stored 4xx problem body as application/problem+json, verbatim', async () => {
+    const t = await setup()
+    const body = JSON.stringify({
+      type: 'https://nightshift.local/errors/not_found',
+      title: 'not found',
+      status: 404,
+      code: 'not_found',
+      detail: 'route not found',
+    })
+    await t.deps.idemRoot.reserve({
+      actor_id: 'a_nils',
+      idem_key: 'k-404',
+      request_method: 'POST',
+      request_path: '/idem-echo',
+      created_at: new Date().toISOString(),
+    })
+    await t.deps.idemRoot.complete('a_nils', 'k-404', 404, body)
+    const replay = await t.app.inject({
+      method: 'POST',
+      url: '/idem-echo',
+      headers: { authorization: `Bearer ${t.adminToken}`, 'idempotency-key': 'k-404' },
+    })
+    expect(replay.statusCode).toBe(404)
+    expect(replay.headers['content-type']).toContain('application/problem+json')
+    expect(replay.body).toBe(body)
     await t.close()
   })
 
@@ -5574,6 +5860,9 @@ describe('Idempotency-Key middleware (spec §7.3)', () => {
       headers: { ...base, 'idempotency-key': 'k-b' },
     })
     expect(a.body).not.toBe(b.body)
+    const noKey = await t.app.inject({ method: 'POST', url: '/idem-echo', headers: base })
+    const noKey2 = await t.app.inject({ method: 'POST', url: '/idem-echo', headers: base })
+    expect(noKey.body).not.toBe(noKey2.body)
     await t.close()
   })
 
@@ -5596,6 +5885,53 @@ describe('Idempotency-Key middleware (spec §7.3)', () => {
     await t.close()
   })
 
+  it('oversized or blank keys are ignored (no reservation made)', async () => {
+    const t = await setup()
+    const base = { authorization: `Bearer ${t.adminToken}` }
+    const blank = await t.app.inject({
+      method: 'POST',
+      url: '/idem-echo',
+      headers: { ...base, 'idempotency-key': '' },
+    })
+    const oversized = await t.app.inject({
+      method: 'POST',
+      url: '/idem-echo',
+      headers: { ...base, 'idempotency-key': 'x'.repeat(201) },
+    })
+    expect(blank.statusCode).toBe(200)
+    expect(oversized.statusCode).toBe(200)
+    const rows = await t.deps.db.selectFrom('idempotency_keys').selectAll().execute()
+    expect(rows).toEqual([])
+    await t.close()
+  })
+
+  it('a 204 response completes the key instead of stranding it (D-j)', async () => {
+    const t = await setup()
+    t.app.delete('/idem-quiet', async (_req, reply) => reply.code(204).send())
+    const headers = { authorization: `Bearer ${t.adminToken}`, 'idempotency-key': 'k-204' }
+    const first = await t.app.inject({ method: 'DELETE', url: '/idem-quiet', headers })
+    expect(first.statusCode).toBe(204)
+    const replay = await t.app.inject({ method: 'DELETE', url: '/idem-quiet', headers })
+    expect(replay.statusCode).toBe(204)
+    expect(replay.body).toBe(first.body)
+    await t.close()
+  })
+
+  it('a Buffer payload completes as its utf8 text and replays identically', async () => {
+    const t = await setup()
+    t.app.put('/idem-blob', async (_req, reply) => {
+      reply.header('content-type', 'text/plain')
+      return reply.send(Buffer.from('blob-body'))
+    })
+    const headers = { authorization: `Bearer ${t.adminToken}`, 'idempotency-key': 'k-blob' }
+    const first = await t.app.inject({ method: 'PUT', url: '/idem-blob', headers })
+    expect(first.body).toBe('blob-body')
+    const replay = await t.app.inject({ method: 'PUT', url: '/idem-blob', headers })
+    expect(replay.statusCode).toBe(first.statusCode)
+    expect(replay.body).toBe('blob-body')
+    await t.close()
+  })
+
   it('5xx deletes the reservation so retries re-execute (D-j)', async () => {
     const t = await setup()
     t.app.post('/idem-boom', async () => {
@@ -5604,6 +5940,7 @@ describe('Idempotency-Key middleware (spec §7.3)', () => {
     const headers = { authorization: `Bearer ${t.adminToken}`, 'idempotency-key': 'k-boom' }
     const first = await t.app.inject({ method: 'POST', url: '/idem-boom', headers })
     expect(first.statusCode).toBe(500)
+    expect(first.headers['content-type']).toContain('application/problem+json')
     const outcome = await t.deps.idemRoot.reserve({
       actor_id: 'a_nils',
       idem_key: 'k-boom',
