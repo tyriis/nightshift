@@ -3037,12 +3037,14 @@ export class UpdateTask {
           entity_id: input.taskId,
           before: {
             title: before.title,
+            description: before.description,
             blocked_flag: before.blocked_flag,
             assignee_id: before.assignee_id,
             acceptance_criteria: before.acceptance_criteria,
           },
           after: {
             title: after.title,
+            description: after.description,
             blocked_flag: after.blocked_flag,
             assignee_id: after.assignee_id,
             acceptance_criteria: after.acceptance_criteria,
