@@ -1,0 +1,55 @@
+{
+  "name": "nightshift",
+  "version": "0.1.0",
+  "description": "Self-hosted task board where humans and AI agents are first-class actors",
+  "type": "module",
+  "license": "Apache-2.0",
+  "imports": {
+    "#root/*": {
+      "development": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "dev": "NODE_OPTIONS=--conditions=development tsx watch src/index.ts",
+    "start:dev": "NODE_OPTIONS=--conditions=development tsx src/index.ts",
+    "build": "pnpm run clean && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "24.13.3",
+    "@typescript-eslint/eslint-plugin": "8.58.2",
+    "@typescript-eslint/parser": "8.58.2",
+    "@vitest/coverage-v8": "^4.1.5",
+    "eslint": "10.2.0",
+    "eslint-config-prettier": "10.1.8",
+    "fast-check": "^4.2.0",
+    "prettier": "3.8.3",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3",
+    "vitest": "^4.1.5",
+    "yaml": "^2.9.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "fastify": "5.12.3",
+    "kysely": "0.29.5",
+    "zod": "4.5.4"
+  }
+}
