@@ -2683,7 +2683,7 @@ export class SqliteIdempotencyRepo implements IdempotencyRepo {
       .executeTakeFirst()
     // Kysely 0.29.5 InsertResult exposes numInsertedOrUpdatedRows (not numInsertedRows);
     // with onConflict doNothing a racer's no-op yields 0.
-    if (Number(res.numInsertedOrUpdatedRows) === 1) return { state: 'reserved' }
+    if (Number(res.numInsertedOrUpdatedRows) === 1) return { state: 'reserved' } // Task-4/5 idiom: executeTakeFirstOrThrow for the insert result
 
     const row = await this.db
       .selectFrom('idempotency_keys')
