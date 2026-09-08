@@ -317,4 +317,67 @@ describe('thread routes (spec §6.5, §7.2)', () => {
     expect(sneaky.statusCode).toBe(201)
     await t.close()
   })
+
+  it('invariant 6 at REST: gate 409s the agent, the human answer lifts it, pinned release stands (D-o, §14.5)', async () => {
+    const t = await makeTestApp()
+    const agent = (
+      await t.app.inject({
+        method: 'POST',
+        url: '/admin/actors',
+        headers: bearer(t),
+        payload: { kind: 'agent', handle: 'hermes-1', display_name: 'Hermes' },
+      })
+    ).json()
+    const issued = (
+      await t.app.inject({
+        method: 'POST',
+        url: `/admin/actors/${agent.id as string}/tokens`,
+        headers: bearer(t),
+        payload: { label: 'ci' },
+      })
+    ).json()
+    const agentBearer = { authorization: `Bearer ${issued.raw_token as string}` }
+    const taskId = await createTask(t, 'gated at rest')
+    const claim = (
+      await t.app.inject({ method: 'POST', url: `/tasks/${taskId}/claim`, headers: agentBearer })
+    ).json()
+    const q = (
+      await t.app.inject({
+        method: 'POST',
+        url: `/tasks/${taskId}/threads`,
+        headers: agentBearer,
+        payload: { kind: 'question', body: 'which API?', assignee_handle: 'nils' },
+      })
+    ).json()
+    const gated = await t.app.inject({
+      method: 'PATCH',
+      url: `/tasks/${taskId}/status`,
+      headers: agentBearer,
+      payload: { status: 'in_review', reason: 'pr', lease_token: claim.lease_token },
+    })
+    expect(gated.statusCode).toBe(409)
+    // problem.ts spreads details top-level: `open` rides beside code on the wire
+    expect(gated.json()).toMatchObject({ code: 'open_questions', open: 1 })
+    const answered = await t.app.inject({
+      method: 'POST',
+      url: `/tasks/${taskId}/threads/${q.thread.id as string}/answer`,
+      headers: bearer(t), // admin = human nils, the assignee (D-x: any actor may answer)
+      payload: { body: 'REST' },
+    })
+    expect(answered.statusCode).toBe(200)
+    const released = await t.app.inject({
+      method: 'PATCH',
+      url: `/tasks/${taskId}/status`,
+      headers: agentBearer,
+      payload: { status: 'in_review', reason: 'pr', lease_token: claim.lease_token },
+    })
+    expect(released.statusCode).toBe(200)
+    const audit = await t.deps.auditRoot.search({
+      entity_type: 'task',
+      entity_id: taskId,
+      limit: 20,
+    })
+    expect(audit.some((a) => a.reason === 'claim released on review')).toBe(true)
+    await t.close()
+  })
 })

@@ -2485,6 +2485,8 @@ git add -A
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(app): invariant 6 review gate on open human questions"
 ```
 
+> **Amendment (Task 8, harness adaptation + audit-absence pin):** The gate block itself shipped byte-identical to Step 8.3 — including replacing Plan A's misplaced seam comment and the relocation above the `done` branch (D-o). Deviations, all harness-side: (1) the block's assumed `setup()` returning `{ db, uow, ids }` does not exist — `update-status.test.ts` ships `withAgent()` (returns `{ db, uow }` with agent + `tok_agent` seeded); each new test opens one shared `seqIds()` after `withAgent()` and passes it to `CreateTask`/`CreateThread`/`AnswerQuestion` per the M-1 one-counter rule; the human-claim test uses `seedToken(db, 'tok_human', 'a_human')` and a `humanClaimant` context exactly as the block wrote them. (2) The gate test gained an audit-absence pin the block lacks — after the 409 the task's trail contains no `status_changed` row (the throw precedes every write; D-o record-integrity made explicit). (3) The pre-existing zero-question test was renamed to `… Plan B wired (see invariant-6 tests)` per Step 8.3, body untouched. (4) The Step 8.4 REST pin asserts `open` TOP-LEVEL beside `code` in the 409 body (problem.ts spreads DomainError details flat — the T7 wire shape), reads the release-audit trail via `t.deps.auditRoot.search` (no /audit surface needed), and answers as the admin token (human nils, the assignee). Block sync = shipped form.
+
 ---
 
 ### Task 9: Inbox surface + `assigned` producer
