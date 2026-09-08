@@ -117,6 +117,14 @@ describe('thread routes (spec §6.5, §7.2)', () => {
       [2, 'reply one'],
       [3, 'reply two'],
     ])
+    // a typo'd task id must not masquerade as "no discussion yet" — sibling GET /tasks/:id 404s
+    const ghostList = await t.app.inject({
+      method: 'GET',
+      url: '/tasks/t_ghost/threads',
+      headers: bearer(t),
+    })
+    expect(ghostList.statusCode).toBe(404)
+    expect(ghostList.json().code).toBe('not_found')
     await t.close()
   })
 
@@ -179,7 +187,13 @@ describe('thread routes (spec §6.5, §7.2)', () => {
       payload: { body: 'again' },
     })
     expect(again.statusCode).toBe(409)
-    expect(again.json().code).toBe('question_transition')
+    // the T6-unified details shape stays visible at the REST boundary agents meet —
+    // problem.ts spreads DomainError details TOP-LEVEL (stale_lease precedent)
+    expect(again.json()).toMatchObject({
+      code: 'question_transition',
+      from: 'answered',
+      to: 'answered',
+    })
     await t.close()
   })
 

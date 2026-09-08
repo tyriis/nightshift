@@ -9,10 +9,9 @@ const kindEnum = { type: 'string', enum: ['note', 'question'] } as const
 const stateEnum = { type: 'string', enum: ['open', 'answered', 'resolved', 'wont_fix'] } as const
 
 // REST speaks handles (public actor vocabulary); use-cases speak ids (ports.ts).
-// The route resolves handle → id; unknown handle → 404 not_found from the use-case.
+// The route resolves handle → id; an unknown handle 404s here, in the ROUTE layer.
 async function handleToId(deps: AppDeps, handle: string): Promise<string> {
-  const rows = await deps.actorsRoot.list()
-  const hit = rows.find((a) => a.handle === handle)
+  const hit = await deps.actorsRoot.findByHandle(handle)
   if (!hit) throw new DomainError('not_found', `actor '@${handle}' not found`)
   return hit.id
 }
@@ -20,6 +19,9 @@ async function handleToId(deps: AppDeps, handle: string): Promise<string> {
 export const registerThreadRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   app.get('/tasks/:id/threads', async (request) => {
     const { id } = request.params as { id: string }
+    // existence first, mirroring GET /tasks/:id — a typo'd id must not read as "no discussion"
+    const task = await deps.tasksRoot.findById(id)
+    if (!task) throw new DomainError('not_found', `task ${id} not found`)
     return deps.threadsRoot.listForTask(id)
   })
 
