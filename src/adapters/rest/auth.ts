@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import type { ActorRef } from '#root/application/ports'
+// sanctioned pure-util import (plan ruling): token-hash is node:crypto-only, no infra coupling
 import { hashToken } from '#root/infra/token-hash'
 import { DomainError } from '#root/domain/errors'
 
@@ -39,7 +40,11 @@ export const registerAuth = (app: FastifyInstance, deps: AppDeps): void => {
   app.decorateRequest('idemKey', null)
 
   app.addHook('onRequest', async (request) => {
-    const path = request.url.split('?')[0]
+    // PUBLIC_PATHS membership stays EXACTLY {/ping, /openapi.yaml} (binding); the
+    // LOOKUP normalizes slash spellings only — collapse duplicates, strip trailing
+    // (root '/' survives: the strip requires a preceding char). Fail-closed: this can
+    // only add PUBLIC spellings, never unprotect anything absent from the set.
+    const path = (request.url.split('?')[0] ?? '/').replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1')
     if (PUBLIC_PATHS.has(path)) return
     const header = request.headers.authorization
     if (!header?.startsWith('Bearer ')) {
