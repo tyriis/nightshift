@@ -50,7 +50,7 @@ describe('GetNext (spec §7.2 ready-work query)', () => {
     expect((await next.run({ limit: 1 })).map((t) => t.task.id)).toEqual([p1.id])
 
     // claiming removes it from ready
-    await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: a.id })
+    await new ClaimTask(uow, fixedClock(), seqIds()).run({ ...agent, taskId: a.id })
     expect((await next.run({})).map((t) => t.task.id)).toEqual([p1.id, b.id])
     void backlog
     void parent

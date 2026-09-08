@@ -30,7 +30,10 @@ describe('UpdateStatus gates (spec §6.4)', () => {
     const task = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
     const uc = new UpdateStatus(uow, fixedClock())
     await uc.run({ ...human, taskId: task.id, to: 'todo', reason: 'groomed' })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
     await uc.run({
       ...agent,
       taskId: task.id,
@@ -57,7 +60,10 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       title: 'x',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
     const uc = new UpdateStatus(uow, fixedClock())
     await expect(
       uc.run({ ...human, taskId: task.id, to: 'in_progress', reason: 'nudge' })
@@ -178,7 +184,10 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       title: 'x',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
     // with no questions present, in_review succeeds:
     await expect(
       new UpdateStatus(uow, fixedClock()).run({
@@ -203,7 +212,10 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       title: 'gated',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
     await new CreateThread(uow, fixedClock(), ids).run({
       ...agent,
       taskId: task.id,
@@ -238,7 +250,10 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       title: 'gated',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
     const q = await new CreateThread(uow, fixedClock(), ids).run({
       ...agent,
       taskId: task.id,
@@ -271,7 +286,10 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       title: 'gated',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
     await new CreateThread(uow, fixedClock(), ids).run({
       ...agent,
       taskId: task.id,
@@ -301,7 +319,7 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       title: 'gated',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
       ...humanClaimant,
       taskId: task.id,
     })
@@ -333,7 +351,10 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       title: 'x',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
     await new CreateThread(uow, fixedClock(), ids).run({
       ...agent,
       taskId: task.id,
@@ -362,7 +383,10 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       title: 'x',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
     await uow.withTransaction(async (repos) => repos.actors.setPolicy('review_gate', 'off'))
     const done = await new UpdateStatus(uow, fixedClock()).run({
       ...agent,
@@ -390,7 +414,10 @@ describe('UpdateStatus gates (spec §6.4)', () => {
       title: 'x',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
     await new ReleaseClaim(uow, fixedClock()).run({ ...agent, taskId: task.id })
     await expect(
       new UpdateStatus(uow, fixedClock()).run({

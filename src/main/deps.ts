@@ -142,7 +142,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
       updateTask: new UpdateTask(uow, clock, ids),
       updateStatus: new UpdateStatus(uow, clock),
       splitTask: new SplitTask(uow, clock, ids),
-      claimTask: new ClaimTask(uow, clock),
+      claimTask: new ClaimTask(uow, clock, ids),
       releaseClaim: new ReleaseClaim(uow, clock),
       heartbeat: new Heartbeat(uow, clock),
       addBlock: new AddBlock(uow, clock),

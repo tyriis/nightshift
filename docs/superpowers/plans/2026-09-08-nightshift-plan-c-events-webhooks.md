@@ -2730,6 +2730,8 @@ Run: `pnpm test && pnpm lint && pnpm typecheck` — green (existing 409 pins pro
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -am "feat(app): claim_conflict inbox copy for race losers (D-cc)"
 ```
 
+> **Amendment (Task 14, claim-task lint normalization):** the Step-3 block's last line — `const selfReclaim = (handle: string, e: DomainError): boolean => e.details?.holder_handle === handle` — is 104 chars and exceeds prettier's printWidth; the formatter ships it wrapped as `const selfReclaim = (handle: string, e: DomainError): boolean =>\n  e.details?.holder_handle === handle`. This is the ONLY byte-divergence (lint normalization); the block above has been updated to the shipped two-line form. Block sync = shipped form.
+
 ---
 
 ## Task 15: Acceptance story — event feed + webhook delivery end-to-end (spec §11 "webhook delivery + event cursor replay")
