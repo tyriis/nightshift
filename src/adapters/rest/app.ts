@@ -7,6 +7,7 @@ import { registerAuth } from '#root/adapters/rest/auth'
 import { registerIdempotency } from '#root/adapters/rest/idempotency'
 import { registerRateLimit } from '#root/adapters/rest/rate-limit'
 import { registerAdminRoutes } from '#root/adapters/rest/routes/admin'
+import { registerWebhookRoutes } from '#root/adapters/rest/routes/webhooks'
 import { registerAuditRoutes } from '#root/adapters/rest/routes/audit'
 import { registerInboxRoutes } from '#root/adapters/rest/routes/inbox'
 import { registerDependencyRoutes } from '#root/adapters/rest/routes/dependencies'
@@ -58,6 +59,7 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerDependencyRoutes(server, deps)
   registerLabelRoutes(server, deps)
   registerAdminRoutes(server, deps)
+  registerWebhookRoutes(server, deps) // admin surface groups together (plan Task 9)
 
   return server
 }

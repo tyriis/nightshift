@@ -1641,6 +1641,8 @@ Run: `pnpm test && pnpm lint && pnpm typecheck && pnpm build` — green (drift t
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -am "feat(api): human-only webhook admin surface + contract"
 ```
 
+> **Amendment (Task 9, embed offsets + quote chars; both TS blocks byte-identical):** Three byte-sync notes. (1) The Step 2 test block and the Step 4 route module transcribed **byte-identical** to disk (diffed against the plan's own lines — zero diff), each passing `prettier --check` as written; the Step 3 RED is the anticipated one: `AssertionError: GET /admin/webhooks: expected 404 to be 403`, `expected 404 to be 201`, `expected 404 to be 400` (3 failed — the 404 is problem.ts's notFoundHandler `not_found`; no fake RED claimed). (2) The Step 5 yaml blocks land embedded: paths at the file's `paths:` nesting indent (+2), schemas at `components.schemas` (+4), and prettier's yaml override (`singleQuote: false`) swaps the blocks' single-quoted `'200'`/`'#/components/...'` tokens to the file's double-quote style — Task 2 amendment precedent, quote characters only, structure as planned. Both normalizations verified mechanically: block + embed-indent + quote-swap diffs zero against disk. (3) The Step 1 deps.ts fragment lands at the file's nesting offsets — the three use-case lines at +2 (the `useCases` members sit at 6 spaces where the fragment shows 4) and `webhooksRoot` byte-identical at 4; the import lines and `AppDeps` field lines have no plan block (the step's prose names the symbols), and the app.ts registration follows the step's placement prose with a house comment. Block sync = shipped form.
+
 ---
 
 ## Task 10: `GET /events` — the cursor feed (D-aa/D-dd)

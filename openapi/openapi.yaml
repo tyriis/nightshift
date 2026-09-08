@@ -20,6 +20,7 @@ tags:
   - name: inbox
   - name: attachments
   - name: links
+  - name: webhooks
 paths:
   /ping:
     get:
@@ -447,6 +448,68 @@ paths:
               schema:
                 type: object
                 properties: { key: { type: string }, value: { type: string } }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/webhooks:
+    get:
+      tags: [webhooks]
+      operationId: listWebhooks
+      description: registered agent wake callbacks (human-only, spec §6.8); secrets are NEVER re-served after creation (D-ff)
+      responses:
+        "200":
+          description: webhook rows, oldest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Webhook" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [webhooks]
+      operationId: createWebhook
+      description: >-
+        register a per-agent callback (spec §6.8): HMAC secret generated and shown
+        EXACTLY ONCE (D-ff); the delivery checkpoint anchors at the current audit
+        watermark (D-bb) — a new webhook sees only subsequent events. url must be
+        http(s) (use-case rule), unique (DDL rule), 8..2000 chars (schema rule).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, url]
+              additionalProperties: false
+              properties:
+                agent_id: { type: string, minLength: 1, maxLength: 60 }
+                url: { type: string, minLength: 8, maxLength: 2000 }
+      responses:
+        "201":
+          description: webhook row + the one-time secret
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookWithSecret" }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/webhooks/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    delete:
+      tags: [webhooks]
+      operationId: deleteWebhook
+      description: remove a webhook; absent is 404 not_found. Delivery stops immediately.
+      responses:
+        "204": { description: removed (no body) }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/webhooks/{id}/rotate-secret:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [webhooks]
+      operationId: rotateWebhookSecret
+      description: >-
+        new HMAC secret shown exactly once; the checkpoint RE-ANCHORS to the current
+        watermark and the backoff clears (rotation IS re-registration, D-bb). 404 on ghost.
+      responses:
+        "200":
+          description: webhook row + the new one-time secret
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookWithSecret" }
         default: { $ref: "#/components/responses/Problem" }
   /tasks/{id}/threads:
     parameters: [{ $ref: "#/components/parameters/TaskId" }]
@@ -952,3 +1015,24 @@ components:
         bytes: { type: integer }
         created_by: { type: string }
         created_at: { type: string }
+    Webhook:
+      type: object
+      description: registered callback (ports.ts WebhookRecord, D-bb); secret exists only in create/rotate responses (D-ff)
+      properties:
+        id: { type: string }
+        actor_id: { type: string }
+        url: { type: string }
+        created_by: { type: string }
+        created_at: { type: string }
+        delivered_cursor: { type: integer, description: audit id the loop delivers AFTER (D-bb) }
+    WebhookWithSecret:
+      description: webhook row + the secret, returned exactly once (D-ff, spec §5 raw_token lineage)
+      allOf:
+        - $ref: "#/components/schemas/Webhook"
+        - type: object
+          properties:
+            secret:
+              {
+                type: string,
+                description: base64url 32-byte HMAC key; signs X-Nightshift-Signature (D-bb),
+              }

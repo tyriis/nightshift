@@ -17,6 +17,7 @@ import { SqliteLinkRepo } from '#root/infra/sqlite/link-repo'
 import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
 import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
 import { SqliteUnitOfWork } from '#root/infra/sqlite/uow'
+import { SqliteWebhookRepo } from '#root/infra/sqlite/webhook-repo'
 import { AddBlock } from '#root/application/usecases/add-block'
 import { AddMessage } from '#root/application/usecases/add-message'
 import { AnswerQuestion } from '#root/application/usecases/answer-question'
@@ -32,6 +33,11 @@ import { MarkInboxRead } from '#root/application/usecases/mark-inbox-read'
 import { AttachLabel, CreateLabel, DetachLabel } from '#root/application/usecases/labels'
 import { CreateActor, CreateToken, RevokeToken } from '#root/application/usecases/manage-actors'
 import { GetPolicy, SetPolicy } from '#root/application/usecases/manage-policy'
+import {
+  CreateWebhook,
+  DeleteWebhook,
+  RotateWebhookSecret,
+} from '#root/application/usecases/manage-webhooks'
 import { ReleaseClaim } from '#root/application/usecases/release-claim'
 import { RemoveBlock } from '#root/application/usecases/remove-block'
 import { SplitTask } from '#root/application/usecases/split-task'
@@ -56,6 +62,7 @@ export interface AppDeps {
   inboxRoot: SqliteInboxRepo
   attachmentsRoot: SqliteAttachmentRepo
   linksRoot: SqliteLinkRepo
+  webhooksRoot: SqliteWebhookRepo
   files: FileStore
   useCases: {
     createTask: CreateTask
@@ -85,6 +92,9 @@ export interface AppDeps {
     revokeToken: RevokeToken
     getPolicy: GetPolicy
     setPolicy: SetPolicy
+    createWebhook: CreateWebhook
+    deleteWebhook: DeleteWebhook
+    rotateWebhookSecret: RotateWebhookSecret
   }
 }
 
@@ -109,6 +119,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     inboxRoot: new SqliteInboxRepo(db),
     attachmentsRoot: new SqliteAttachmentRepo(db),
     linksRoot: new SqliteLinkRepo(db),
+    webhooksRoot: new SqliteWebhookRepo(db),
     files, // shared instance: uploads and content serving hit the same store
     useCases: {
       createTask: new CreateTask(uow, clock, ids),
@@ -145,6 +156,9 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
       revokeToken: new RevokeToken(uow, clock),
       getPolicy: new GetPolicy(uow),
       setPolicy: new SetPolicy(uow, clock),
+      createWebhook: new CreateWebhook(uow, clock, ids),
+      deleteWebhook: new DeleteWebhook(uow, clock),
+      rotateWebhookSecret: new RotateWebhookSecret(uow, clock),
     },
   }
 }
