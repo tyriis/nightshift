@@ -9,6 +9,7 @@ import { registerRateLimit } from '#root/adapters/rest/rate-limit'
 import { registerAdminRoutes } from '#root/adapters/rest/routes/admin'
 import { registerWebhookRoutes } from '#root/adapters/rest/routes/webhooks'
 import { registerAuditRoutes } from '#root/adapters/rest/routes/audit'
+import { registerEventRoutes } from '#root/adapters/rest/routes/events'
 import { registerInboxRoutes } from '#root/adapters/rest/routes/inbox'
 import { registerDependencyRoutes } from '#root/adapters/rest/routes/dependencies'
 import { registerLabelRoutes } from '#root/adapters/rest/routes/labels'
@@ -51,6 +52,7 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerRateLimit(server, deps) // LAST onRequest: idempotent replays skip the budget (D-v)
 
   registerAuditRoutes(server, deps)
+  registerEventRoutes(server, deps) // the cursor feed reads the same spine (D-aa)
   registerTaskRoutes(server, deps)
   registerThreadRoutes(server, deps) // threads are task-surface (spec §7.2)
   registerInboxRoutes(server, deps)

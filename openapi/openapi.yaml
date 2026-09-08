@@ -21,6 +21,7 @@ tags:
   - name: attachments
   - name: links
   - name: webhooks
+  - name: events
 paths:
   /ping:
     get:
@@ -342,6 +343,29 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+        default: { $ref: "#/components/responses/Problem" }
+  /events:
+    get:
+      tags: [events]
+      operationId: getEvents
+      description: >-
+        global event feed (spec §6.8): the audit spine minus payloads (D-aa), ASCENDING
+        from the cursor; cursor is an audit_log.id — monotonic across restarts (append-only,
+        never purged). Tailing burns the per-actor rate-limit budget (D-dd). SSE is deferred
+        (§6.8/§12): poll this, or register a webhook.
+      parameters:
+        - { name: cursor, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 500, default: 100 },
+          }
+      responses:
+        "200":
+          description: events with cursor strictly increasing; empty when caught up
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Event" } }
         default: { $ref: "#/components/responses/Problem" }
   /admin/actors:
     get:
@@ -914,6 +938,18 @@ components:
         entity_id: { type: string }
         before: {}
         after: {}
+        reason: { type: ["string", "null"] }
+        created_at: { type: string }
+    Event:
+      type: object
+      description: audit spine minus payloads (D-aa) — before/after snapshots are excluded; the machine reason rides
+      properties:
+        cursor: { type: integer, description: audit_log.id — the restart-monotonic cursor }
+        actor_id: { type: ["string", "null"] }
+        token_id: { type: ["string", "null"] }
+        action: { type: string }
+        entity_type: { type: string }
+        entity_id: { type: string }
         reason: { type: ["string", "null"] }
         created_at: { type: string }
     Problem:
