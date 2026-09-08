@@ -21,7 +21,7 @@ const question = (over: Partial<ThreadDraft> = {}): ThreadDraft =>
     id: 'th_q',
     kind: 'question',
     state: 'open',
-    assignee_id: over.kind === 'note' ? null : 'a_ag',
+    assignee_id: 'a_ag',
     ...over,
   })
 

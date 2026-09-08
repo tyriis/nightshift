@@ -11,30 +11,47 @@ const setup = async () => {
   return { db, repo: new SqliteInboxRepo(db) }
 }
 
-const add = (id: string, kind: InboxKind) => ({
+const add = (
+  id: string,
+  kind: InboxKind,
+  created_at = `2026-01-0${id.slice(-1)}T00:00:00.000Z`
+) => ({
   id,
   actor_id: 'a_x',
   kind,
   task_id: 't_1',
   thread_id: null as string | null,
-  created_at: `2026-01-0${id.slice(-1)}T00:00:00.000Z`,
+  created_at,
 })
 
 describe('SqliteInboxRepo', () => {
   it('adds, lists newest-first, filters unread, caps limit', async () => {
     const { db, repo } = await setup()
-    await repo.add(add('ib_1', 'assigned'))
-    await repo.add(add('ib_2', 'mentioned'))
+    // ids chosen so lexical id-order CONTRADICTS recency: 'ib_9' is the older row.
+    // An `order by id desc` implementation would answer ['ib_9','ib_2'] here.
+    await repo.add(add('ib_2', 'mentioned', '2026-01-02T00:00:00.000Z')) // newer
+    await repo.add(add('ib_9', 'assigned', '2026-01-01T00:00:00.000Z')) // older
     expect(
       (await repo.listForActor('a_x', { unreadOnly: false, limit: 10 })).map((i) => i.id)
-    ).toEqual(['ib_2', 'ib_1'])
-    await repo.markRead('ib_1', 'a_x')
+    ).toEqual(['ib_2', 'ib_9'])
+    await repo.markRead('ib_9', 'a_x')
     expect(
       (await repo.listForActor('a_x', { unreadOnly: true, limit: 10 })).map((i) => i.id)
     ).toEqual(['ib_2'])
     expect(
       (await repo.listForActor('a_x', { unreadOnly: false, limit: 1 })).map((i) => i.id)
     ).toEqual(['ib_2'])
+    await db.destroy()
+  })
+
+  it('breaks same-timestamp ties by id desc (created_at ties stay deterministic)', async () => {
+    const { db, repo } = await setup()
+    const stamp = '2026-01-05T00:00:00.000Z'
+    await repo.add(add('ib_3', 'assigned', stamp))
+    await repo.add(add('ib_7', 'mentioned', stamp))
+    expect(
+      (await repo.listForActor('a_x', { unreadOnly: false, limit: 10 })).map((i) => i.id)
+    ).toEqual(['ib_7', 'ib_3'])
     await db.destroy()
   })
 

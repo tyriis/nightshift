@@ -87,7 +87,9 @@ export class SqliteThreadRepo implements ThreadRepo {
     body: string
     created_at: string
   }): Promise<MessageRecord> {
-    // D-y: seq computed here (max+1 under the caller's transaction) — clock-free ordering
+    // D-y: seq computed here (max+1 under the caller's transaction) — clock-free ordering;
+    // racing appends serialize on the unique (thread_id, seq) backstop — the loser fails
+    // rather than writing a duplicate
     const r = await sql<{ next: number }>`
       select coalesce(max(seq), 0) + 1 as next from messages where thread_id = ${input.threadId}
     `.execute(this.db)

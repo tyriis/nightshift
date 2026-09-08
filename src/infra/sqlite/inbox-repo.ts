@@ -26,10 +26,13 @@ export class SqliteInboxRepo implements InboxRepo {
     actorId: string,
     filter: { unreadOnly: boolean; limit: number }
   ): Promise<InboxItemRecord[]> {
+    // recency order (newest-first): ids are RandomIdGen-random (src/infra/ids.ts),
+    // NOT monotonic — ordering by id would be an arbitrary subset under limit
     const base = this.db
       .selectFrom('inbox_items')
       .selectAll()
       .where('actor_id', '=', actorId)
+      .orderBy('created_at', 'desc')
       .orderBy('id', 'desc')
     const rows = await (filter.unreadOnly ? base.where('read', '=', 0) : base)
       .limit(filter.limit)
