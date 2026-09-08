@@ -5,6 +5,7 @@ import type { AppDeps } from '#root/main/deps'
 import { registerProblemHandlers } from '#root/adapters/rest/problem'
 import { registerAuth } from '#root/adapters/rest/auth'
 import { registerIdempotency } from '#root/adapters/rest/idempotency'
+import { registerRateLimit } from '#root/adapters/rest/rate-limit'
 import { registerAdminRoutes } from '#root/adapters/rest/routes/admin'
 import { registerAuditRoutes } from '#root/adapters/rest/routes/audit'
 import { registerInboxRoutes } from '#root/adapters/rest/routes/inbox'
@@ -46,6 +47,7 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   // hook order matters: auth resolves the actor, then idempotency reserves per-actor keys
   registerAuth(server, deps)
   registerIdempotency(server, deps)
+  registerRateLimit(server, deps) // LAST onRequest: idempotent replays skip the budget (D-v)
 
   registerAuditRoutes(server, deps)
   registerTaskRoutes(server, deps)
