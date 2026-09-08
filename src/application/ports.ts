@@ -1,3 +1,4 @@
+import type { InboxItemKind, LinkKind, QuestionState, ThreadKind } from '#root/domain/discussion'
 import type { ActorKind, TaskDraft, TaskRecord, TaskStatus } from '#root/domain/task'
 
 export interface Clock {
@@ -199,6 +200,140 @@ export interface IdempotencyRepo {
   remove(actorId: string, key: string): Promise<void>
 }
 
+// ---- threads, messages, questions (spec §6.5, D-m/D-n/D-y)
+
+export interface ThreadDraft {
+  id: string
+  task_id: string
+  kind: ThreadKind
+  state: QuestionState | null
+  assignee_id: string | null
+  answer_message_id: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export type ThreadRecord = ThreadDraft
+
+export interface MessageRecord {
+  id: string
+  thread_id: string
+  seq: number
+  author_id: string
+  body: string
+  created_at: string
+}
+
+export interface ThreadWithMessages {
+  thread: ThreadRecord
+  messages: MessageRecord[]
+}
+
+export interface OpenQuestionRow {
+  id: string
+  state: QuestionState
+  assignee_handle: string
+  /** body of the first message — the question text (spec §7.2 context bundle) */
+  question: string
+}
+
+export interface ThreadRepo {
+  create(draft: ThreadDraft): Promise<ThreadRecord>
+  find(id: string): Promise<ThreadRecord | null>
+  /** Threads (oldest first) each carrying its messages ordered by seq. */
+  listForTask(taskId: string): Promise<ThreadWithMessages[]>
+  /** seq = per-thread max+1, computed here (D-y); callers never pass seq. */
+  appendMessage(input: {
+    id: string
+    threadId: string
+    authorId: string
+    body: string
+    created_at: string
+  }): Promise<MessageRecord>
+  setQuestionFields(
+    threadId: string,
+    patch: { state?: QuestionState; assignee_id?: string; answer_message_id?: string },
+    updated_at: string
+  ): Promise<void>
+  /** Invariant-6 count (D-o): open questions on the task assigned to a HUMAN actor. */
+  openHumanAssigned(taskId: string): Promise<number>
+  /** Context bundle rows (spec §7.2): OPEN questions with first-message text. */
+  openQuestionsForTask(taskId: string): Promise<OpenQuestionRow[]>
+}
+
+// ---- inbox (spec §6.8, D-r)
+
+// The D-r vocabulary lives in the domain (INBOX_ITEM_KINDS, the sqlite CHECK's twin);
+// ports only names the type for app-layer consumers — no second source to drift.
+export type InboxKind = InboxItemKind
+
+export interface InboxItemDraft {
+  id: string
+  actor_id: string
+  kind: InboxKind
+  task_id: string
+  thread_id: string | null
+  created_at: string
+}
+
+export interface InboxItemRecord extends InboxItemDraft {
+  read: boolean
+}
+
+export interface InboxRepo {
+  add(draft: InboxItemDraft): Promise<void>
+  listForActor(
+    actorId: string,
+    filter: { unreadOnly: boolean; limit: number }
+  ): Promise<InboxItemRecord[]>
+  /** Owner-only mark-read; false when absent or not owned. */
+  markRead(itemId: string, actorId: string): Promise<boolean>
+}
+
+// ---- attachments + links (spec §6.6, D-s/D-t)
+
+export interface AttachmentRecord {
+  id: string
+  task_id: string
+  filename: string
+  content_type: string
+  sha256: string
+  bytes: number
+  created_by: string
+  created_at: string
+}
+
+export interface AttachmentRepo {
+  add(draft: AttachmentRecord): Promise<AttachmentRecord>
+  find(id: string): Promise<AttachmentRecord | null>
+  listForTask(taskId: string): Promise<AttachmentRecord[]>
+  findByTaskShaFilename(
+    taskId: string,
+    sha256: string,
+    filename: string
+  ): Promise<AttachmentRecord | null>
+}
+
+export interface LinkDraft {
+  id: string
+  task_id: string
+  kind: LinkKind
+  url: string
+  created_by: string
+  created_at: string
+}
+
+export type LinkRecord = LinkDraft
+
+export interface LinkRepo {
+  add(draft: LinkDraft): Promise<LinkRecord>
+  find(id: string): Promise<LinkRecord | null>
+  findByTaskKindUrl(taskId: string, kind: LinkKind, url: string): Promise<LinkRecord | null>
+  remove(id: string): Promise<void>
+  listForTask(taskId: string): Promise<LinkRecord[]>
+}
+
 // ---- wiring seams
 
 export interface Repos {
@@ -207,6 +342,10 @@ export interface Repos {
   deps: DependencyRepo
   labels: LabelRepo
   actors: ActorRepo
+  threads: ThreadRepo
+  inbox: InboxRepo
+  attachments: AttachmentRepo
+  links: LinkRepo
 }
 
 export interface UnitOfWork {

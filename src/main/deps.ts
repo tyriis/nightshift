@@ -4,11 +4,15 @@ import type { DB } from '#root/infra/sqlite/schema'
 import { SystemClock } from '#root/infra/clock'
 import { RandomIdGen } from '#root/infra/ids'
 import { SqliteActorRepo } from '#root/infra/sqlite/actor-repo'
+import { SqliteAttachmentRepo } from '#root/infra/sqlite/attachment-repo'
 import { SqliteAuditRepo } from '#root/infra/sqlite/audit-repo'
 import { SqliteDependencyRepo } from '#root/infra/sqlite/dependency-repo'
 import { SqliteIdempotencyRepo } from '#root/infra/sqlite/idempotency-repo'
+import { SqliteInboxRepo } from '#root/infra/sqlite/inbox-repo'
 import { SqliteLabelRepo } from '#root/infra/sqlite/label-repo'
+import { SqliteLinkRepo } from '#root/infra/sqlite/link-repo'
 import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
+import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
 import { SqliteUnitOfWork } from '#root/infra/sqlite/uow'
 import { AddBlock } from '#root/application/usecases/add-block'
 import { ClaimTask } from '#root/application/usecases/claim-task'
@@ -38,6 +42,10 @@ export interface AppDeps {
   depsRoot: SqliteDependencyRepo
   labelsRoot: SqliteLabelRepo
   auditRoot: SqliteAuditRepo
+  threadsRoot: SqliteThreadRepo
+  inboxRoot: SqliteInboxRepo
+  attachmentsRoot: SqliteAttachmentRepo
+  linksRoot: SqliteLinkRepo
   useCases: {
     createTask: CreateTask
     updateTask: UpdateTask
@@ -77,6 +85,10 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     depsRoot: new SqliteDependencyRepo(db),
     labelsRoot: new SqliteLabelRepo(db),
     auditRoot: new SqliteAuditRepo(db),
+    threadsRoot: new SqliteThreadRepo(db),
+    inboxRoot: new SqliteInboxRepo(db),
+    attachmentsRoot: new SqliteAttachmentRepo(db),
+    linksRoot: new SqliteLinkRepo(db),
     useCases: {
       createTask: new CreateTask(uow, clock, ids),
       updateTask: new UpdateTask(uow, clock),
