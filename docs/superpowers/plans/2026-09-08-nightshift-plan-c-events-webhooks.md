@@ -562,6 +562,8 @@ Expected: green.
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -am "feat(db): webhooks table with per-row delivery checkpoint"
 ```
 
+> **Amendment (Task 4, prettier hug on the checkpoint inserts):** Three byte-sync notes. (1) The wh_1 and wh_2 insert statements exceed printWidth 100 (the 8-char `'s3cr3t'` / 7-char `'other'` secrets push them over), so prettier hugs their arguments: both ship as ``…'2026-01-01',0,0,0)`.execute(`↵`db`↵`)``; the wh_3 statement fits and ships as planned. The SQL text inside every template literal is byte-identical to the Step 1 block. (2) Embedding offset only: the Step 1 block lands at the file's `describe`-nesting indent (+2 base, same treatment as Task 2's block); statement and template contents unchanged. (3) Honest RED: both pins were genuine — `creates all tables` failed on the missing `webhooks` entry and the new pin failed with `SqliteError: no such table: webhooks` (2 failed | 7 passed) before Step 3. The Step 3 `migrations.ts` block and the Step 4 `schema.ts` block are byte-identical to shipped (byte-diffed). Block sync = shipped form.
+
 ---
 
 ## Task 5: `WebhookRepo` port + implementation (D-ff secret discipline)

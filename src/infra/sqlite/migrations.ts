@@ -205,6 +205,28 @@ const migrations: Record<string, Migration> = {
       await sql`create index inbox_actor_idx on inbox_items (actor_id, read)`.execute(db)
     },
   },
+
+  '2026-09-12_webhooks': {
+    up: async (db: Kysely<DB>) => {
+      // D-bb/D-ff: one row per registered callback, its delivery checkpoint riding
+      // with it (a separate ledger table is the second source D-aa rejects). secret
+      // is PLAINTEXT on purpose — an HMAC signing key the loop must re-read; unlike
+      // bearer tokens it cannot be stored hashed (D-ff states the exception). url is
+      // UNIQUE: a runner gets exactly one wake path, and a re-register is an upsert
+      // decision this board refuses to make silently.
+      await sql`create table webhooks (
+        id text primary key,
+        actor_id text not null references actors(id),
+        url text not null unique,
+        secret text not null,
+        created_by text not null references actors(id),
+        created_at text not null,
+        delivered_cursor integer not null default 0,
+        attempts integer not null default 0,
+        next_attempt_at integer not null default 0
+      )`.execute(db)
+    },
+  },
 }
 
 class InCodeMigrationProvider implements MigrationProvider {

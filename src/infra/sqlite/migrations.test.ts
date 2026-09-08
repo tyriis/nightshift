@@ -18,6 +18,7 @@ const TABLES = [
   'inbox_items',
   'attachments',
   'links',
+  'webhooks',
 ]
 
 describe('migrations', () => {
@@ -182,6 +183,32 @@ describe('migrations', () => {
         db
       )
     ).rejects.toThrow(/UNIQUE/i)
+    await db.destroy()
+  })
+
+  it('pins webhook DDL: unique url, integer checkpoint fields (D-bb)', async () => {
+    const db = makeDb(':memory:')
+    await migrateToLatest(db)
+    await seedActorAndTask(db) // a_x (human) + t_x
+    await sql`insert into actors (id, kind, handle, display_name, description, created_at)
+                  values ('a_ag2','agent','ag2','Ag2','','2026-01-01')`.execute(db)
+    await sql`insert into webhooks (id, actor_id, url, secret, created_by, created_at,
+                      delivered_cursor, attempts, next_attempt_at)
+                  values ('wh_1','a_ag2','http://x/cb','s3cr3t','a_x','2026-01-01',0,0,0)`.execute(
+      db
+    )
+    await expect(
+      sql`insert into webhooks (id, actor_id, url, secret, created_by, created_at,
+                      delivered_cursor, attempts, next_attempt_at)
+                  values ('wh_2','a_ag2','http://x/cb','other','a_x','2026-01-01',0,0,0)`.execute(
+        db
+      )
+    ).rejects.toThrow(/UNIQUE/i) // one runner, one wake path (D-bb)
+    await expect(
+      sql`insert into webhooks (id, actor_id, url, secret, created_by, created_at,
+                      delivered_cursor, attempts, next_attempt_at)
+                  values ('wh_3','a_missing','http://x/y','s','a_x','2026-01-01',0,0,0)`.execute(db)
+    ).rejects.toThrow(/FOREIGN KEY|foreign key/i)
     await db.destroy()
   })
 

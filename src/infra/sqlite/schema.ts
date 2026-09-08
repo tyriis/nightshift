@@ -100,6 +100,7 @@ export interface DB {
   inbox_items: InboxItemsTable
   attachments: AttachmentsTable
   links: LinksTable
+  webhooks: WebhooksTable
 }
 
 export interface ThreadsTable {
@@ -151,4 +152,16 @@ export interface LinksTable {
   url: string
   created_by: string
   created_at: string
+}
+
+export interface WebhooksTable {
+  id: string
+  actor_id: string
+  url: string
+  secret: string
+  created_by: string
+  created_at: string
+  delivered_cursor: number
+  attempts: number
+  next_attempt_at: number
 }
