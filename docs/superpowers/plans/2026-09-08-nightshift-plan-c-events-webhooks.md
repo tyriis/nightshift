@@ -2307,6 +2307,8 @@ Run: `pnpm test && pnpm lint && pnpm typecheck && pnpm build` — green.
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -am "feat(main): webhook loop in the composition root, off in tests"
 ```
 
+> **Amendment (Task 12, deps.ts prettier hugs):** The Step-2 deps fragment landed at the file's nesting width and prettier re-hugged two spots: the call opens `deliveryLoop: new WebhookDeliveryLoop(new SqliteWebhookRepo(db), new SqliteAuditRepo(db), {` on ONE line (the plan block opened `new WebhookDeliveryLoop(` with each repo argument on its own line), and the tail closes `}),` (the plan block held `}` and `),` apart). Token content identical — whitespace-normalized diff shows exactly these two hunks and nothing else; `pnpm lint` and `prettier --check` pass only on the shipped form, so the hug is normative here. No other divergence in the commit; index.ts/test-app.ts/test additions match their blocks/prose byte-for-byte. Block sync = shipped form.
+
 ---
 
 ## Task 13: FTS5 external-content index + repo-port read (D-gg, spec §9 — no UI, no route)
