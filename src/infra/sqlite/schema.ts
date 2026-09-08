@@ -1,5 +1,5 @@
 import type { Generated } from 'kysely'
-import type { LinkKind, QuestionState, ThreadKind } from '#root/domain/discussion'
+import type { InboxItemKind, LinkKind, QuestionState, ThreadKind } from '#root/domain/discussion'
 import type { ActorKind, TaskStatus } from '#root/domain/task'
 
 export interface ActorsTable {
@@ -126,7 +126,7 @@ export interface MessagesTable {
 export interface InboxItemsTable {
   id: string
   actor_id: string
-  kind: 'assigned' | 'mentioned' | 'question_assigned'
+  kind: InboxItemKind
   task_id: string
   thread_id: string | null
   read: number

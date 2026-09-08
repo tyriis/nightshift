@@ -130,6 +130,17 @@ describe('migrations', () => {
         db
       )
     ).rejects.toThrow(/CHECK|check/i)
+    // question without state is malformed too — the biconditional's question-arm (D-m);
+    // assignee is set so only this CHECK can reject
+    await expect(
+      sql`insert into threads (id, task_id, kind, assignee_id, created_by, created_at, updated_at)
+            values ('th_q4','t_x','question','a_ag','a_x','2026-01-01','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    // thread kind vocabulary enforced (D-m)
+    await expect(
+      sql`insert into threads (id, task_id, kind, assignee_id, created_by, created_at, updated_at)
+            values ('th_k','t_x','bogus','a_ag','a_x','2026-01-01','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
     // messages: unique seq per thread (D-y ordering)
     await sql`insert into messages (id, thread_id, seq, author_id, body, created_at)
                 values ('ms_1','th_n',1,'a_x','hi','2026-01-01')`.execute(db)

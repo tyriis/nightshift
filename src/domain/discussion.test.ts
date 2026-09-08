@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  INBOX_ITEM_KINDS,
   LINK_KINDS,
   QUESTION_STATES,
   THREAD_KINDS,
@@ -11,6 +12,7 @@ describe('discussion vocabulary (spec §6.5/§6.6)', () => {
     expect(THREAD_KINDS).toEqual(['note', 'question'])
     expect(QUESTION_STATES).toEqual(['open', 'answered', 'resolved', 'wont_fix'])
     expect(LINK_KINDS).toEqual(['pr', 'commit', 'doc', 'other'])
+    expect(INBOX_ITEM_KINDS).toEqual(['assigned', 'mentioned', 'question_assigned'])
   })
 })
 

@@ -119,9 +119,15 @@ const migrations: Record<string, Migration> = {
         check ((kind = 'question') = (state is not null)),
         check (kind = 'note' or assignee_id is not null)
       )`.execute(db)
+      // task_id-leading index: every thread read filters by task (the thread list, the
+      // invariant-6 open-question gate). EXPLAIN-verified: SEARCH threads USING INDEX
+      // threads_task_idx (task_id=?) with it — including the task_id+kind+state gate
+      // variant — full SCAN threads without (created_at ordering stays a TEMP B-TREE;
+      // the autoindex is the text-PK only and covers nothing else).
       await sql`create index threads_task_idx on threads (task_id)`.execute(db)
-      // answer_message_id carries no FK by design: threads⇄messages would cycle the FK
-      // creation order; its only writer is AnswerQuestion inside one transaction (D-n).
+      // answer_message_id carries no FK: the integrity guarantee lives in AnswerQuestion's
+      // single transaction (D-n) — the column is only set after the answer row exists.
+      // (SQLite permits forward FK refs at CREATE, so creation order was never the constraint.)
 
       await sql`create table messages (
         id text primary key,
@@ -143,7 +149,9 @@ const migrations: Record<string, Migration> = {
         created_at text not null
       )`.execute(db)
       // (actor, read)-leading index: GET /inbox?unread is THE inbox read path; small
-      // circle ⇒ the two hot filters are covered by this one index.
+      // circle ⇒ the two hot filters are covered by this one index. EXPLAIN-verified:
+      // SEARCH inbox_items USING INDEX inbox_actor_idx (actor_id=? AND read=?), full
+      // SCAN without it (created_at ordering stays a TEMP B-TREE).
       await sql`create index inbox_actor_idx on inbox_items (actor_id, read)`.execute(db)
 
       await sql`create table attachments (

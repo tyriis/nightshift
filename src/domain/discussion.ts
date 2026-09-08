@@ -20,3 +20,7 @@ export const canTransitionQuestion = (from: QuestionState, to: QuestionState): b
 
 export const LINK_KINDS = ['pr', 'commit', 'doc', 'other'] as const
 export type LinkKind = (typeof LINK_KINDS)[number]
+
+// Decision D-r: the inbox kinds actually built — claim_conflict stays deferred (D-s).
+export const INBOX_ITEM_KINDS = ['assigned', 'mentioned', 'question_assigned'] as const
+export type InboxItemKind = (typeof INBOX_ITEM_KINDS)[number]

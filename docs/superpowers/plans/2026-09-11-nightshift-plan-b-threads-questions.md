@@ -254,6 +254,8 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(domain): discussion vocab
 
 > **Amendment (Task 1, mentions.ts lint):** Step 1.5's `.map((m) => m[2] as string)` trips `@typescript-eslint/no-unnecessary-type-assertion` — `RegExpMatchArray[2]` is already `string` here — so the assertion is removed: `.map((m) => m[2])`. Block sync = shipped form.
 
+> **Amendment (Task 1, post-approval review carry-in):** `INBOX_ITEM_KINDS`/`InboxItemKind` (the D-r kind list) joined `discussion.ts` during Task 3's quality-review repair, as the vocabulary single-source for the `inbox_items` DDL and row type; the freeze test in `discussion.test.ts` pins it. Lands in the child fix commit of `6acaf76` (a commit cannot quote its own hash — resolve via `git log`).
+
 ---
 
 ### Task 2: Adapter-level problem codes — the 413/415 backlog fix
@@ -602,6 +604,8 @@ and add to `interface DB`: `threads: ThreadsTable`, `messages: MessagesTable`, `
 git add -A
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(infra): threads, messages, inbox, attachments, links"
 ```
+
+> **Amendment (Task 3, quality review):** Three repairs to the shipped form of `6acaf76`. (1) The `threads` constraint test gains two isolated probes: `th_q4` (`kind='question'`, `state` NULL, `assignee_id` set) pins the biconditional's previously unpinned question-arm — mutation-verified: weakening `check ((kind = 'question') = (state is not null))` to the `or` form reddens exactly this probe (restored green after); `th_k` (`kind='bogus'`, `assignee_id` set) isolates the `kind` vocabulary check the same way (mutation: removing the inline `check (kind in ('note','question'))` reddens exactly it). (2) The `answer_message_id` no-FK comment was factually wrong — SQLite accepts forward FK refs at CREATE (verified live), creation order was never the constraint; it now names the real guarantee, `AnswerQuestion`'s single transaction (D-n). (3) Both index comments follow the init idiom with EXPLAIN-verified claims, quoted honestly: with the indexes the task-filtered `threads` reads (plain list + the `kind`/`state` gate variant) print `SEARCH threads USING INDEX threads_task_idx (task_id=?)` and the unread-inbox read prints `SEARCH inbox_items USING INDEX inbox_actor_idx (actor_id=? AND read=?)`; dropping either index yields a full `SCAN` (the `created_at` ordering stays a TEMP B-TREE in both shapes — not claimed otherwise; the surviving `sqlite_autoindex_*` are the text PKs only). (4) `schema.ts` imports `InboxItemKind` from `#root/domain/discussion` in place of the inline union (export added under the Task 1 carry-in amendment). Lands in the child fix commit of `6acaf76` (a commit cannot quote its own hash — resolve via `git log`). Block sync = shipped form.
 
 ---
 
