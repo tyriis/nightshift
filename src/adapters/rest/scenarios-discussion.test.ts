@@ -64,12 +64,13 @@ describe('acceptance — threads, questions, attachments (spec §14 steps 2, 5, 
     const claim = (
       await t.app.inject({ method: 'POST', url: `/tasks/${task.id}/claim`, headers: sess })
     ).json()
-    await t.app.inject({
+    const note = await t.app.inject({
       method: 'POST',
       url: `/tasks/${task.id}/threads`,
       headers: sess,
       payload: { kind: 'note', body: 'starting; plan in spec.md — @ana FYI' },
     })
+    expect(note.statusCode).toBe(201) // self-naming: a failing step names itself, not a downstream audit mismatch
     const context = (
       await t.app.inject({ method: 'GET', url: `/tasks/${task.id}/context`, headers: sess })
     ).json()
@@ -101,7 +102,8 @@ describe('acceptance — threads, questions, attachments (spec §14 steps 2, 5, 
       payload: { status: 'in_review', reason: 'pr ready', lease_token: claim.lease_token },
     })
     expect(blocked.statusCode).toBe(409)
-    expect(blocked.json().code).toBe('open_questions')
+    // the T12-verified flat envelope: problem.ts spreads details top-level beside code
+    expect(blocked.json()).toMatchObject({ code: 'open_questions', open: 1 })
 
     // ana answers (her own inbox shows the question_assigned too), resolves
     const qInbox = (
@@ -119,12 +121,13 @@ describe('acceptance — threads, questions, attachments (spec §14 steps 2, 5, 
       payload: { body: 'RFC 9457 problem+json' },
     })
     expect(answered.statusCode).toBe(200)
-    await t.app.inject({
+    const resolved = await t.app.inject({
       method: 'PATCH',
       url: `/tasks/${task.id}/threads/${q.thread.id}`,
       headers: bearer(anaToken),
       payload: { state: 'resolved' },
     })
+    expect(resolved.statusCode).toBe(200) // self-naming: the gate-lift step reports itself
 
     // §14.6 — agent links the PR, moves to in_review (auto-releases claim), human closes
     const link = await t.app.inject({

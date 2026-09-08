@@ -381,4 +381,33 @@ describe('thread routes (spec §6.5, §7.2)', () => {
     expect(audit.some((a) => a.reason === 'claim released on review')).toBe(true)
     await t.close()
   })
+
+  it('one POST with an Idempotency-Key replays the stored 201 (self-check §7.3, inherited hook)', async () => {
+    const t = await makeTestApp()
+    const taskId = await createTask(t, 'idem host')
+    const headers = { ...bearer(t), 'idempotency-key': 'thread-create-1' }
+    const first = await t.app.inject({
+      method: 'POST',
+      url: `/tasks/${taskId}/threads`,
+      headers,
+      payload: { kind: 'note', body: 'created once' },
+    })
+    expect(first.statusCode).toBe(201)
+    const replay = await t.app.inject({
+      method: 'POST',
+      url: `/tasks/${taskId}/threads`,
+      headers,
+      payload: { kind: 'note', body: 'created once' },
+    })
+    // VERIFICATION pin of inherited app-level behavior (the hook covers new POST routes by
+    // construction): the replay answers the STORED 201 byte-identically — never a second 201
+    expect(replay.statusCode).toBe(201)
+    expect(replay.body).toBe(first.body)
+    expect(replay.json().thread.id).toBe(first.json().thread.id)
+    const list = (
+      await t.app.inject({ method: 'GET', url: `/tasks/${taskId}/threads`, headers: bearer(t) })
+    ).json()
+    expect(list).toHaveLength(1) // the replay wrote nothing: list length unchanged
+    await t.close()
+  })
 })
