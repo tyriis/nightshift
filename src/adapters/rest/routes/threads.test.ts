@@ -365,6 +365,7 @@ describe('thread routes (spec §6.5, §7.2)', () => {
       payload: { body: 'REST' },
     })
     expect(answered.statusCode).toBe(200)
+    // the 409 wrote nothing (the gate precedes every write), so the same live lease_token still validates here
     const released = await t.app.inject({
       method: 'PATCH',
       url: `/tasks/${taskId}/status`,
