@@ -51,7 +51,12 @@ describe('AnswerQuestion (spec §6.5, D-n)', () => {
       entity_id: q.thread.id,
       limit: 5,
     })
-    expect(audit[0]).toMatchObject({ action: 'question_answered', reason: 'question answered' })
+    expect(audit[0]).toMatchObject({
+      action: 'question_answered',
+      reason: 'question answered',
+      // seq rides with the link — the thread's audit trail names every message ({message_id, seq})
+      after: { state: 'answered', answer_message_id: r.message.id, seq: 2 },
+    })
     await db.destroy()
   })
 
@@ -74,7 +79,10 @@ describe('AnswerQuestion (spec §6.5, D-n)', () => {
     // answered → answered is not in the table (only open → answered answers)
     await expect(
       answerUc.run({ ...ana, threadId: q.thread.id, body: 'again' })
-    ).rejects.toMatchObject({ code: 'question_transition' })
+    ).rejects.toMatchObject({
+      code: 'question_transition',
+      details: { from: 'answered', to: 'answered' },
+    }) // unified {from,to} shape
     // terminal resolved → answering stays rejected forever
     await updateUc.run({ ...human, threadId: q.thread.id, state: 'resolved' })
     await expect(

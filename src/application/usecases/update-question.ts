@@ -27,6 +27,10 @@ export class UpdateQuestion {
       if (thread.kind !== 'question') {
         throw new DomainError('invalid_request', 'only question threads can be updated')
       }
+      // Arms below are independent: reassign and state-change each act on their own,
+      // the surrounding transaction makes the compound all-or-nothing, and state
+      // legality is judged against the PRE-CALL state read above — the D-n table
+      // is keyed on state only; reassignment never moves it.
       let changed = false
 
       if (input.assignee_id !== undefined && input.assignee_id !== thread.assignee_id) {
@@ -82,6 +86,7 @@ export class UpdateQuestion {
         changed = true
       }
 
+      // Plan-verbatim cast: null arm unreachable — the row was just written on this transaction.
       return (changed ? await repos.threads.find(thread.id) : thread) as ThreadRecord
     })
   }

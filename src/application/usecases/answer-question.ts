@@ -40,7 +40,8 @@ export class AnswerQuestion {
       // the state cast is total here — the DDL biconditional makes question ⇒ state NOT NULL
       if (!canTransitionQuestion(thread.state as QuestionState, 'answered')) {
         throw new DomainError('question_transition', `question is '${thread.state}', not 'open'`, {
-          state: thread.state,
+          from: thread.state,
+          to: 'answered',
         })
       }
       const message = await repos.threads.appendMessage({
@@ -62,7 +63,7 @@ export class AnswerQuestion {
         entity_type: 'thread',
         entity_id: thread.id,
         before: { state: thread.state },
-        after: { state: 'answered', answer_message_id: message.id },
+        after: { state: 'answered', answer_message_id: message.id, seq: message.seq },
         reason: 'question answered',
         created_at: now,
       })
@@ -72,6 +73,7 @@ export class AnswerQuestion {
         threadId: thread.id,
         at: now,
       })
+      // Plan-verbatim cast: null arm unreachable — the row was just written on this transaction.
       return { message, thread: (await repos.threads.find(thread.id)) as ThreadRecord }
     })
   }
