@@ -13,6 +13,11 @@ const TABLES = [
   'audit_log',
   'policy',
   'idempotency_keys',
+  'threads',
+  'messages',
+  'inbox_items',
+  'attachments',
+  'links',
 ]
 
 describe('migrations', () => {
@@ -92,6 +97,77 @@ describe('migrations', () => {
       sql`insert into tasks (id, title, position, blocked_flag, created_by, created_at, updated_at)
           values ('t_flag','x',1,2,'a_x','2026-01-01','2026-01-01')`.execute(db)
     ).rejects.toThrow(/CHECK|check/i)
+    await db.destroy()
+  })
+
+  it('pins discussion DDL constraints (question⇔state/assignee, orderings, uniqueness)', async () => {
+    const db = makeDb(':memory:')
+    await migrateToLatest(db)
+    await seedActorAndTask(db) // existing helper: seeds a_x (human) + t_x
+    await sql`insert into actors (id, kind, handle, display_name, description, created_at)
+                values ('a_ag','agent','ag','Ag','','2026-01-01')`.execute(db)
+    // note thread: state must stay NULL
+    await sql`insert into threads (id, task_id, kind, created_by, created_at, updated_at)
+                values ('th_n','t_x','note','a_x','2026-01-01','2026-01-01')`.execute(db)
+    await expect(
+      sql`insert into threads (id, task_id, kind, state, created_by, created_at, updated_at)
+            values ('th_bad','t_x','note','open','a_x','2026-01-01','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    // question thread requires assignee; state vocabulary enforced
+    await expect(
+      sql`insert into threads (id, task_id, kind, state, created_by, created_at, updated_at)
+            values ('th_q','t_x','question','open','a_x','2026-01-01','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    await sql`insert into threads (id, task_id, kind, state, assignee_id, created_by,
+                created_at, updated_at)
+                values ('th_q2','t_x','question','open','a_ag','a_x','2026-01-01','2026-01-01')`.execute(
+      db
+    )
+    await expect(
+      sql`insert into threads (id, task_id, kind, state, assignee_id, created_by,
+                created_at, updated_at)
+                values ('th_q3','t_x','question','shipped','a_ag','a_x','2026-01-01','2026-01-01')`.execute(
+        db
+      )
+    ).rejects.toThrow(/CHECK|check/i)
+    // messages: unique seq per thread (D-y ordering)
+    await sql`insert into messages (id, thread_id, seq, author_id, body, created_at)
+                values ('ms_1','th_n',1,'a_x','hi','2026-01-01')`.execute(db)
+    await expect(
+      sql`insert into messages (id, thread_id, seq, author_id, body, created_at)
+            values ('ms_2','th_n',1,'a_x','again','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/UNIQUE/i)
+    // links: kind check + idempotency uniqueness (D-t)
+    await sql`insert into links (id, task_id, kind, url, created_by, created_at)
+                values ('lk_1','t_x','pr','https://x/1','a_x','2026-01-01')`.execute(db)
+    await expect(
+      sql`insert into links (id, task_id, kind, url, created_by, created_at)
+            values ('lk_2','t_x','wiki','https://x/2','a_x','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    await expect(
+      sql`insert into links (id, task_id, kind, url, created_by, created_at)
+            values ('lk_3','t_x','pr','https://x/1','a_x','2026-01-01')`.execute(db)
+    ).rejects.toThrow(/UNIQUE/i)
+    // inbox: kind vocabulary — claim_conflict deliberately NOT in the vocabulary (D-r)
+    await sql`insert into inbox_items (id, actor_id, kind, task_id, read, created_at)
+                values ('ib_1','a_x','assigned','t_x',0,'2026-01-01')`.execute(db)
+    await expect(
+      sql`insert into inbox_items (id, actor_id, kind, task_id, read, created_at)
+            values ('ib_2','a_x','claim_conflict','t_x',0,'2026-01-01')`.execute(db)
+    ).rejects.toThrow(/CHECK|check/i)
+    // attachments: per-task content identity (D-s dedupe anchor)
+    await sql`insert into attachments (id, task_id, filename, content_type, sha256, bytes,
+                    created_by, created_at)
+                    values ('at_1','t_x','a.md','text/markdown','ab',1,'a_x','2026-01-01')`.execute(
+      db
+    )
+    await expect(
+      sql`insert into attachments (id, task_id, filename, content_type, sha256, bytes,
+                    created_by, created_at)
+                    values ('at_2','t_x','a.md','text/markdown','ab',1,'a_x','2026-01-01')`.execute(
+        db
+      )
+    ).rejects.toThrow(/UNIQUE/i)
     await db.destroy()
   })
 
