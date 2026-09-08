@@ -2231,6 +2231,8 @@ Run: `pnpm test && pnpm lint && pnpm typecheck` — green.
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -am "feat(infra): webhook delivery loop — signed, backoff, at-least-once"
 ```
 
+> **Amendment (Task 11, test block — coverage-floor repair: two loop-machinery pins):** the Step-1 block shipped with one changed line (`import type { AuditEntryDraft, AuditRepo, WebhookRepo } from '#root/application/ports'`) and two appended tests, `start() at intervalMs 0 refuses (no timer to leak); stop() on a never-started loop resolves` and `armed timer fires tick() on the default clock; a failing pass is swallowed; stop() tears down` (stub repos for the rejecting-`listDue` fire — the honest seam; real repos cannot be torn down mid-fire without racing teardown). Honest gate-RED first: with the Step-1 block **verbatim**, `start()`, the interval callback, its `.catch`, `stop()` and the `tick()` default-`nowMs` branch are unreachable by any of the seven pins ⇒ `delivery-loop.ts` at 71.42/63.63/60/79.31 and the whole run at **98.9 / 97.23 / 98.75 / 99.35**, under the never-lower floor 99.73/97.98/100/99.9 (Funcs 100 → 98.75). With the two pins: module 100/100/100/100 (lcov FN 10/10, BR 11/11, lines 29/29), whole run 99.74/98.02/100/99.9, 407 tests / 60 files. The Step-3 implementation block shipped **byte-identical**; its block sync = shipped form, and the test block sync = shipped form.
+
 ---
 
 ## Task 12: Wire the loop into the composition root (start disabled in tests)
