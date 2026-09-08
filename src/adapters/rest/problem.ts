@@ -1,5 +1,5 @@
 import type { FastifyError, FastifyInstance } from 'fastify'
-import { isDomainError } from '#root/domain/errors'
+import { isDomainError, type DomainErrorCode } from '#root/domain/errors'
 
 export interface ProblemBody {
   type: string
@@ -31,7 +31,7 @@ const problem = (status: number, code: string, detail: string): ProblemBody => (
 export const sendProblem = (
   reply: { code(n: number): { type(t: string): { send(b: unknown): unknown } } },
   status: number,
-  code: string,
+  code: DomainErrorCode | keyof typeof ADAPTER_ERROR_CODES,
   detail: string
 ): unknown =>
   reply

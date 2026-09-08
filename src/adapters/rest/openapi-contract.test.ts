@@ -92,7 +92,7 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
     // Derived from the domain single source, never re-listed: a new TASK_STATUSES or DomainErrorCode
     // member joins the expected set the moment it lands in the domain and stays RED until the yaml
     // enum catches up — the mechanism closing the false-GREEN class one layer below path×method.
-    // internal_error is problem.ts's adapter catch-all, not a domain member — unioned explicitly.
+    // internal_error rides in ADAPTER_ERROR_CODES with the other transport codes (D-u).
     const spec = parse(await readFile('openapi/openapi.yaml', 'utf8')) as {
       components: {
         schemas: {
