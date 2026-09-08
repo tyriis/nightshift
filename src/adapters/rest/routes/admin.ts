@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import { actorCtx, requireHuman } from '#root/adapters/rest/auth'
 import type { ActorKind } from '#root/domain/task'
+import { ACTOR_KINDS } from '#root/domain/task'
 
 // human-only guard: requireHuman is async (auth.ts) — a sync-throwing preHandler would
 // deadlock fastify's hook iterator (R4); fixed at the source, so routes wire it directly.
@@ -24,7 +25,7 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
           required: ['kind', 'handle', 'display_name'],
           additionalProperties: false,
           properties: {
-            kind: { type: 'string', enum: ['human', 'agent'] },
+            kind: { type: 'string', enum: ACTOR_KINDS },
             handle: { type: 'string', minLength: 1, maxLength: 60 },
             display_name: { type: 'string', minLength: 1, maxLength: 120 },
             description: { type: 'string' },
