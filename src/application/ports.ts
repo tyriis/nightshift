@@ -46,6 +46,10 @@ export interface AuditRow {
 export interface AuditRepo {
   append(entry: AuditEntryDraft): Promise<void>
   search(q: { entity_type?: string; entity_id?: string; limit: number }): Promise<AuditRow[]>
+  /** Event-feed read (D-aa): rows with id > after, ASCENDING by id — the cursor advances forward. */
+  tail(after: number, limit: number): Promise<AuditRow[]>
+  /** Highest committed audit id (0 on empty) — the watermark a webhook checkpoint anchors to (D-bb). */
+  watermark(): Promise<number>
 }
 
 // ---- tasks
