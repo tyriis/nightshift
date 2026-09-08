@@ -1,7 +1,8 @@
 import { makeDb } from '#root/infra/sqlite/db'
 import { migrateToLatest } from '#root/infra/sqlite/migrations'
 import type { Kysely } from 'kysely'
-import type { DB } from '#root/infra/sqlite/schema'
+import type { DB, ThreadsTable } from '#root/infra/sqlite/schema'
+import type { ThreadKind } from '#root/domain/discussion'
 import type { ActorKind, TaskDraft, TaskStatus } from '#root/domain/task'
 
 export const freshDb = async (): Promise<Kysely<DB>> => {
@@ -79,4 +80,66 @@ export const seedTask = async (
 
 export const setStatus = async (db: Kysely<DB>, id: string, status: TaskStatus): Promise<void> => {
   await db.updateTable('tasks').set({ status }).where('id', '=', id).execute()
+}
+
+export const seedThread = async (
+  db: Kysely<DB>,
+  id: string,
+  taskId: string,
+  kind: ThreadKind = 'note',
+  patch: Partial<Pick<ThreadsTable, 'state' | 'assignee_id' | 'created_by'>> = {}
+): Promise<string> => {
+  const assigneeId = kind === 'question' ? (patch.assignee_id ?? 'a_ag') : null
+  if (assigneeId === 'a_ag' && patch.assignee_id === undefined) {
+    // the default assignee must exist or the FK kills a plain seedThread(…, 'question')
+    // call; idempotent on id so a test that already seeded a_ag is untouched
+    await db
+      .insertInto('actors')
+      .values({
+        id: 'a_ag',
+        kind: 'agent',
+        handle: 'seed_agent',
+        display_name: 'Seed agent',
+        description: '',
+        created_at: '2026-01-01T00:00:00.000Z',
+      })
+      .onConflict((oc) => oc.column('id').doNothing())
+      .execute()
+  }
+  await db
+    .insertInto('threads')
+    .values({
+      id,
+      task_id: taskId,
+      kind,
+      state: kind === 'question' ? (patch.state ?? 'open') : null,
+      assignee_id: assigneeId,
+      answer_message_id: null,
+      created_by: patch.created_by ?? 'a_creator',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    })
+    .execute()
+  return id
+}
+
+export const seedMessage = async (
+  db: Kysely<DB>,
+  id: string,
+  threadId: string,
+  seq: number,
+  body: string
+): Promise<string> => {
+  await db
+    .insertInto('messages')
+    .values({
+      id,
+      thread_id: threadId,
+      seq,
+      author_id: 'a_creator',
+      body,
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
+    .execute()
+  return id
 }

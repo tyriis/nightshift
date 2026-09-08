@@ -4,6 +4,7 @@ import { parse } from 'yaml'
 import type { FastifyInstance } from 'fastify'
 import { makeTestApp } from '#root/testing/test-app'
 import { DOMAIN_ERROR_STATUS } from '#root/domain/errors'
+import { ADAPTER_ERROR_CODES } from '#root/adapters/rest/problem'
 import { TASK_STATUSES } from '#root/domain/task'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
@@ -91,7 +92,7 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
     // Derived from the domain single source, never re-listed: a new TASK_STATUSES or DomainErrorCode
     // member joins the expected set the moment it lands in the domain and stays RED until the yaml
     // enum catches up — the mechanism closing the false-GREEN class one layer below path×method.
-    // internal_error is problem.ts's adapter catch-all, not a domain member — unioned explicitly.
+    // internal_error rides in ADAPTER_ERROR_CODES with the other transport codes (D-u).
     const spec = parse(await readFile('openapi/openapi.yaml', 'utf8')) as {
       components: {
         schemas: {
@@ -102,8 +103,11 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
     }
     // statuses: order-sensitive exact; codes: sorted for set equality — exact, no superset tolerance
     expect(spec.components.schemas.TaskStatus.enum).toEqual([...TASK_STATUSES])
-    const domainCodes = Object.keys(DOMAIN_ERROR_STATUS).concat('internal_error').sort()
-    expect(spec.components.schemas.Problem.properties.code.enum.sort()).toEqual(domainCodes)
+    // domain ∪ adapter (D-u): transport codes join the same pinned vocabulary
+    const expectedCodes = Object.keys(DOMAIN_ERROR_STATUS)
+      .concat(Object.keys(ADAPTER_ERROR_CODES))
+      .sort()
+    expect(spec.components.schemas.Problem.properties.code.enum.sort()).toEqual(expectedCodes)
   })
 
   it('routeKeys fails loudly on tree shapes outside the grammar', () => {

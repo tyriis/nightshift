@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { CreateTask } from '#root/application/usecases/create-task'
+import { AnswerQuestion } from '#root/application/usecases/answer-question'
 import { ClaimTask } from '#root/application/usecases/claim-task'
+import { CreateThread } from '#root/application/usecases/create-thread'
 import { ReleaseClaim } from '#root/application/usecases/release-claim'
 import { UpdateStatus } from '#root/application/usecases/update-status'
 import { SplitTask } from '#root/application/usecases/split-task'
@@ -169,7 +171,7 @@ describe('UpdateStatus gates (spec §6.4)', () => {
     await db.destroy()
   })
 
-  it('invariant 6 (question gate): open human-assigned question gates agent in_review — Plan B wires the repo; here the seam is exercised with zero questions', async () => {
+  it('invariant 6 (question gate): open human-assigned question gates agent in_review — Plan B wired (see invariant-6 tests)', async () => {
     const { db, uow } = await withAgent()
     const task = await new CreateTask(uow, fixedClock(), seqIds()).run({
       ...human,
@@ -187,6 +189,167 @@ describe('UpdateStatus gates (spec §6.4)', () => {
         lease_token: claim.lease_token,
       })
     ).resolves.toBeTruthy()
+    await db.destroy()
+  })
+
+  // ---- invariant 6, wired (Task 8, D-o). withAgent() is the shipped harness (the plan's
+  // setup() name); one shared seqIds() per test carries task + thread + answer ids (M-1).
+
+  it('invariant 6 (D-o): open human-assigned question gates agent in_review with 409 open_questions', async () => {
+    const { db, uow } = await withAgent()
+    const ids = seqIds()
+    const task = await new CreateTask(uow, fixedClock(), ids).run({
+      ...human,
+      title: 'gated',
+      status: 'todo',
+    })
+    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    await new CreateThread(uow, fixedClock(), ids).run({
+      ...agent,
+      taskId: task.id,
+      kind: 'question',
+      body: 'which API?',
+      assignee_id: 'a_human',
+    })
+    await expect(
+      new UpdateStatus(uow, fixedClock()).run({
+        ...agent,
+        taskId: task.id,
+        to: 'in_review',
+        reason: 'pr ready',
+        lease_token: claim.lease_token,
+      })
+    ).rejects.toMatchObject({ code: 'open_questions', details: { open: 1 } })
+    // the rejection writes NO audit row: the gate throws before any write (and the tx rolls back)
+    const audit = await new SqliteAuditRepo(db).search({
+      entity_type: 'task',
+      entity_id: task.id,
+      limit: 20,
+    })
+    expect(audit.some((a) => a.action === 'status_changed')).toBe(false)
+    await db.destroy()
+  })
+
+  it('invariant 6: a human answer lifts the gate on the same live lease (§14.5)', async () => {
+    const { db, uow } = await withAgent()
+    const ids = seqIds()
+    const task = await new CreateTask(uow, fixedClock(), ids).run({
+      ...human,
+      title: 'gated',
+      status: 'todo',
+    })
+    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    const q = await new CreateThread(uow, fixedClock(), ids).run({
+      ...agent,
+      taskId: task.id,
+      kind: 'question',
+      body: 'which API?',
+      assignee_id: 'a_human',
+    })
+    await new AnswerQuestion(uow, fixedClock(), ids).run({
+      ...human,
+      threadId: q.thread.id,
+      body: 'REST',
+    })
+    await expect(
+      new UpdateStatus(uow, fixedClock()).run({
+        ...agent,
+        taskId: task.id,
+        to: 'in_review',
+        reason: 'pr ready',
+        lease_token: claim.lease_token,
+      })
+    ).resolves.toBeTruthy()
+    await db.destroy()
+  })
+
+  it('invariant 6: a question assigned to an AGENT does not gate (spec §6.4.6 literal)', async () => {
+    const { db, uow } = await withAgent()
+    const ids = seqIds()
+    const task = await new CreateTask(uow, fixedClock(), ids).run({
+      ...human,
+      title: 'gated',
+      status: 'todo',
+    })
+    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    await new CreateThread(uow, fixedClock(), ids).run({
+      ...agent,
+      taskId: task.id,
+      kind: 'question',
+      body: 'self-check?',
+      assignee_id: 'a_agent',
+    })
+    await expect(
+      new UpdateStatus(uow, fixedClock()).run({
+        ...agent,
+        taskId: task.id,
+        to: 'in_review',
+        reason: 'really',
+        lease_token: claim.lease_token,
+      })
+    ).resolves.toBeTruthy()
+    await db.destroy()
+  })
+
+  it('invariant 6: a HUMAN actor is never gated by open questions (D-o)', async () => {
+    const { db, uow } = await withAgent()
+    const ids = seqIds()
+    await seedToken(db, 'tok_human', 'a_human') // human claim needs a token (claim-task rule)
+    const humanClaimant: ActorContext = { actor: human.actor, tokenId: 'tok_human' }
+    const task = await new CreateTask(uow, fixedClock(), ids).run({
+      ...human,
+      title: 'gated',
+      status: 'todo',
+    })
+    const claim = await new ClaimTask(uow, fixedClock()).run({
+      ...humanClaimant,
+      taskId: task.id,
+    })
+    await new CreateThread(uow, fixedClock(), ids).run({
+      ...agent,
+      taskId: task.id,
+      kind: 'question',
+      body: 'needs human',
+      assignee_id: 'a_human',
+    })
+    await expect(
+      new UpdateStatus(uow, fixedClock()).run({
+        ...humanClaimant,
+        taskId: task.id,
+        to: 'in_review',
+        reason: 'human path',
+        lease_token: claim.lease_token,
+      })
+    ).resolves.toBeTruthy()
+    await db.destroy()
+  })
+
+  it('question gate holds even with review_gate off (invariant 5 policy does not lift invariant 6)', async () => {
+    const { db, uow } = await withAgent()
+    const ids = seqIds()
+    await uow.withTransaction(async (r) => r.actors.setPolicy('review_gate', 'off'))
+    const task = await new CreateTask(uow, fixedClock(), ids).run({
+      ...human,
+      title: 'x',
+      status: 'todo',
+    })
+    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agent, taskId: task.id })
+    await new CreateThread(uow, fixedClock(), ids).run({
+      ...agent,
+      taskId: task.id,
+      kind: 'question',
+      body: 'q',
+      assignee_id: 'a_human',
+    })
+    await expect(
+      new UpdateStatus(uow, fixedClock()).run({
+        ...agent,
+        taskId: task.id,
+        to: 'in_review',
+        reason: 'r',
+        lease_token: claim.lease_token,
+      })
+    ).rejects.toMatchObject({ code: 'open_questions' })
     await db.destroy()
   })
 

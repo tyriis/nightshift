@@ -2,10 +2,14 @@ import type { Kysely } from 'kysely'
 import type { Repos, UnitOfWork } from '#root/application/ports'
 import type { DB } from '#root/infra/sqlite/schema'
 import { SqliteActorRepo } from '#root/infra/sqlite/actor-repo'
+import { SqliteAttachmentRepo } from '#root/infra/sqlite/attachment-repo'
 import { SqliteAuditRepo } from '#root/infra/sqlite/audit-repo'
 import { SqliteDependencyRepo } from '#root/infra/sqlite/dependency-repo'
+import { SqliteInboxRepo } from '#root/infra/sqlite/inbox-repo'
 import { SqliteLabelRepo } from '#root/infra/sqlite/label-repo'
+import { SqliteLinkRepo } from '#root/infra/sqlite/link-repo'
 import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
+import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
 
 export class SqliteUnitOfWork implements UnitOfWork {
   constructor(private readonly db: Kysely<DB>) {}
@@ -17,6 +21,10 @@ export class SqliteUnitOfWork implements UnitOfWork {
       deps: new SqliteDependencyRepo(tx),
       labels: new SqliteLabelRepo(tx),
       actors: new SqliteActorRepo(tx),
+      threads: new SqliteThreadRepo(tx),
+      inbox: new SqliteInboxRepo(tx),
+      attachments: new SqliteAttachmentRepo(tx),
+      links: new SqliteLinkRepo(tx),
     }
   }
 

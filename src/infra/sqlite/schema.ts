@@ -1,4 +1,5 @@
 import type { Generated } from 'kysely'
+import type { InboxItemKind, LinkKind, QuestionState, ThreadKind } from '#root/domain/discussion'
 import type { ActorKind, TaskStatus } from '#root/domain/task'
 
 export interface ActorsTable {
@@ -94,4 +95,60 @@ export interface DB {
   audit_log: AuditLogTable
   policy: PolicyTable
   idempotency_keys: IdempotencyKeysTable
+  threads: ThreadsTable
+  messages: MessagesTable
+  inbox_items: InboxItemsTable
+  attachments: AttachmentsTable
+  links: LinksTable
+}
+
+export interface ThreadsTable {
+  id: string
+  task_id: string
+  kind: ThreadKind
+  state: QuestionState | null
+  assignee_id: string | null
+  answer_message_id: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface MessagesTable {
+  id: string
+  thread_id: string
+  seq: number
+  author_id: string
+  body: string
+  created_at: string
+}
+
+export interface InboxItemsTable {
+  id: string
+  actor_id: string
+  kind: InboxItemKind
+  task_id: string
+  thread_id: string | null
+  read: number
+  created_at: string
+}
+
+export interface AttachmentsTable {
+  id: string
+  task_id: string
+  filename: string
+  content_type: string
+  sha256: string
+  bytes: number
+  created_by: string
+  created_at: string
+}
+
+export interface LinksTable {
+  id: string
+  task_id: string
+  kind: LinkKind
+  url: string
+  created_by: string
+  created_at: string
 }

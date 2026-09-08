@@ -3,6 +3,7 @@ import { CreateTask } from '#root/application/usecases/create-task'
 import { UpdateTask } from '#root/application/usecases/update-task'
 import { buildUow, fixedClock, human, seqIds } from '#root/application/usecases/create-task.test'
 import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
+import { SqliteInboxRepo } from '#root/infra/sqlite/inbox-repo'
 import { SqliteAuditRepo } from '#root/infra/sqlite/audit-repo'
 import { seedActor } from '#root/testing/fixtures'
 import { DomainError } from '#root/domain/errors'
@@ -14,7 +15,7 @@ describe('UpdateTask (content patch, decision D-e)', () => {
       ...human,
       title: 'old',
     })
-    const uc = new UpdateTask(uow, fixedClock())
+    const uc = new UpdateTask(uow, fixedClock(), seqIds())
     const updated = await uc.run({
       ...human,
       taskId: created.id,
@@ -39,7 +40,7 @@ describe('UpdateTask (content patch, decision D-e)', () => {
     const { db, uow } = await buildUow()
     await seedActor(db, 'a_agent', 'agent', 'hermes-1')
     const created = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
-    const uc = new UpdateTask(uow, fixedClock())
+    const uc = new UpdateTask(uow, fixedClock(), seqIds())
     const updated = await uc.run({
       ...human,
       taskId: created.id,
@@ -52,7 +53,7 @@ describe('UpdateTask (content patch, decision D-e)', () => {
   it('rejects unknown assignee actor', async () => {
     const { db, uow } = await buildUow()
     const created = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
-    const uc = new UpdateTask(uow, fixedClock())
+    const uc = new UpdateTask(uow, fixedClock(), seqIds())
     await expect(
       uc.run({ ...human, taskId: created.id, patch: { assignee_id: 'a_ghost' } })
     ).rejects.toBeInstanceOf(DomainError)
@@ -65,7 +66,7 @@ describe('UpdateTask (content patch, decision D-e)', () => {
   it('rejects empty-string assignee with not_found (M-3: SET always existence-checks)', async () => {
     const { db, uow } = await buildUow()
     const created = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
-    const uc = new UpdateTask(uow, fixedClock())
+    const uc = new UpdateTask(uow, fixedClock(), seqIds())
     await expect(
       uc.run({ ...human, taskId: created.id, patch: { assignee_id: '' } })
     ).rejects.toMatchObject({ code: 'not_found' })
@@ -76,7 +77,7 @@ describe('UpdateTask (content patch, decision D-e)', () => {
     const { db, uow } = await buildUow()
     await seedActor(db, 'a_agent', 'agent', 'hermes-1')
     const created = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
-    const uc = new UpdateTask(uow, fixedClock())
+    const uc = new UpdateTask(uow, fixedClock(), seqIds())
     await uc.run({ ...human, taskId: created.id, patch: { assignee_id: 'a_agent' } })
     const cleared = await uc.run({ ...human, taskId: created.id, patch: { assignee_id: null } })
     expect(cleared.assignee_id).toBeNull()
@@ -90,7 +91,7 @@ describe('UpdateTask (content patch, decision D-e)', () => {
       title: 'x',
       description: 'old desc',
     })
-    await new UpdateTask(uow, fixedClock()).run({
+    await new UpdateTask(uow, fixedClock(), seqIds()).run({
       ...human,
       taskId: created.id,
       patch: { description: 'new desc' },
@@ -112,7 +113,7 @@ describe('UpdateTask (content patch, decision D-e)', () => {
 
   it('rejects unknown task with not_found', async () => {
     const { db, uow } = await buildUow()
-    const uc = new UpdateTask(uow, fixedClock())
+    const uc = new UpdateTask(uow, fixedClock(), seqIds())
     await expect(
       uc.run({ ...human, taskId: 't_ghost', patch: { title: 'x' } })
     ).rejects.toMatchObject({ code: 'not_found' })
@@ -122,7 +123,7 @@ describe('UpdateTask (content patch, decision D-e)', () => {
   it('empty patch is a no-op (no audit noise)', async () => {
     const { db, uow } = await buildUow()
     const created = await new CreateTask(uow, fixedClock(), seqIds()).run({ ...human, title: 'x' })
-    const updated = await new UpdateTask(uow, fixedClock()).run({
+    const updated = await new UpdateTask(uow, fixedClock(), seqIds()).run({
       ...human,
       taskId: created.id,
       patch: {},
@@ -135,6 +136,32 @@ describe('UpdateTask (content patch, decision D-e)', () => {
       limit: 5,
     })
     expect(auditRows.map((r) => r.action)).toEqual(['task_created'])
+    await db.destroy()
+  })
+
+  it('assignee change notifies the new assignee (D-r: assigned inbox, never self, never on no-op patch)', async () => {
+    const { db, uow } = await buildUow()
+    const ids = seqIds()
+    await seedActor(db, 'a_ana', 'human', 'ana')
+    const task = await new CreateTask(uow, fixedClock(), ids).run({ ...human, title: 'x' })
+    const uc = new UpdateTask(uow, fixedClock(), ids)
+    const inbox = new SqliteInboxRepo(db)
+    const anaKinds = async () =>
+      (await inbox.listForActor('a_ana', { unreadOnly: false, limit: 5 })).map((i) => i.kind)
+
+    await uc.run({ ...human, taskId: task.id, patch: { assignee_id: 'a_ana' } })
+    expect(await anaKinds()).toEqual(['assigned'])
+    // same-assignee no-op patch: real change required, not just the key's presence
+    await uc.run({ ...human, taskId: task.id, patch: { assignee_id: 'a_ana' } })
+    expect(await anaKinds()).toHaveLength(1)
+    // re-assign away from ana: her count stands (only NEW assignees get notified)
+    await uc.run({ ...human, taskId: task.id, patch: { assignee_id: 'a_human' } }) // self: no notify
+    expect(await anaKinds()).toHaveLength(1)
+    expect(await inbox.listForActor('a_human', { unreadOnly: false, limit: 5 })).toEqual([]) // actor never notified of their own assignment
+    await uc.run({ ...human, taskId: task.id, patch: { title: 'y' } }) // no assignee key: no notify
+    expect(await anaKinds()).toHaveLength(1)
+    await uc.run({ ...human, taskId: task.id, patch: { assignee_id: null } }) // unassign: no notify (null guard)
+    expect(await anaKinds()).toHaveLength(1)
     await db.destroy()
   })
 })

@@ -55,6 +55,20 @@ export class UpdateStatus {
         })
       }
 
+      // Invariant 6 (spec §6.4.6, D-o): an agent may not hand work to review while a
+      // question on this task still awaits a HUMAN. Plan A's seam comment sat inside
+      // the done branch; the spec text is binding, the branch placement was not.
+      if (input.to === 'in_review' && input.actor.kind === 'agent') {
+        const openHuman = await repos.threads.openHumanAssigned(input.taskId)
+        if (openHuman > 0) {
+          throw new DomainError(
+            'open_questions',
+            `${openHuman} open question(s) await a human answer (spec §6.4.6)`,
+            { open: openHuman }
+          )
+        }
+      }
+
       if (input.to === 'done') {
         const gate = await repos.actors.getPolicy('review_gate')
         if ((gate ?? 'on') === 'on' && input.actor.kind === 'agent') {
@@ -63,7 +77,6 @@ export class UpdateStatus {
             'agents may move work to in_review, not done (spec §6.4.5)'
           )
         }
-        // Invariant 6 seam: Plan B adds "open question assigned to a human → open_questions 409" here.
         const openDesc = await repos.tasks.countOpenDescendants(input.taskId)
         if (openDesc > 0) {
           throw new DomainError('open_descendants', `${openDesc} descendants still open`, {

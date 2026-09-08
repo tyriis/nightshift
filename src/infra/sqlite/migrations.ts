@@ -101,6 +101,82 @@ const migrations: Record<string, Migration> = {
       )`.execute(db)
     },
   },
+
+  '2026-09-11_discussion': {
+    up: async (db: Kysely<DB>) => {
+      // D-m: question IS a thread (kind='question'); the CHECKs encode the shape rules
+      // so a malformed row cannot exist no matter which code path wrote it.
+      await sql`create table threads (
+        id text primary key,
+        task_id text not null references tasks(id),
+        kind text not null check (kind in ('note','question')),
+        state text check (state in ('open','answered','resolved','wont_fix')),
+        assignee_id text references actors(id),
+        answer_message_id text,
+        created_by text not null references actors(id),
+        created_at text not null,
+        updated_at text not null,
+        check ((kind = 'question') = (state is not null)),
+        check (kind = 'note' or assignee_id is not null)
+      )`.execute(db)
+      // task_id-leading index: every thread read filters by task (the thread list, the
+      // invariant-6 open-question gate). EXPLAIN-verified: SEARCH threads USING INDEX
+      // threads_task_idx (task_id=?) with it — including the task_id+kind+state gate
+      // variant — full SCAN threads without (created_at ordering stays a TEMP B-TREE;
+      // the autoindex is the text-PK only and covers nothing else).
+      await sql`create index threads_task_idx on threads (task_id)`.execute(db)
+      // answer_message_id carries no FK: the integrity guarantee lives in AnswerQuestion's
+      // single transaction (D-n) — the column is only set after the answer row exists.
+      // (SQLite permits forward FK refs at CREATE, so creation order was never the constraint.)
+
+      await sql`create table messages (
+        id text primary key,
+        thread_id text not null references threads(id),
+        seq integer not null,
+        author_id text not null references actors(id),
+        body text not null,
+        created_at text not null,
+        unique (thread_id, seq)
+      )`.execute(db)
+
+      await sql`create table inbox_items (
+        id text primary key,
+        actor_id text not null references actors(id),
+        kind text not null check (kind in ('assigned','mentioned','question_assigned')),
+        task_id text not null references tasks(id),
+        thread_id text references threads(id),
+        read integer not null default 0 check (read in (0,1)),
+        created_at text not null
+      )`.execute(db)
+      // (actor, read)-leading index: GET /inbox?unread is THE inbox read path; small
+      // circle ⇒ the two hot filters are covered by this one index. EXPLAIN-verified:
+      // SEARCH inbox_items USING INDEX inbox_actor_idx (actor_id=? AND read=?), full
+      // SCAN without it (created_at ordering stays a TEMP B-TREE).
+      await sql`create index inbox_actor_idx on inbox_items (actor_id, read)`.execute(db)
+
+      await sql`create table attachments (
+        id text primary key,
+        task_id text not null references tasks(id),
+        filename text not null,
+        content_type text not null,
+        sha256 text not null,
+        bytes integer not null,
+        created_by text not null references actors(id),
+        created_at text not null,
+        unique (task_id, sha256, filename)
+      )`.execute(db)
+
+      await sql`create table links (
+        id text primary key,
+        task_id text not null references tasks(id),
+        kind text not null check (kind in ('pr','commit','doc','other')),
+        url text not null,
+        created_by text not null references actors(id),
+        created_at text not null,
+        unique (task_id, kind, url)
+      )`.execute(db)
+    },
+  },
 }
 
 class InCodeMigrationProvider implements MigrationProvider {
