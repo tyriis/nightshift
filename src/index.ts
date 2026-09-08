@@ -23,11 +23,13 @@ const start = async (): Promise<void> => {
     await ensureBootstrapAdmin(deps)
     const server = buildApp(deps, { logger: true })
     await server.listen({ port: config.port, host: '0.0.0.0' })
+    deps.deliveryLoop.start() // refuses when intervalMs 0 (config-level kill, D-v lineage)
 
     const shutdown = async (): Promise<void> => {
       if (closing) return
       closing = true
       server.log.info('Graceful shutdown signal received')
+      await deps.deliveryLoop.stop() // drains the in-flight pass before the db goes away
       await server.close()
       await db.destroy()
       process.exit(0)

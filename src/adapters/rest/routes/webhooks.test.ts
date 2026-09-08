@@ -149,3 +149,11 @@ describe('POST/GET/DELETE /admin/webhooks + rotate (D-ff, requireHuman)', () => 
     await t.close()
   })
 })
+
+it('makeTestApp defaults the loop DISABLED (the suite must never POST; D-v posture)', async () => {
+  const t = await makeTestApp()
+  expect(t.deps.config.webhookIntervalMs).toBe(0)
+  // start() on a disabled loop is inert — no timer to leak, proven by process exit
+  await t.deps.deliveryLoop.stop() // resolves even when never started
+  await t.close()
+})

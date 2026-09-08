@@ -18,6 +18,7 @@ import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
 import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
 import { SqliteUnitOfWork } from '#root/infra/sqlite/uow'
 import { SqliteWebhookRepo } from '#root/infra/sqlite/webhook-repo'
+import { WebhookDeliveryLoop } from '#root/infra/webhooks/delivery-loop'
 import { AddBlock } from '#root/application/usecases/add-block'
 import { AddMessage } from '#root/application/usecases/add-message'
 import { AnswerQuestion } from '#root/application/usecases/answer-question'
@@ -64,6 +65,7 @@ export interface AppDeps {
   linksRoot: SqliteLinkRepo
   webhooksRoot: SqliteWebhookRepo
   files: FileStore
+  deliveryLoop: WebhookDeliveryLoop
   useCases: {
     createTask: CreateTask
     updateTask: UpdateTask
@@ -121,6 +123,16 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     linksRoot: new SqliteLinkRepo(db),
     webhooksRoot: new SqliteWebhookRepo(db),
     files, // shared instance: uploads and content serving hit the same store
+    // D-bb loop: constructed here, STARTED only by the composition root (index.ts) —
+    // makeTestApp never starts it (intervalMs 0 default there) so the suite stays inert.
+    // Its repo instances are its own (root connections) — the loop touches no UoW
+    // (stated deviation from the background-loop clause: it needs none; all its writes
+    // are single statements, global safety via Kysely's driver mutex, uow.ts:44-45).
+    deliveryLoop: new WebhookDeliveryLoop(new SqliteWebhookRepo(db), new SqliteAuditRepo(db), {
+      intervalMs: config.webhookIntervalMs,
+      timeoutMs: config.webhookTimeoutMs,
+      maxBackoffMs: config.webhookMaxBackoffMs,
+    }),
     useCases: {
       createTask: new CreateTask(uow, clock, ids),
       updateTask: new UpdateTask(uow, clock, ids),
