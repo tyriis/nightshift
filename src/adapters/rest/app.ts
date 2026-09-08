@@ -10,6 +10,7 @@ import { registerAuditRoutes } from '#root/adapters/rest/routes/audit'
 import { registerDependencyRoutes } from '#root/adapters/rest/routes/dependencies'
 import { registerLabelRoutes } from '#root/adapters/rest/routes/labels'
 import { registerTaskRoutes } from '#root/adapters/rest/routes/tasks'
+import { registerThreadRoutes } from '#root/adapters/rest/routes/threads'
 
 export interface BuildAppOptions {
   logger?: boolean
@@ -37,6 +38,7 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
 
   registerAuditRoutes(server, deps)
   registerTaskRoutes(server, deps)
+  registerThreadRoutes(server, deps) // threads are task-surface (spec §7.2)
   registerDependencyRoutes(server, deps)
   registerLabelRoutes(server, deps)
   registerAdminRoutes(server, deps)

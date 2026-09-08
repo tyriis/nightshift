@@ -16,6 +16,7 @@ tags:
   - name: labels
   - name: audit
   - name: admin
+  - name: threads
 paths:
   /ping:
     get:
@@ -444,6 +445,129 @@ paths:
                 type: object
                 properties: { key: { type: string }, value: { type: string } }
         default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/threads:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    get:
+      tags: [threads]
+      operationId: listThreads
+      description: threads oldest-first, each with ordered messages (spec §6.5)
+      responses:
+        "200":
+          description: thread list
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ThreadWithMessages" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [threads]
+      operationId: createThread
+      description: >-
+        kind=question requires assignee_handle and opens a review-gating question
+        (spec §6.4.6); 409 threads_on_parent on a task with children — humans may
+        pass ?meta_note=true (UI-only flag, audited, spec §6.2)
+      parameters:
+        - { name: meta_note, in: query, schema: { type: boolean } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, body]
+              additionalProperties: false
+              properties:
+                kind: { type: string, enum: [note, question] }
+                body: { type: string, minLength: 1, maxLength: 20000 }
+                assignee_handle: { type: string, minLength: 1, maxLength: 60 }
+      responses:
+        "201":
+          description: thread with its first message (CreateThreadResult, ports.ts)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  thread: { $ref: "#/components/schemas/Thread" }
+                  message: { $ref: "#/components/schemas/Message" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/threads/{tid}/messages:
+    parameters:
+      - { $ref: "#/components/parameters/TaskId" }
+      - { name: tid, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [threads]
+      operationId: addThreadMessage
+      description: reply to a thread; @handles in body route inbox entries (spec §6.5)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              additionalProperties: false
+              properties: { body: { type: string, minLength: 1, maxLength: 20000 } }
+      responses:
+        "201":
+          description: appended message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/threads/{tid}/answer:
+    parameters:
+      - { $ref: "#/components/parameters/TaskId" }
+      - { name: tid, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [threads]
+      operationId: answerQuestionThread
+      description: appends the answer message, links it, open → answered (409 question_transition otherwise)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              additionalProperties: false
+              properties: { body: { type: string, minLength: 1, maxLength: 20000 } }
+      responses:
+        "200":
+          description: answer + updated thread
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: "#/components/schemas/Message" }
+                  thread: { $ref: "#/components/schemas/Thread" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/threads/{tid}:
+    parameters:
+      - { $ref: "#/components/parameters/TaskId" }
+      - { name: tid, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [threads]
+      operationId: updateQuestionThread
+      description: state ∈ {resolved, wont_fix} per D-n transitions; assignee_handle re-assigns (inbox)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                state: { type: string, enum: [open, answered, resolved, wont_fix] }
+                assignee_handle: { type: string, minLength: 1, maxLength: 60 }
+      responses:
+        "200":
+          description: updated thread
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Thread" }
+        default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -612,3 +736,32 @@ components:
               unsupported_media_type,
             ]
         detail: { type: string }
+    Thread:
+      type: object
+      description: thread row (ports.ts ThreadRecord); question fields NULL for notes (D-m)
+      properties:
+        id: { type: string }
+        task_id: { type: string }
+        kind: { type: string, enum: [note, question] }
+        state:
+          { type: ["string", "null"], enum: ["open", "answered", "resolved", "wont_fix", null] }
+        assignee_id: { type: ["string", "null"] }
+        answer_message_id: { type: ["string", "null"] }
+        created_by: { type: string }
+        created_at: { type: string }
+        updated_at: { type: string }
+    Message:
+      type: object
+      properties:
+        id: { type: string }
+        thread_id: { type: string }
+        seq: { type: integer }
+        author_id: { type: string }
+        body: { type: string }
+        created_at: { type: string }
+    ThreadWithMessages:
+      type: object
+      description: thread + its messages ordered by seq (spec §6.5)
+      properties:
+        thread: { $ref: "#/components/schemas/Thread" }
+        messages: { type: array, items: { $ref: "#/components/schemas/Message" } }
