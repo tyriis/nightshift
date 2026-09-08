@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
-import type { QuestionState } from '#root/domain/discussion'
-import type { ThreadKind } from '#root/domain/discussion'
+import type { QuestionState, ThreadKind } from '#root/domain/discussion'
+import { QUESTION_STATES, THREAD_KINDS } from '#root/domain/discussion'
 import { actorCtx } from '#root/adapters/rest/auth'
 import { DomainError } from '#root/domain/errors'
 
-const kindEnum = { type: 'string', enum: ['note', 'question'] } as const
-const stateEnum = { type: 'string', enum: ['open', 'answered', 'resolved', 'wont_fix'] } as const
+const kindEnum = { type: 'string', enum: THREAD_KINDS } as const
+const stateEnum = { type: 'string', enum: QUESTION_STATES } as const
 
 // REST speaks handles (public actor vocabulary); use-cases speak ids (ports.ts).
 // The route resolves handle → id; an unknown handle 404s here, in the ROUTE layer.

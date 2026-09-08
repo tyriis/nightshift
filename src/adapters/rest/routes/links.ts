@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import type { LinkKind } from '#root/domain/discussion'
+import { LINK_KINDS } from '#root/domain/discussion'
 import { actorCtx } from '#root/adapters/rest/auth'
 import { DomainError } from '#root/domain/errors'
 
-const kindEnum = { type: 'string', enum: ['pr', 'commit', 'doc', 'other'] } as const
+const kindEnum = { type: 'string', enum: LINK_KINDS } as const
 
 export const registerLinkRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   app.get('/tasks/:id/links', async (request) => {

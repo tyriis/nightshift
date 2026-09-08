@@ -2,6 +2,7 @@ import { makeDb } from '#root/infra/sqlite/db'
 import { migrateToLatest } from '#root/infra/sqlite/migrations'
 import type { Kysely } from 'kysely'
 import type { DB, ThreadsTable } from '#root/infra/sqlite/schema'
+import type { ThreadKind } from '#root/domain/discussion'
 import type { ActorKind, TaskDraft, TaskStatus } from '#root/domain/task'
 
 export const freshDb = async (): Promise<Kysely<DB>> => {
@@ -85,7 +86,7 @@ export const seedThread = async (
   db: Kysely<DB>,
   id: string,
   taskId: string,
-  kind: 'note' | 'question' = 'note',
+  kind: ThreadKind = 'note',
   patch: Partial<Pick<ThreadsTable, 'state' | 'assignee_id' | 'created_by'>> = {}
 ): Promise<string> => {
   const assigneeId = kind === 'question' ? (patch.assignee_id ?? 'a_ag') : null
