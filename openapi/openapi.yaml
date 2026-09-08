@@ -19,6 +19,7 @@ tags:
   - name: threads
   - name: inbox
   - name: attachments
+  - name: links
 paths:
   /ping:
     get:
@@ -655,6 +656,55 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/links:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    get:
+      tags: [links]
+      operationId: listLinks
+      description: list external links for a task (404 if the task does not exist)
+      responses:
+        "200":
+          description: link rows, oldest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Link" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [links]
+      operationId: addLink
+      description: >-
+        register an external handoff reference (D-t); insert-or-get on
+        (task, kind, url) — re-posting the same triple returns the existing row
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, url]
+              additionalProperties: false
+              properties:
+                kind: { type: string, enum: [pr, commit, doc, other] }
+                url: { type: string, minLength: 8, maxLength: 2000 }
+      responses:
+        "201":
+          description: the link row (existing or newly created)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Link" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/links/{linkId}:
+    parameters:
+      - { $ref: "#/components/parameters/TaskId" }
+      - { name: linkId, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [links]
+      operationId: removeLink
+      description: remove a link; absent or belonging to another task is 404 not_found
+      responses:
+        "204":
+          description: removed (no body)
         default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:

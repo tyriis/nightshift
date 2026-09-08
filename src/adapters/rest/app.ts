@@ -13,6 +13,7 @@ import { registerLabelRoutes } from '#root/adapters/rest/routes/labels'
 import { registerTaskRoutes } from '#root/adapters/rest/routes/tasks'
 import { registerThreadRoutes } from '#root/adapters/rest/routes/threads'
 import { registerAttachmentRoutes } from '#root/adapters/rest/routes/attachments'
+import { registerLinkRoutes } from '#root/adapters/rest/routes/links'
 
 export interface BuildAppOptions {
   logger?: boolean
@@ -51,6 +52,7 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerThreadRoutes(server, deps) // threads are task-surface (spec §7.2)
   registerInboxRoutes(server, deps)
   registerAttachmentRoutes(server, deps)
+  registerLinkRoutes(server, deps)
   registerDependencyRoutes(server, deps)
   registerLabelRoutes(server, deps)
   registerAdminRoutes(server, deps)

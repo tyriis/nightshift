@@ -27,6 +27,7 @@ import { UpdateQuestion } from '#root/application/usecases/update-question'
 import { GetContext } from '#root/application/usecases/get-context'
 import { GetNext } from '#root/application/usecases/get-next'
 import { Heartbeat } from '#root/application/usecases/heartbeat'
+import { AddLink, RemoveLink } from '#root/application/usecases/manage-links'
 import { MarkInboxRead } from '#root/application/usecases/mark-inbox-read'
 import { AttachLabel, CreateLabel, DetachLabel } from '#root/application/usecases/labels'
 import { CreateActor, CreateToken, RevokeToken } from '#root/application/usecases/manage-actors'
@@ -74,6 +75,8 @@ export interface AppDeps {
     updateQuestion: UpdateQuestion
     markInboxRead: MarkInboxRead
     uploadAttachment: UploadAttachment
+    addLink: AddLink
+    removeLink: RemoveLink
     createLabel: CreateLabel
     attachLabel: AttachLabel
     detachLabel: DetachLabel
@@ -132,6 +135,8 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
       updateQuestion: new UpdateQuestion(uow, clock, ids),
       markInboxRead: new MarkInboxRead(uow),
       uploadAttachment: new UploadAttachment(uow, clock, ids, files),
+      addLink: new AddLink(uow, clock, ids),
+      removeLink: new RemoveLink(uow, clock),
       createLabel: new CreateLabel(uow, clock, ids),
       attachLabel: new AttachLabel(uow, clock),
       detachLabel: new DetachLabel(uow, clock),
