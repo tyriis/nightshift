@@ -31,9 +31,7 @@ export class UpdateQuestion {
 
       if (input.assignee_id !== undefined && input.assignee_id !== thread.assignee_id) {
         const assignee = await repos.actors.findById(input.assignee_id)
-        if (!assignee) {
-          throw new DomainError('not_found', `assignee ${input.assignee_id} not found`)
-        }
+        if (!assignee) throw new DomainError('not_found', `assignee ${input.assignee_id} not found`)
         await repos.threads.setQuestionFields(thread.id, { assignee_id: assignee.id }, now)
         await repos.audit.append({
           actor_id: input.actor.id,
