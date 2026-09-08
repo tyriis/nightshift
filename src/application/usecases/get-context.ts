@@ -1,17 +1,17 @@
 import type { TaskRecord, TaskStatus } from '#root/domain/task'
 import { DomainError } from '#root/domain/errors'
 import type {
+  AttachmentRecord,
   AttachmentRepo,
   BlockerRow,
   DependencyRepo,
   LabelRow,
   LabelRepo,
+  LinkRecord,
   LinkRepo,
   OpenQuestionRow,
-  LinkRecord,
-  AttachmentRecord,
-  ThreadRepo,
   TaskRepo,
+  ThreadRepo,
 } from '#root/application/ports'
 
 export interface ContextAncestor {
@@ -39,8 +39,8 @@ export class GetContext {
     private readonly deps: DependencyRepo,
     private readonly labels: LabelRepo,
     private readonly threads: ThreadRepo,
-    private readonly linksRepo: LinkRepo,
-    private readonly attachmentsRepo: AttachmentRepo
+    private readonly links: LinkRepo,
+    private readonly attachments: AttachmentRepo
   ) {}
 
   async run(input: { taskId: string }): Promise<TaskContextBundle> {
@@ -62,8 +62,8 @@ export class GetContext {
       blockers,
       labels,
       open_questions: await this.threads.openQuestionsForTask(input.taskId),
-      links: await this.linksRepo.listForTask(input.taskId),
-      attachments: await this.attachmentsRepo.listForTask(input.taskId),
+      links: await this.links.listForTask(input.taskId),
+      attachments: await this.attachments.listForTask(input.taskId),
     }
   }
 }

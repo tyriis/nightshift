@@ -91,7 +91,7 @@ describe('GetContext (spec §7.2 one-call bundle)', () => {
     expect(bundle.blockers.map((b) => b.id)).toEqual([blocker.id])
     expect(bundle.labels.map((l) => l.name)).toEqual(['infra'])
     expect(bundle.unmet_blockers).toBe(1)
-    // seams (spec §7.2 mentions these fields; populated by Plan B/C):
+    // seams: empty here — this task has no threads/links/files (the populated case is the next test)
     expect(bundle.open_questions).toEqual([])
     expect(bundle.links).toEqual([])
     expect(bundle.attachments).toEqual([])
