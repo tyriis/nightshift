@@ -1,6 +1,6 @@
 import type { TaskRecord } from '#root/domain/task'
 import { DomainError } from '#root/domain/errors'
-import type { ActorContext, Clock, TaskPatch, UnitOfWork } from '#root/application/ports'
+import type { ActorContext, Clock, IdGen, TaskPatch, UnitOfWork } from '#root/application/ports'
 
 export interface UpdateTaskInput extends ActorContext {
   taskId: string
@@ -10,7 +10,8 @@ export interface UpdateTaskInput extends ActorContext {
 export class UpdateTask {
   constructor(
     private readonly uow: UnitOfWork,
-    private readonly clock: Clock
+    private readonly clock: Clock,
+    private readonly ids: IdGen
   ) {}
 
   async run(input: UpdateTaskInput): Promise<TaskRecord> {
@@ -51,6 +52,22 @@ export class UpdateTask {
           reason: 'content updated',
           created_at: now,
         })
+        // D-r: assignment changes notify the new assignee — never self, never null, never unchanged
+        if (
+          input.patch.assignee_id !== undefined &&
+          input.patch.assignee_id !== null &&
+          input.patch.assignee_id !== before.assignee_id &&
+          input.patch.assignee_id !== input.actor.id
+        ) {
+          await repos.inbox.add({
+            id: this.ids.newId('ib'),
+            actor_id: input.patch.assignee_id,
+            kind: 'assigned',
+            task_id: input.taskId,
+            thread_id: null,
+            created_at: now,
+          })
+        }
         return after
       }
       return before

@@ -7,6 +7,7 @@ import { registerAuth } from '#root/adapters/rest/auth'
 import { registerIdempotency } from '#root/adapters/rest/idempotency'
 import { registerAdminRoutes } from '#root/adapters/rest/routes/admin'
 import { registerAuditRoutes } from '#root/adapters/rest/routes/audit'
+import { registerInboxRoutes } from '#root/adapters/rest/routes/inbox'
 import { registerDependencyRoutes } from '#root/adapters/rest/routes/dependencies'
 import { registerLabelRoutes } from '#root/adapters/rest/routes/labels'
 import { registerTaskRoutes } from '#root/adapters/rest/routes/tasks'
@@ -39,6 +40,7 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerAuditRoutes(server, deps)
   registerTaskRoutes(server, deps)
   registerThreadRoutes(server, deps) // threads are task-surface (spec §7.2)
+  registerInboxRoutes(server, deps)
   registerDependencyRoutes(server, deps)
   registerLabelRoutes(server, deps)
   registerAdminRoutes(server, deps)

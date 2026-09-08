@@ -24,6 +24,7 @@ import { UpdateQuestion } from '#root/application/usecases/update-question'
 import { GetContext } from '#root/application/usecases/get-context'
 import { GetNext } from '#root/application/usecases/get-next'
 import { Heartbeat } from '#root/application/usecases/heartbeat'
+import { MarkInboxRead } from '#root/application/usecases/mark-inbox-read'
 import { AttachLabel, CreateLabel, DetachLabel } from '#root/application/usecases/labels'
 import { CreateActor, CreateToken, RevokeToken } from '#root/application/usecases/manage-actors'
 import { GetPolicy, SetPolicy } from '#root/application/usecases/manage-policy'
@@ -66,6 +67,7 @@ export interface AppDeps {
     addMessage: AddMessage
     answerQuestion: AnswerQuestion
     updateQuestion: UpdateQuestion
+    markInboxRead: MarkInboxRead
     createLabel: CreateLabel
     attachLabel: AttachLabel
     detachLabel: DetachLabel
@@ -99,7 +101,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     linksRoot: new SqliteLinkRepo(db),
     useCases: {
       createTask: new CreateTask(uow, clock, ids),
-      updateTask: new UpdateTask(uow, clock),
+      updateTask: new UpdateTask(uow, clock, ids),
       updateStatus: new UpdateStatus(uow, clock),
       splitTask: new SplitTask(uow, clock, ids),
       claimTask: new ClaimTask(uow, clock),
@@ -117,6 +119,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
       addMessage: new AddMessage(uow, clock, ids),
       answerQuestion: new AnswerQuestion(uow, clock, ids),
       updateQuestion: new UpdateQuestion(uow, clock, ids),
+      markInboxRead: new MarkInboxRead(uow),
       createLabel: new CreateLabel(uow, clock, ids),
       attachLabel: new AttachLabel(uow, clock),
       detachLabel: new DetachLabel(uow, clock),
