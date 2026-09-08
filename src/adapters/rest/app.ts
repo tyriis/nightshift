@@ -12,6 +12,7 @@ import { registerDependencyRoutes } from '#root/adapters/rest/routes/dependencie
 import { registerLabelRoutes } from '#root/adapters/rest/routes/labels'
 import { registerTaskRoutes } from '#root/adapters/rest/routes/tasks'
 import { registerThreadRoutes } from '#root/adapters/rest/routes/threads'
+import { registerAttachmentRoutes } from '#root/adapters/rest/routes/attachments'
 
 export interface BuildAppOptions {
   logger?: boolean
@@ -19,6 +20,14 @@ export interface BuildAppOptions {
 
 export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInstance => {
   const server: FastifyInstance = Fastify({ logger: opts.logger ?? false })
+
+  // D-t: raw-body uploads (application/octet-stream) — parseAs buffer, no multipart dep.
+  // Registered app-level, before routes; JSON/text keep their default parsers untouched.
+  server.addContentTypeParser(
+    'application/octet-stream',
+    { parseAs: 'buffer' },
+    (_req, body, done) => done(null, body)
+  )
 
   registerProblemHandlers(server)
   // plan block wrote this async; lint (require-await) rejects an await-less async —
@@ -41,6 +50,7 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerTaskRoutes(server, deps)
   registerThreadRoutes(server, deps) // threads are task-surface (spec §7.2)
   registerInboxRoutes(server, deps)
+  registerAttachmentRoutes(server, deps)
   registerDependencyRoutes(server, deps)
   registerLabelRoutes(server, deps)
   registerAdminRoutes(server, deps)

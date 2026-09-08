@@ -18,6 +18,7 @@ tags:
   - name: admin
   - name: threads
   - name: inbox
+  - name: attachments
 paths:
   /ping:
     get:
@@ -596,6 +597,63 @@ paths:
       responses:
         "204":
           description: marked read (no body)
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}/attachments:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    get:
+      tags: [attachments]
+      operationId: listAttachments
+      responses:
+        "200":
+          description: metadata rows, oldest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Attachment" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [attachments]
+      operationId: uploadAttachment
+      description: >-
+        raw application/octet-stream body; filename/content_type via querystring;
+        size-capped (413 payload_too_large); content-addressed, re-upload dedupes (spec §6.6)
+      parameters:
+        - {
+            name: filename,
+            in: query,
+            required: true,
+            schema: { type: string, minLength: 1, maxLength: 240 },
+          }
+        - {
+            name: content_type,
+            in: query,
+            schema: { type: string, maxLength: 120, default: application/octet-stream },
+          }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: stored attachment metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        default: { $ref: "#/components/responses/Problem" }
+  /attachments/{id}/content:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [attachments]
+      operationId: getAttachmentContent
+      description: >-
+        raw bytes; HTML/SVG-origin types are downgraded to application/octet-stream with
+        attachment disposition and nosniff (spec §10)
+      responses:
+        "200":
+          description: the stored bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:

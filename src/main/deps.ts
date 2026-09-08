@@ -36,6 +36,7 @@ import { RemoveBlock } from '#root/application/usecases/remove-block'
 import { SplitTask } from '#root/application/usecases/split-task'
 import { UpdateStatus } from '#root/application/usecases/update-status'
 import { UpdateTask } from '#root/application/usecases/update-task'
+import { UploadAttachment } from '#root/application/usecases/upload-attachment'
 
 export interface AppDeps {
   config: Config
@@ -72,6 +73,7 @@ export interface AppDeps {
     answerQuestion: AnswerQuestion
     updateQuestion: UpdateQuestion
     markInboxRead: MarkInboxRead
+    uploadAttachment: UploadAttachment
     createLabel: CreateLabel
     attachLabel: AttachLabel
     detachLabel: DetachLabel
@@ -87,6 +89,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
   const clock = new SystemClock()
   const ids = new RandomIdGen()
   const uow = new SqliteUnitOfWork(db)
+  const files = new DiskFileStore(join(config.dataDir, 'files')) // D-s; composition root may do IO
   return {
     config,
     db,
@@ -103,7 +106,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     inboxRoot: new SqliteInboxRepo(db),
     attachmentsRoot: new SqliteAttachmentRepo(db),
     linksRoot: new SqliteLinkRepo(db),
-    files: new DiskFileStore(join(config.dataDir, 'files')), // D-s; composition root may do IO
+    files, // shared instance: uploads and content serving hit the same store
     useCases: {
       createTask: new CreateTask(uow, clock, ids),
       updateTask: new UpdateTask(uow, clock, ids),
@@ -128,6 +131,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
       answerQuestion: new AnswerQuestion(uow, clock, ids),
       updateQuestion: new UpdateQuestion(uow, clock, ids),
       markInboxRead: new MarkInboxRead(uow),
+      uploadAttachment: new UploadAttachment(uow, clock, ids, files),
       createLabel: new CreateLabel(uow, clock, ids),
       attachLabel: new AttachLabel(uow, clock),
       detachLabel: new DetachLabel(uow, clock),
