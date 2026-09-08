@@ -1,8 +1,11 @@
 import type { Kysely } from 'kysely'
+import { join } from 'node:path'
 import type { Config } from '#root/main/config'
+import type { FileStore } from '#root/application/ports'
 import type { DB } from '#root/infra/sqlite/schema'
 import { SystemClock } from '#root/infra/clock'
 import { RandomIdGen } from '#root/infra/ids'
+import { DiskFileStore } from '#root/infra/files/disk-file-store'
 import { SqliteActorRepo } from '#root/infra/sqlite/actor-repo'
 import { SqliteAttachmentRepo } from '#root/infra/sqlite/attachment-repo'
 import { SqliteAuditRepo } from '#root/infra/sqlite/audit-repo'
@@ -51,6 +54,7 @@ export interface AppDeps {
   inboxRoot: SqliteInboxRepo
   attachmentsRoot: SqliteAttachmentRepo
   linksRoot: SqliteLinkRepo
+  files: FileStore
   useCases: {
     createTask: CreateTask
     updateTask: UpdateTask
@@ -99,6 +103,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     inboxRoot: new SqliteInboxRepo(db),
     attachmentsRoot: new SqliteAttachmentRepo(db),
     linksRoot: new SqliteLinkRepo(db),
+    files: new DiskFileStore(join(config.dataDir, 'files')), // D-s; composition root may do IO
     useCases: {
       createTask: new CreateTask(uow, clock, ids),
       updateTask: new UpdateTask(uow, clock, ids),

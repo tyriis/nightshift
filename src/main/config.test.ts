@@ -7,6 +7,9 @@ describe('loadConfig', () => {
       port: 3123,
       dbPath: './nightshift.db',
       bootstrapToken: undefined,
+      dataDir: './data',
+      maxUploadBytes: 20_971_520,
+      rateLimitPerMin: 120,
     })
   })
 
@@ -24,5 +27,16 @@ describe('loadConfig', () => {
 
   it('rejects short bootstrap token', () => {
     expect(() => loadConfig({ NS_BOOTSTRAP_TOKEN: 'short' })).toThrow(/invalid env/)
+  })
+
+  it('coerces the Plan B knobs; 0 rate limit is legal (off switch, D-v)', () => {
+    const c = loadConfig({ NS_MAX_UPLOAD_BYTES: '4096', NS_RATE_LIMIT_PER_MIN: '0' })
+    expect(c.maxUploadBytes).toBe(4096)
+    expect(c.rateLimitPerMin).toBe(0)
+  })
+
+  it('rejects non-numeric upload cap and negative rate limit', () => {
+    expect(() => loadConfig({ NS_MAX_UPLOAD_BYTES: 'abc' })).toThrow(/invalid env/)
+    expect(() => loadConfig({ NS_RATE_LIMIT_PER_MIN: '-1' })).toThrow(/invalid env/)
   })
 })

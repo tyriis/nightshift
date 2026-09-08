@@ -334,6 +334,20 @@ export interface LinkRepo {
   listForTask(taskId: string): Promise<LinkRecord[]>
 }
 
+// ---- file store (spec §6.6, §9; D-s) — infra adapter, NOT a tx repo
+
+export interface FileRef {
+  sha256: string
+  bytes: number
+}
+
+export interface FileStore {
+  /** Content-addressed, idempotent; hashing lives in infra (node:crypto stays out of app). */
+  put(content: Uint8Array): Promise<FileRef>
+  /** null for unknown addresses; rejects only malformed inputs. */
+  get(sha256: string): Promise<Uint8Array | null>
+}
+
 // ---- wiring seams
 
 export interface Repos {

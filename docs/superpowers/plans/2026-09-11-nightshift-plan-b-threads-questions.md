@@ -2872,6 +2872,8 @@ git add -A
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(infra): content-addressed disk file store and env config"
 ```
 
+> **Amendment (Task 11, defensive arms pinned + config row additions):** `ports.ts` (`FileRef`/`FileStore`, zero node imports), `disk-file-store.ts`, the config schema/`Config`/return, the deps `files` wiring and the `makeTestApp(overrides)` temp-dir env all shipped byte-identical to the blocks. Test-side: (1) the block's three store tests shipped verbatim plus a tmp-hygiene assertion inside test 1 (the shard dir holds EXACTLY the one blob — rename atomicity leaves no `.tmp` residue) and a distinct-bytes test (two addresses, both round-trip). (2) One extra test pins the two re-throw arms the block leaves unreachable: a corrupted store (blob slot occupied by a directory) makes BOTH `get` and `put` surface the EISDIR — never a `null` lie or silent overwrite (deterministic via a directory planted at the probe's own sha path); the new file is consequently branch-complete (100% statements, zero partials). (3) `config.test.ts` pins the three defaults EXACTLY (`'./data'`, 20_971_520, 120) — silent default flips are contract breaks for T12/T14 — plus rows `NS_MAX_UPLOAD_BYTES: 'abc'` → throws, `NS_RATE_LIMIT_PER_MIN: '0'` → 0 legal (D-v off switch), `-1` → throws. Traversal note: `pathFor` accepts ONLY the lowercase-64-hex grammar, so no accepted string ever carries path syntax — the defense is the grammar itself, exercised by `'../../etc/passwd'` and uppercase-64 rejections. Block sync = shipped form.
+
 ---
 
 ### Task 12: Attachments — upload + serve (sanitized) + routes
