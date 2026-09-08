@@ -21,7 +21,7 @@ export interface BuildAppOptions {
 export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInstance => {
   const server: FastifyInstance = Fastify({ logger: opts.logger ?? false })
 
-  // D-t: raw-body uploads (application/octet-stream) — parseAs buffer, no multipart dep.
+  // D-s: raw-body uploads (application/octet-stream) — parseAs buffer, no multipart dep.
   // Registered app-level, before routes; JSON/text keep their default parsers untouched.
   server.addContentTypeParser(
     'application/octet-stream',

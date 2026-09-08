@@ -57,6 +57,9 @@ export const registerAttachmentRoutes = (app: FastifyInstance, deps: AppDeps): v
 
   app.get('/tasks/:id/attachments', async (request) => {
     const { id } = request.params as { id: string }
+    // existence first, mirroring GET /tasks/:id/threads — a typo'd id must not read as "no files"
+    const task = await deps.tasksRoot.findById(id)
+    if (!task) throw new DomainError('not_found', `task ${id} not found`)
     return deps.attachmentsRoot.listForTask(id)
   })
 
@@ -67,8 +70,10 @@ export const registerAttachmentRoutes = (app: FastifyInstance, deps: AppDeps): v
     const bytes = await deps.files.get(row.sha256)
     if (!bytes) throw new DomainError('not_found', 'stored blob is missing')
     const safe = UNSAFE_INLINE.test(row.content_type)
-    // filename sanitized: strip quotes/control for the disposition header
-    const filename = row.filename.replace(/["\\\r\n]/g, '_')
+    // filename sanitized for the disposition header: EVERY control char (\x00-\x1f, \x7f —
+    // node's header validator rejects anything outside \t\x20-\x7e\x80-\xff with a raw
+    // ERR_INVALID_CHAR 500) plus quote and backslash, all folded to '_'
+    const filename = row.filename.replace(/[\x00-\x1f\x7f"\\]/g, '_')
     return reply
       .header('x-content-type-options', 'nosniff')
       .header('content-disposition', `${safe ? 'attachment' : 'inline'}; filename="${filename}"`)

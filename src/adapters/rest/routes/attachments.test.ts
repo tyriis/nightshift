@@ -89,7 +89,7 @@ describe('attachment routes (spec §6.6, §10, D-s)', () => {
     await t.close()
   })
 
-  it('filename with quote/CR is stripped in the disposition header', async () => {
+  it('filename with quote/CR/VT/NUL is stripped in the disposition header (no raw 500)', async () => {
     const t = await makeTestApp()
     const taskId = await createTask(t, 'fn host')
     const row = (
@@ -109,6 +109,26 @@ describe('attachment routes (spec §6.6, §10, D-s)', () => {
     expect(disp).toContain('filename="a_b_c.txt"') // quote→_, CR→_ (two replacements)
     expect(disp).not.toContain('\r')
     expect(disp.match(/"/g)).toHaveLength(2) // the wrapping pair only — injected quotes are gone
+    // the reviewer-probed live 500 (ERR_INVALID_CHAR on vertical tab) — now a clean 200
+    const vt = (await upload(t, taskId, Buffer.from('y'), 'filename=a%0Bb.txt')).json()
+    const vtRes = await t.app.inject({
+      method: 'GET',
+      url: `/attachments/${vt.id as string}/content`,
+      headers: bearer(t),
+    })
+    expect(vtRes.statusCode).toBe(200)
+    expect(vtRes.headers['content-disposition']).toContain('filename="a_b.txt"')
+    expect((vtRes.headers['content-disposition'] as string).match(/"/g)).toHaveLength(2)
+    expect(vtRes.headers['x-content-type-options']).toBe('nosniff')
+    // NUL: same class of control
+    const n0 = (await upload(t, taskId, Buffer.from('z'), 'filename=a%00b.txt')).json()
+    const n0Res = await t.app.inject({
+      method: 'GET',
+      url: `/attachments/${n0.id as string}/content`,
+      headers: bearer(t),
+    })
+    expect(n0Res.statusCode).toBe(200)
+    expect(n0Res.headers['content-disposition']).toContain('filename="a_b.txt"')
     await t.close()
   })
 
@@ -135,7 +155,7 @@ describe('attachment routes (spec §6.6, §10, D-s)', () => {
     await t.close()
   })
 
-  it('unknown attachment content → 404; list for unknown task → []', async () => {
+  it('unknown attachment content → 404; ghost task list → 404 (T7 standard: no empty-list masquerade)', async () => {
     const t = await makeTestApp()
     const missing = await t.app.inject({
       method: 'GET',
@@ -149,7 +169,17 @@ describe('attachment routes (spec §6.6, §10, D-s)', () => {
       url: '/tasks/t_ghost/attachments',
       headers: bearer(t),
     })
-    expect(list.json()).toEqual([])
+    expect(list.statusCode).toBe(404)
+    expect(list.json().code).toBe('not_found')
+    // real task still lists — including the empty case
+    const taskId = await createTask(t, 'empty list')
+    const real = await t.app.inject({
+      method: 'GET',
+      url: `/tasks/${taskId}/attachments`,
+      headers: bearer(t),
+    })
+    expect(real.statusCode).toBe(200)
+    expect(real.json()).toEqual([])
     await t.close()
   })
 

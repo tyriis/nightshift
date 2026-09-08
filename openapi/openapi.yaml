@@ -603,6 +603,7 @@ paths:
     get:
       tags: [attachments]
       operationId: listAttachments
+      description: list attachment metadata for a task (404 if the task does not exist)
       responses:
         "200":
           description: metadata rows, oldest first

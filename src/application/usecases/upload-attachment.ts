@@ -31,7 +31,7 @@ export class UploadAttachment {
 
   async run(input: UploadAttachmentInput): Promise<AttachmentRecord> {
     if (input.content.byteLength === 0) {
-      throw new DomainError('invalid_request', 'empty upload rejected')
+      throw new DomainError('invalid_request', 'attachment upload requires non-empty content')
     }
     const ref = await this.files.put(input.content) // idempotent, hashes in infra (D-s)
     const now = this.clock.now().toISOString()
