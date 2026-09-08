@@ -378,6 +378,8 @@ git add -A
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "fix(rest): map 413/415 transport failures to problem codes (backlog)"
 ```
 
+> **Amendment (Task 2, probe routes — planned probes could not reach the transport errors):** Two API corrections in the Step 2.1 block. (1) 415: fastify registers default content-type parsers for both `application/json` and `text/plain` (`lib/content-type-parser.js`), so a `text/plain` probe parses fine and dies at route body-validation with 400 `invalid_request` — it never reaches the 415 path. Shipped input: content-type `application/x-sh` (a type no parser will ever register — `FST_ERR_CTP_INVALID_MEDIA_TYPE`, statusCode 415); the case title now reads "unparseable content-type…". (2) 413: fastify reads the per-route body limit from the direct route option `bodyLimit` (`lib/route.js`: `bodyLimit: opts.bodyLimit` into the context, `context._parserOptions.limit = opts.bodyLimit || null`) — `{ config: { bodyLimit: 8 } }` is silently inert (the probe answered 200). Shipped option: `{ bodyLimit: 8 }`. With these corrections RED lands exactly as planned: both probes answer 500 `internal_error` on the shipped handler. Block sync = shipped form.
+
 ---
 
 ### Task 3: Migration + schema — discussion, inbox, attachments, links tables

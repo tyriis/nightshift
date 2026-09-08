@@ -608,5 +608,7 @@ components:
               question_transition,
               rate_limited,
               idempotency_in_flight,
+              payload_too_large,
+              unsupported_media_type,
             ]
         detail: { type: string }
