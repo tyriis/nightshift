@@ -263,6 +263,8 @@ Expected: all green (domain tuple extension is type-compatible everywhere — no
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -am "feat(inbox): admit claim_conflict across all three surfaces"
 ```
 
+> **Amendment (Task 2, 4-tuple pin + printWidth normalizations):** Three byte-sync notes. (1) Step 6 pre-authorized this one: `src/domain/discussion.test.ts` pinned the 3-tuple (`expect(INBOX_ITEM_KINDS).toEqual(['assigned', 'mentioned', 'question_assigned'])`) — the expectation moved to the 4-tuple `['assigned', 'mentioned', 'question_assigned', 'claim_conflict']` in this same commit; prettier wraps the call across lines (printWidth 100). (2) The Step 5 block showed quoted `type: 'string'` property lines; the shipped yaml is unquoted (`{ type: string }`) per that step's own keep-disk-style parenthetical and prettier's yaml `singleQuote: false` — only the quote characters differ, structure is as planned. (3) The Step 3 `insert…select` line exceeds printWidth, so prettier hugs its argument: the statement ships as ``…read, created_at from inbox_items`.execute(`↵`db`↵`)` — the SQL text itself is byte-identical to the planned block. Block sync = shipped form.
+
 ---
 
 ## Task 3: AuditRepo `tail` + `watermark` — the event spine reads (D-aa)

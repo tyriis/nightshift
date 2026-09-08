@@ -177,6 +177,34 @@ const migrations: Record<string, Migration> = {
       )`.execute(db)
     },
   },
+
+  '2026-09-12_inbox_claim_conflict': {
+    up: async (db: Kysely<DB>) => {
+      // D-cc: claim_conflict joins the inbox vocabulary (D-r deferred it until runner
+      // wake paths exist — webhooks ship that path in this plan). SQLite cannot ALTER
+      // a CHECK, so the table is rebuilt in place: identical columns, extended set,
+      // then the data rides across in one statement. Column list is explicit (never
+      // select *) so a future column addition fails this copy LOUDLY.
+      await sql`create table inbox_items_v2 (
+        id text primary key,
+        actor_id text not null references actors(id),
+        kind text not null check (kind in ('assigned','mentioned','question_assigned','claim_conflict')),
+        task_id text not null references tasks(id),
+        thread_id text references threads(id),
+        read integer not null default 0 check (read in (0,1)),
+        created_at text not null
+      )`.execute(db)
+      await sql`insert into inbox_items_v2
+                  select id, actor_id, kind, task_id, thread_id, read, created_at from inbox_items`.execute(
+        db
+      )
+      await sql`drop table inbox_items`.execute(db)
+      await sql`alter table inbox_items_v2 rename to inbox_items`.execute(db)
+      // re-create the (actor, read) index dropped with the old table — same name, same
+      // definition as the discussion migration's EXPLAIN-verified pin
+      await sql`create index inbox_actor_idx on inbox_items (actor_id, read)`.execute(db)
+    },
+  },
 }
 
 class InCodeMigrationProvider implements MigrationProvider {

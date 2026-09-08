@@ -159,12 +159,15 @@ describe('migrations', () => {
       sql`insert into links (id, task_id, kind, url, created_by, created_at)
             values ('lk_3','t_x','pr','https://x/1','a_x','2026-01-01')`.execute(db)
     ).rejects.toThrow(/UNIQUE/i)
-    // inbox: kind vocabulary — claim_conflict deliberately NOT in the vocabulary (D-r)
+    // inbox: kind vocabulary — claim_conflict IN the vocabulary since Plan C (D-cc
+    // extends D-r's set once wake paths exist); the fourth bogus kind stays rejected
     await sql`insert into inbox_items (id, actor_id, kind, task_id, read, created_at)
                 values ('ib_1','a_x','assigned','t_x',0,'2026-01-01')`.execute(db)
+    await sql`insert into inbox_items (id, actor_id, kind, task_id, read, created_at)
+                values ('ib_cc','a_x','claim_conflict','t_x',0,'2026-01-01')`.execute(db)
     await expect(
       sql`insert into inbox_items (id, actor_id, kind, task_id, read, created_at)
-            values ('ib_2','a_x','claim_conflict','t_x',0,'2026-01-01')`.execute(db)
+            values ('ib_2','a_x','bogus_kind','t_x',0,'2026-01-01')`.execute(db)
     ).rejects.toThrow(/CHECK|check/i)
     // attachments: per-task content identity (D-s dedupe anchor)
     await sql`insert into attachments (id, task_id, filename, content_type, sha256, bytes,

@@ -920,11 +920,12 @@ components:
       type: object
       description: >-
         inbox entry (ports.ts InboxItemRecord); kind vocabulary mirrors domain
-        INBOX_ITEM_KINDS (D-r) — claim_conflict stays deferred (Plan D-s)
+        INBOX_ITEM_KINDS (D-r, extended by D-cc in Plan C: claim_conflict rides the
+        webhook wake path)
       properties:
         id: { type: string }
         actor_id: { type: string }
-        kind: { type: string, enum: [assigned, mentioned, question_assigned] }
+        kind: { type: string, enum: [assigned, mentioned, question_assigned, claim_conflict] }
         task_id: { type: string }
         thread_id: { type: ["string", "null"] }
         read: { type: boolean }
