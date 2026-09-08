@@ -11,6 +11,8 @@ export type DomainErrorCode =
   | 'agent_close_forbidden'
   | 'open_questions'
   | 'threads_on_parent'
+  | 'question_transition'
+  | 'rate_limited'
   | 'canceled_terminal'
   | 'idempotency_in_flight'
   | 'unauthenticated'
@@ -29,6 +31,8 @@ export const DOMAIN_ERROR_STATUS: Record<DomainErrorCode, number> = {
   agent_close_forbidden: 403,
   open_questions: 409,
   threads_on_parent: 409,
+  question_transition: 409,
+  rate_limited: 429,
   canceled_terminal: 409,
   idempotency_in_flight: 409,
   unauthenticated: 401,

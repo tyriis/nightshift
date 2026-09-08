@@ -250,6 +250,10 @@ git add -A
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(domain): discussion vocabulary, question transitions, mentions"
 ```
 
+> **Amendment (Task 1, mentions test — planned text was unsatisfiable):** Step 1.2's third case read `extractMentions('(hermes-1) on it')` — no `@` in the input, so no D-q-conformant parser can return `['hermes-1']` (accepting it would require `@`-less matching, which breaks the email rule the same suite pins). Shipped input: `extractMentions('(@hermes-1) on it')` — same name, same expectation, and it exercises exactly the claimed pair (open-paren boundary + `hermes-1` handle chars). Block sync = shipped form.
+
+> **Amendment (Task 1, mentions.ts lint):** Step 1.5's `.map((m) => m[2] as string)` trips `@typescript-eslint/no-unnecessary-type-assertion` — `RegExpMatchArray[2]` is already `string` here — so the assertion is removed: `.map((m) => m[2])`. Block sync = shipped form.
+
 ---
 
 ### Task 2: Adapter-level problem codes — the 413/415 backlog fix
@@ -2443,7 +2447,7 @@ if (input.to === 'in_review' && input.actor.kind === 'agent') {
 }
 ```
 
-Nothing else changes: the claim auto-release-to-in_review (reason `claim released on review`, grep-pinned) and the done-block gates stay exactly as shipped. Update the shipped test at `update-status.test.ts` that asserted the _unwired_ seam (it currently asserts in_review succeeds with zero questions — still true; extend its name to `…Plan B wired (see invariant-6 tests)`). If its block text changed, record the byte-sync amendment in THIS plan file.
+Nothing else changes: the claim auto-release-to-in*review (reason `claim released on review`, grep-pinned) and the done-block gates stay exactly as shipped. Update the shipped test at `update-status.test.ts` that asserted the \_unwired* seam (it currently asserts in_review succeeds with zero questions — still true; extend its name to `…Plan B wired (see invariant-6 tests)`). If its block text changed, record the byte-sync amendment in THIS plan file.
 
 - [ ] **Step 8.4: REST-level pin** — append to `threads.test.ts`: agent token claims task, opens question assigned to admin human (`assignee_handle: 'nils'`), `PATCH /tasks/:id/status {status:'in_review', reason:'pr', lease_token}` → 409 `open_questions`. Then admin answers, and the same PATCH → 200 and the audit carries `claim released on review` (proves the pinned string untouched on the new path).
 
@@ -3577,7 +3581,7 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "test(acceptance): spec §14 di
 
 Backlog items from the handover ticket. **Files:** `src/adapters/rest/auth.ts` (+ test), `src/infra/sqlite/schema.ts`? no — docs comment only; `.github/workflows/ci.yaml`.
 
-- [ ] **Step 16.1: PUBLIC_PATHS trailing slash (fail-closed cosmetic).** `auth.ts` line: `const path = request.url.split('?')[0]` → keep PUBLIC_PATHS contents EXACTLY `{/ping, /openapi.yaml}` (binding); normalize the lookup instead — `const path = (request.url.split('?')[0] ?? '/').replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1')` (collapse duplicate slashes, strip trailing slash except root). This makes `/ping/` hit the public set (currently 401). Test in `auth.test.ts`: unauthenticated `GET /ping/` → 200 (was 401); `GET /audit/` still requires auth (401 without, 200 with — normalization does NOT leak protected paths: normalization only _matches more public path spellings_, and `/audit` is absent from PUBLIC_PATHS in any spelling).
+- [ ] **Step 16.1: PUBLIC_PATHS trailing slash (fail-closed cosmetic).** `auth.ts` line: `const path = request.url.split('?')[0]` → keep PUBLIC*PATHS contents EXACTLY `{/ping, /openapi.yaml}` (binding); normalize the lookup instead — `const path = (request.url.split('?')[0] ?? '/').replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1')` (collapse duplicate slashes, strip trailing slash except root). This makes `/ping/` hit the public set (currently 401). Test in `auth.test.ts`: unauthenticated `GET /ping/` → 200 (was 401); `GET /audit/` still requires auth (401 without, 200 with — normalization does NOT leak protected paths: normalization only \_matches more public path spellings*, and `/audit` is absent from PUBLIC_PATHS in any spelling).
 
 - [ ] **Step 16.2: token-hash sanctioned import (document, not relocate).** `auth.ts` and `manage-actors.ts` import `#root/infra/token-hash` — pure `node:crypto` helpers. Plan A already ruled this sanctioned in manage-actors' comments; extend the same one-line note to `auth.ts`'s import: `// sanctioned pure-util import (plan ruling): token-hash is node:crypto-only, no infra coupling`. No code moves (relocation would churn two tested files for zero behavior — the ticket allows "document or relocate").
 

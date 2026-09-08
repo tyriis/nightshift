@@ -15,6 +15,8 @@ describe('DomainError', () => {
     ['agent_close_forbidden', 403],
     ['open_questions', 409],
     ['threads_on_parent', 409],
+    ['question_transition', 409],
+    ['rate_limited', 429],
     ['idempotency_in_flight', 409],
     ['unauthenticated', 401],
   ])('maps %s to HTTP %i', (code, status) => {

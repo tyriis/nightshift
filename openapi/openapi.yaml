@@ -605,6 +605,8 @@ components:
               agent_close_forbidden,
               open_questions,
               threads_on_parent,
+              question_transition,
+              rate_limited,
               idempotency_in_flight,
             ]
         detail: { type: string }
