@@ -133,7 +133,7 @@ paths:
       operationId: getTaskContext
       responses:
         "200":
-          description: one-call context bundle (spec §7.2); question/link/attachment arrays empty in Plan A
+          description: one-call context bundle (spec §7.2) — questions, links and attachments populated
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ContextBundle" }
@@ -699,9 +699,22 @@ components:
               title: { type: string }
               status: { $ref: "#/components/schemas/TaskStatus" }
         labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
-        open_questions: { type: array }
-        links: { type: array }
-        attachments: { type: array }
+        open_questions:
+          type: array
+          description: open questions on the task (D-n/D-m); first-message text preview
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              state: { type: string, enum: [open, answered, resolved, wont_fix] }
+              assignee_handle: { type: string }
+              question: { type: string }
+        links:
+          type: array
+          items: { $ref: "#/components/schemas/Link" }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/Attachment" }
     Label:
       type: object
       properties:
@@ -806,4 +819,26 @@ components:
         task_id: { type: string }
         thread_id: { type: ["string", "null"] }
         read: { type: boolean }
+        created_at: { type: string }
+    Link:
+      type: object
+      description: external link on a task (ports.ts LinkRecord, D-t)
+      properties:
+        id: { type: string }
+        task_id: { type: string }
+        kind: { type: string, enum: [pr, commit, doc, other] }
+        url: { type: string }
+        created_by: { type: string }
+        created_at: { type: string }
+    Attachment:
+      type: object
+      description: content-addressed attachment metadata (ports.ts AttachmentRecord, D-s); bytes of the stored blob
+      properties:
+        id: { type: string }
+        task_id: { type: string }
+        filename: { type: string }
+        content_type: { type: string }
+        sha256: { type: string }
+        bytes: { type: integer }
+        created_by: { type: string }
         created_at: { type: string }

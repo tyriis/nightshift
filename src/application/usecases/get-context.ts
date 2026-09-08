@@ -1,10 +1,16 @@
 import type { TaskRecord, TaskStatus } from '#root/domain/task'
 import { DomainError } from '#root/domain/errors'
 import type {
+  AttachmentRepo,
   BlockerRow,
   DependencyRepo,
   LabelRow,
   LabelRepo,
+  LinkRepo,
+  OpenQuestionRow,
+  LinkRecord,
+  AttachmentRecord,
+  ThreadRepo,
   TaskRepo,
 } from '#root/application/ports'
 
@@ -22,17 +28,19 @@ export interface TaskContextBundle {
   ancestors: ContextAncestor[]
   blockers: BlockerRow[]
   labels: LabelRow[]
-  /** seams — populated in Plan B (threads) / later plans; shape fixed by spec §7.2 */
-  open_questions: unknown[]
-  links: unknown[]
-  attachments: unknown[]
+  open_questions: OpenQuestionRow[]
+  links: LinkRecord[]
+  attachments: AttachmentRecord[]
 }
 
 export class GetContext {
   constructor(
     private readonly tasks: TaskRepo,
     private readonly deps: DependencyRepo,
-    private readonly labels: LabelRepo
+    private readonly labels: LabelRepo,
+    private readonly threads: ThreadRepo,
+    private readonly linksRepo: LinkRepo,
+    private readonly attachmentsRepo: AttachmentRepo
   ) {}
 
   async run(input: { taskId: string }): Promise<TaskContextBundle> {
@@ -53,9 +61,9 @@ export class GetContext {
       })),
       blockers,
       labels,
-      open_questions: [],
-      links: [],
-      attachments: [],
+      open_questions: await this.threads.openQuestionsForTask(input.taskId),
+      links: await this.linksRepo.listForTask(input.taskId),
+      attachments: await this.attachmentsRepo.listForTask(input.taskId),
     }
   }
 }

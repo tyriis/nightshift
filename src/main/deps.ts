@@ -113,7 +113,10 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
       getContext: new GetContext(
         new SqliteTaskRepo(db),
         new SqliteDependencyRepo(db),
-        new SqliteLabelRepo(db)
+        new SqliteLabelRepo(db),
+        new SqliteThreadRepo(db),
+        new SqliteLinkRepo(db),
+        new SqliteAttachmentRepo(db)
       ),
       createThread: new CreateThread(uow, clock, ids),
       addMessage: new AddMessage(uow, clock, ids),
