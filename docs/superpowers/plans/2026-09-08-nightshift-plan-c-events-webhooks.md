@@ -16,6 +16,8 @@
 - Ticket: tyriis/nightshift#4. Inputs: spec `docs/superpowers/specs/2026-09-05-nightshift-design.md` (§6.8, §7.2, §9, §11, §12); Plan B record `docs/superpowers/plans/2026-09-11-nightshift-plan-b-threads-questions.md`; Plan A record.
 - Baseline gate (recorded by the planner 2026-09-08 at `2eb0e7c` = the PR #3 merge): **374 tests / 55 files; Stmts 99.71 / Branch 97.91 / Funcs 100 / Lines 99.89**; lint / typecheck / build clean. The uncovered set is exactly Plan B's documented arms (`task-repo.ts:151-164`, `thread-repo.ts:96/132`, `rate-limit.ts:35`, `auth.ts:47`, `migrations.ts:193`). This is the local evidence for the issue-#4 backlog item "first `pnpm test:coverage` CI step green post-Plan-B-merge" — CI itself becomes observable only after @tyriis pushes (we do not push).
 
+- Baseline gate **confirmed green at execution start (2026-09-08)**: same 374/55, same coverage figures, lint/typecheck/build clean.
+
 ### Inherited binding rulings (Plans A+B — obey; violation = task failure)
 
 - **Error taxonomy is one map**: any new DomainErrorCode goes into `src/domain/errors.ts` `DOMAIN_ERROR_STATUS` **and** the yaml `Problem.code` enum in the SAME commit (drift test `openapi-contract.test.ts:107-110` pins `domain ∪ adapter`). Adapter codes go in `ADAPTER_ERROR_CODES` (`problem.ts:16`). `DomainError.details` ride the FLAT envelope — `code`+detail fields pinned, never nested.
