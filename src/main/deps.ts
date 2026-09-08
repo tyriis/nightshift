@@ -15,8 +15,10 @@ import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
 import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
 import { SqliteUnitOfWork } from '#root/infra/sqlite/uow'
 import { AddBlock } from '#root/application/usecases/add-block'
+import { AddMessage } from '#root/application/usecases/add-message'
 import { ClaimTask } from '#root/application/usecases/claim-task'
 import { CreateTask } from '#root/application/usecases/create-task'
+import { CreateThread } from '#root/application/usecases/create-thread'
 import { GetContext } from '#root/application/usecases/get-context'
 import { GetNext } from '#root/application/usecases/get-next'
 import { Heartbeat } from '#root/application/usecases/heartbeat'
@@ -58,6 +60,8 @@ export interface AppDeps {
     removeBlock: RemoveBlock
     getNext: GetNext
     getContext: GetContext
+    createThread: CreateThread
+    addMessage: AddMessage
     createLabel: CreateLabel
     attachLabel: AttachLabel
     detachLabel: DetachLabel
@@ -105,6 +109,8 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
         new SqliteDependencyRepo(db),
         new SqliteLabelRepo(db)
       ),
+      createThread: new CreateThread(uow, clock, ids),
+      addMessage: new AddMessage(uow, clock, ids),
       createLabel: new CreateLabel(uow, clock, ids),
       attachLabel: new AttachLabel(uow, clock),
       detachLabel: new DetachLabel(uow, clock),
