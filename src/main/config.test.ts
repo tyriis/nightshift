@@ -10,6 +10,9 @@ describe('loadConfig', () => {
       dataDir: './data',
       maxUploadBytes: 20_971_520,
       rateLimitPerMin: 120,
+      webhookIntervalMs: 1000,
+      webhookTimeoutMs: 5000,
+      webhookMaxBackoffMs: 300_000,
     })
   })
 
@@ -38,5 +41,18 @@ describe('loadConfig', () => {
   it('rejects non-numeric upload cap and negative rate limit', () => {
     expect(() => loadConfig({ NS_MAX_UPLOAD_BYTES: 'abc' })).toThrow(/invalid env/)
     expect(() => loadConfig({ NS_RATE_LIMIT_PER_MIN: '-1' })).toThrow(/invalid env/)
+  })
+
+  it('defaults the webhook delivery knobs (D-bb)', () => {
+    const c = loadConfig({})
+    expect(c.webhookIntervalMs).toBe(1000)
+    expect(c.webhookTimeoutMs).toBe(5000)
+    expect(c.webhookMaxBackoffMs).toBe(300_000)
+  })
+
+  it('interval 0 disables the loop (the D-v honesty lever); bounds are enforced', () => {
+    expect(loadConfig({ NS_WEBHOOK_INTERVAL_MS: '0' }).webhookIntervalMs).toBe(0)
+    expect(() => loadConfig({ NS_WEBHOOK_TIMEOUT_MS: '1' })).toThrow(/invalid env/)
+    expect(() => loadConfig({ NS_WEBHOOK_MAX_BACKOFF_MS: '5' })).toThrow(/invalid env/)
   })
 })
