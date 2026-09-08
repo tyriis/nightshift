@@ -16,7 +16,7 @@ export interface CreateThreadInput extends ActorContext {
   body: string
   /** required for kind='question' (D-m: question always has an assignee) */
   assignee_id?: string
-  /** D-p: UI-only escape hatch on a parent task; honored for human actors only */
+  /** D-p: UI-only escape hatch on a parent task; honored for human actors posting a note only */
   metaNote?: boolean
 }
 
@@ -41,15 +41,17 @@ export class CreateThread {
       const task = await repos.tasks.findById(input.taskId)
       if (!task) throw new DomainError('not_found', `task ${input.taskId} not found`)
 
-      // spec §6.2: after a split the conversation moves to the children (D-p)
+      // spec §6.2: after a split the conversation moves to the children (D-p).
+      // The escape hatch is positive-by-construction: human + note + flag; anything
+      // else on a parent (agent, question thread, missing flag) keeps the 409.
       const onParent = await repos.tasks.hasChildren(input.taskId)
-      if (onParent) {
-        if (!(input.metaNote === true && input.actor.kind === 'human')) {
-          throw new DomainError(
-            'threads_on_parent',
-            `task ${input.taskId} has children; conversation lives on the leaves (spec §6.2)`
-          )
-        }
+      const metaNoteAllowed =
+        input.metaNote === true && input.actor.kind === 'human' && input.kind === 'note'
+      if (onParent && !metaNoteAllowed) {
+        throw new DomainError(
+          'threads_on_parent',
+          `task ${input.taskId} has children; conversation lives on the leaves (spec §6.2)`
+        )
       }
 
       let assigneeId: string | null = null
@@ -89,7 +91,12 @@ export class CreateThread {
         action: 'thread_created',
         entity_type: 'thread',
         entity_id: thread.id,
-        after: { kind: thread.kind, task_id: thread.task_id },
+        after: {
+          kind: thread.kind,
+          task_id: thread.task_id,
+          message_id: message.id,
+          seq: message.seq,
+        },
         reason: onParent ? 'meta-note on parent (spec §6.2)' : 'thread created',
         created_at: now,
       })

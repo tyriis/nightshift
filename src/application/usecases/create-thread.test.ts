@@ -8,11 +8,6 @@ import { buildUow, fixedClock, human, seqIds } from '#root/application/usecases/
 import { seedActor } from '#root/testing/fixtures'
 import type { ActorContext } from '#root/application/ports'
 
-const ana: ActorContext = {
-  actor: { id: 'a_ana', kind: 'human', handle: 'ana', display_name: 'Ana' },
-  tokenId: null,
-}
-
 const setup = async () => {
   const { db, uow } = await buildUow() // seeds a_human (nils)
   await seedActor(db, 'a_ana', 'human', 'ana')
@@ -47,7 +42,12 @@ describe('CreateThread (spec §6.5)', () => {
       entity_id: r.thread.id,
       limit: 5,
     })
-    expect(audit[0]).toMatchObject({ action: 'thread_created', reason: 'thread created' })
+    expect(audit[0]).toMatchObject({
+      action: 'thread_created',
+      reason: 'thread created',
+      // opening message recorded — the thread history is audit-reconstructable
+      after: { kind: 'note', task_id: taskId, message_id: 'ms_seq2', seq: 1 },
+    })
     await db.destroy()
   })
 
@@ -129,6 +129,17 @@ describe('CreateThread (spec §6.5)', () => {
     await expect(
       uc.run({ ...agent, taskId: parent.id, kind: 'note', body: 'x', metaNote: true })
     ).rejects.toMatchObject({ code: 'threads_on_parent' }) // agents can't use the UI flag
+    // D-p literal: the flag is for a human posting a NOTE — a question thread gets the 409
+    await expect(
+      uc.run({
+        ...human,
+        taskId: parent.id,
+        kind: 'question',
+        body: 'x',
+        assignee_id: 'a_ana',
+        metaNote: true,
+      })
+    ).rejects.toMatchObject({ code: 'threads_on_parent' })
     const r = await uc.run({
       ...human,
       taskId: parent.id,
