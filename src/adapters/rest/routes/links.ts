@@ -23,6 +23,7 @@ export const registerLinkRoutes = (app: FastifyInstance, deps: AppDeps): void =>
           type: 'object',
           required: ['kind', 'url'],
           additionalProperties: false,
+          // 8 = 'http://a', shortest parseable http(s) URL — nothing valid is rejected
           properties: { kind: kindEnum, url: { type: 'string', minLength: 8, maxLength: 2000 } },
         },
       },
