@@ -3619,6 +3619,8 @@ git add -A
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "test(acceptance): spec §14 discussion-side end-to-end story"
 ```
 
+> **Amendment (Task 15, story shipped verbatim — passed first-run):** `scenarios-discussion.test.ts` shipped as the block wrote it — zero adjustments. Its one open question (does the shipped `/audit` route accept `entity_id` without `entity_type`, with `limit`?) was checked against `routes/audit.ts` first: both filters are optional and `limit` defaults to 50, so the story's `?entity_id=…&limit=50` works as written and the block's "amend if both are required" branch did not fire. Per Step 15.2 this task cannot be RED in the TDD sense; it PASSED on the first run (nothing to fix on either side — the story does not misread the shipped surface, and no subsystem defect was exposed). Machine-string note: the story drives the `in_review` transition that auto-releases the claim, but it does not assert `claim released on review` — that byte-exact string is already pinned by `update-status.test.ts` and the Task 8 REST pin, so no duplication here; the story's job is that invariant 6 fires and lifts over HTTP exactly once, and it does. Block sync = shipped form.
+
 ---
 
 ### Task 16: Hygiene backlog + final gate
