@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { makeDb } from '#root/infra/sqlite/db'
+import { migrateToLatest } from '#root/infra/sqlite/migrations'
 import { SqliteAuditRepo } from '#root/infra/sqlite/audit-repo'
 import { freshDb } from '#root/testing/fixtures'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const entry = (entityId: string, action = 'task_created') => ({
   actor_id: 'a_1',
@@ -71,5 +76,62 @@ describe('SqliteAuditRepo', () => {
     for (let i = 0; i < 5; i++) await repo.append(entry(`t_${i}`))
     expect(await repo.search({ limit: 2 })).toHaveLength(2)
     await db.destroy()
+  })
+})
+
+const spineEntry = (n: number) => ({
+  actor_id: 'a_x',
+  token_id: null,
+  action: `action_${n}`,
+  entity_type: 'task',
+  entity_id: 't_1',
+  after: { n },
+  reason: `reason ${n}`,
+  created_at: '2026-01-01T00:00:00.000Z',
+})
+
+describe('audit spine reads (D-aa)', () => {
+  it('tail returns rows after the cursor, ASCENDING; watermark is max(id)', async () => {
+    const db = makeDb(':memory:')
+    await migrateToLatest(db)
+    const audit = new SqliteAuditRepo(db)
+    expect(await audit.tail(0, 10)).toEqual([])
+    expect(await audit.watermark()).toBe(0)
+    for (const n of [1, 2, 3]) await audit.append(spineEntry(n))
+    const rows = await audit.tail(1, 10)
+    expect(rows.map((r) => r.id)).toEqual([2, 3]) // ASCENDING — the cursor advances forward
+    expect(await audit.tail(3, 10)).toEqual([]) // caught up ⇒ empty
+    expect(await audit.tail(1, 1)).toHaveLength(1) // limit respected, oldest-first slice
+    expect(await audit.watermark()).toBe(3)
+    await db.destroy()
+  })
+
+  it('tail excludes payloads by design of the ROUTE, not the repo: repo carries before/after', async () => {
+    const db = makeDb(':memory:')
+    await migrateToLatest(db)
+    const audit = new SqliteAuditRepo(db)
+    await audit.append(spineEntry(1))
+    const [row] = await audit.tail(0, 10)
+    expect(row?.after).toEqual({ n: 1 }) // strip lives in routes/events.ts (D-aa)
+    await db.destroy()
+  })
+
+  it('cursor survives reopen on a file db (restart-monotonicity, spec §6.8)', async () => {
+    // the claim of §6.8 is restart survival — an :memory: db cannot show it.
+    // File db in a temp dir (os.tmpdir per binding), reopen, tail past the old cursor.
+    const dir = mkdtempSync(join(tmpdir(), 'ns-audit-reopen-'))
+    const path = join(dir, 'restart.db')
+    const db1 = makeDb(path)
+    await migrateToLatest(db1)
+    const audit1 = new SqliteAuditRepo(db1)
+    for (const n of [1, 2]) await audit1.append(spineEntry(n))
+    const last = await audit1.watermark()
+    await db1.destroy()
+    const db2 = makeDb(path)
+    const audit2 = new SqliteAuditRepo(db2)
+    await expect(audit2.tail(last, 10)).resolves.toEqual([]) // nothing lost
+    await audit2.append(spineEntry(3))
+    expect((await audit2.tail(last, 10)).map((r) => r.action)).toEqual(['action_3']) // continues forward
+    await db2.destroy()
   })
 })

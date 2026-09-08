@@ -48,7 +48,7 @@ describe('SplitTask (spec §6.2)', () => {
       title: 'big',
       status: 'todo',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
       actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'Hermes' },
       tokenId: 'tok_agent',
       taskId: parent.id,
@@ -85,7 +85,7 @@ describe('SplitTask (spec §6.2)', () => {
 
     // parent is no longer a leaf → cannot be claimed
     await expect(
-      new ClaimTask(uow, fixedClock()).run({
+      new ClaimTask(uow, fixedClock(), seqIds()).run({
         actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'Hermes' },
         tokenId: 'tok_agent',
         taskId: parent.id,
@@ -94,7 +94,7 @@ describe('SplitTask (spec §6.2)', () => {
 
     // children are claimable leaves
     const child = split.created[0] as { id: string }
-    const childClaim = await new ClaimTask(uow, fixedClock()).run({
+    const childClaim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
       actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'Hermes' },
       tokenId: 'tok_agent',
       taskId: child.id,

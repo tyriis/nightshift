@@ -100,6 +100,16 @@ export interface DB {
   inbox_items: InboxItemsTable
   attachments: AttachmentsTable
   links: LinksTable
+  webhooks: WebhooksTable
+  // FTS5 virtual table: queried via sql templates (Kysely's builder has no match-op);
+  // column interface matches the fts5 columns (rowid implicit). Declared for type-honest
+  // sql-template composition only.
+  task_fts: {
+    rowid: number
+    title: string
+    description: string
+    acceptance_criteria: string
+  }
 }
 
 export interface ThreadsTable {
@@ -151,4 +161,16 @@ export interface LinksTable {
   url: string
   created_by: string
   created_at: string
+}
+
+export interface WebhooksTable {
+  id: string
+  actor_id: string
+  url: string
+  secret: string
+  created_by: string
+  created_at: string
+  delivered_cursor: number
+  attempts: number
+  next_attempt_at: number
 }

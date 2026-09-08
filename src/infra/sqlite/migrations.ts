@@ -177,6 +177,87 @@ const migrations: Record<string, Migration> = {
       )`.execute(db)
     },
   },
+
+  '2026-09-12_inbox_claim_conflict': {
+    up: async (db: Kysely<DB>) => {
+      // D-cc: claim_conflict joins the inbox vocabulary (D-r deferred it until runner
+      // wake paths exist — webhooks ship that path in this plan). SQLite cannot ALTER
+      // a CHECK, so the table is rebuilt in place: identical columns, extended set,
+      // then the data rides across in one statement. Column list is explicit (never
+      // select *) so a future column addition fails this copy LOUDLY.
+      await sql`create table inbox_items_v2 (
+        id text primary key,
+        actor_id text not null references actors(id),
+        kind text not null check (kind in ('assigned','mentioned','question_assigned','claim_conflict')),
+        task_id text not null references tasks(id),
+        thread_id text references threads(id),
+        read integer not null default 0 check (read in (0,1)),
+        created_at text not null
+      )`.execute(db)
+      await sql`insert into inbox_items_v2
+                  select id, actor_id, kind, task_id, thread_id, read, created_at from inbox_items`.execute(
+        db
+      )
+      await sql`drop table inbox_items`.execute(db)
+      await sql`alter table inbox_items_v2 rename to inbox_items`.execute(db)
+      // re-create the (actor, read) index dropped with the old table — same name, same
+      // definition as the discussion migration's EXPLAIN-verified pin
+      await sql`create index inbox_actor_idx on inbox_items (actor_id, read)`.execute(db)
+    },
+  },
+
+  '2026-09-12_webhooks': {
+    up: async (db: Kysely<DB>) => {
+      // D-bb/D-ff: one row per registered callback, its delivery checkpoint riding
+      // with it (a separate ledger table is the second source D-aa rejects). secret
+      // is PLAINTEXT on purpose — an HMAC signing key the loop must re-read; unlike
+      // bearer tokens it cannot be stored hashed (D-ff states the exception). url is
+      // UNIQUE: a runner gets exactly one wake path, and a re-register is an upsert
+      // decision this board refuses to make silently.
+      await sql`create table webhooks (
+        id text primary key,
+        actor_id text not null references actors(id),
+        url text not null unique,
+        secret text not null,
+        created_by text not null references actors(id),
+        created_at text not null,
+        delivered_cursor integer not null default 0,
+        attempts integer not null default 0,
+        next_attempt_at integer not null default 0
+      )`.execute(db)
+    },
+  },
+
+  '2026-09-12_fts_search': {
+    up: async (db: Kysely<DB>) => {
+      // D-gg (spec §9 "nearly free"): EXTERNAL-CONTENT FTS5 — text lives in `tasks`,
+      // the index lives here. content_rowid='rowid': tasks.id is TEXT (RandomIdGen),
+      // which cannot alias rowid, but a rowid table KEEPS its implicit rowid — the
+      // triggers mirror (task_ai/ad/au) keep the index honest. NO UI yet (§12):
+      // reads ship as a repo port only.
+      await sql`create virtual table task_fts using fts5(
+        title, description, acceptance_criteria,
+        content='tasks', content_rowid='rowid', tokenize='unicode61'
+      )`.execute(db)
+      await sql`create trigger task_fts_ai after insert on tasks begin
+        insert into task_fts (rowid, title, description, acceptance_criteria)
+          values (new.rowid, new.title, new.description, new.acceptance_criteria);
+      end`.execute(db)
+      await sql`create trigger task_fts_ad after delete on tasks begin
+        insert into task_fts (task_fts, rowid) values ('delete', old.rowid);
+      end`.execute(db)
+      await sql`create trigger task_fts_au after update on tasks begin
+        insert into task_fts (task_fts, rowid, title, description, acceptance_criteria)
+          values ('delete', old.rowid, old.title, old.description, old.acceptance_criteria);
+        insert into task_fts (rowid, title, description, acceptance_criteria)
+          values (new.rowid, new.title, new.description, new.acceptance_criteria);
+      end`.execute(db)
+      // population: external-content FTS5 does NOT back-fill on its own. The canonical
+      // rebuild ships IN the migration: on CI the content table is empty (no-op) and on
+      // a homelab upgrade it indexes every pre-existing task — one statement, both paths.
+      await sql`insert into task_fts(task_fts) values ('rebuild')`.execute(db)
+    },
+  },
 }
 
 class InCodeMigrationProvider implements MigrationProvider {

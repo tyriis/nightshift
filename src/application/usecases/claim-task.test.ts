@@ -41,7 +41,7 @@ const setup = async (ids: IdGen = seqIds()) => {
 describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
   it('first claim wins, second gets already_claimed with holder identity, release frees it', async () => {
     const { db, uow, task } = await setup()
-    const claimUc = new ClaimTask(uow, fixedClock())
+    const claimUc = new ClaimTask(uow, fixedClock(), seqIds())
     const won = await claimUc.run({ ...agentA, taskId: task.id })
     expect(won).toEqual({ lease_token: formatLeaseToken(task.id, 1), generation: 1 })
 
@@ -69,12 +69,12 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
       children: [{ title: 'c' }],
     })
     await expect(
-      new ClaimTask(uow, fixedClock()).run({ ...agentA, taskId: task.id })
+      new ClaimTask(uow, fixedClock(), seqIds()).run({ ...agentA, taskId: task.id })
     ).rejects.toMatchObject({ code: 'not_a_leaf' })
 
     const backlog = await new CreateTask(uow, fixedClock(), ids).run({ ...human, title: 'b' })
     await expect(
-      new ClaimTask(uow, fixedClock()).run({ ...agentA, taskId: backlog.id })
+      new ClaimTask(uow, fixedClock(), seqIds()).run({ ...agentA, taskId: backlog.id })
     ).rejects.toMatchObject({ code: 'invalid_request' })
 
     const canceled = await new CreateTask(uow, fixedClock(), ids).run({ ...human, title: 'z' })
@@ -85,11 +85,11 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
       reason: 'drop',
     })
     await expect(
-      new ClaimTask(uow, fixedClock()).run({ ...agentA, taskId: canceled.id })
+      new ClaimTask(uow, fixedClock(), seqIds()).run({ ...agentA, taskId: canceled.id })
     ).rejects.toMatchObject({ code: 'canceled_terminal' })
 
     await expect(
-      new ClaimTask(uow, fixedClock()).run({ ...human, taskId: split.created[0]!.id })
+      new ClaimTask(uow, fixedClock(), seqIds()).run({ ...human, taskId: split.created[0]!.id })
     ).rejects.toMatchObject({ code: 'invalid_request' }) // human bootstrap w/o tokenId cannot claim
     await db.destroy()
   })
@@ -101,7 +101,10 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
     ).rejects.toMatchObject({
       code: 'stale_lease',
     })
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agentA, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agentA,
+      taskId: task.id,
+    })
 
     await expect(
       new Heartbeat(uow, fixedClock()).run({
@@ -141,7 +144,7 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
   it('claim/release/heartbeat on unknown task → not_found', async () => {
     const { db, uow } = await setup()
     await expect(
-      new ClaimTask(uow, fixedClock()).run({ ...agentA, taskId: 't_ghost' })
+      new ClaimTask(uow, fixedClock(), seqIds()).run({ ...agentA, taskId: 't_ghost' })
     ).rejects.toMatchObject({ code: 'not_found' })
     await expect(
       new ReleaseClaim(uow, fixedClock()).run({ ...agentA, taskId: 't_ghost' })
@@ -159,7 +162,10 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
   it('heartbeat rejects malformed or foreign-task leases; tokenless actor cannot release', async () => {
     const ids = seqIds() // M-1 pin: shared with setup()
     const { db, uow, task } = await setup(ids)
-    const claim = await new ClaimTask(uow, fixedClock()).run({ ...agentA, taskId: task.id })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agentA,
+      taskId: task.id,
+    })
     // valid generation, wrong task id in the lease:
     await expect(
       new Heartbeat(uow, fixedClock()).run({
@@ -209,6 +215,16 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
       claim_generation: 0,
       last_heartbeat_at: null,
     }
+    // D-cc: the fake captures the loser's inbox copy too — the second withTransaction
+    // call (after the first rolled back) must land a claim_conflict row for the loser.
+    const inboxAdds: Array<{
+      id: string
+      actor_id: string
+      kind: string
+      task_id: string
+      thread_id: string | null
+      created_at: string
+    }> = []
     const raceUow: UnitOfWork = {
       async withTransaction<T>(fn: (repos: Repos) => Promise<T>): Promise<T> {
         const repos = {
@@ -219,17 +235,74 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
           },
           actors: { findActorByTokenId: async () => null },
           audit: { append: async () => undefined },
+          inbox: {
+            add: async (d: (typeof inboxAdds)[number]) => {
+              inboxAdds.push(d)
+            },
+          },
         }
         return fn(repos as unknown as Repos)
       },
     }
     await expect(
-      new ClaimTask(raceUow, fixedClock()).run({ ...agentA, taskId: 't_race' })
+      new ClaimTask(raceUow, fixedClock(), seqIds()).run({ ...agentA, taskId: 't_race' })
     ).rejects.toMatchObject({
       code: 'already_claimed',
       message: 'task is claimed by another actor',
       details: { holder_handle: null, holder_display_name: null },
     })
+    expect(inboxAdds).toEqual([
+      {
+        id: 'ib_seq1',
+        actor_id: 'a_agent_a',
+        kind: 'claim_conflict',
+        task_id: 't_race',
+        thread_id: null,
+        created_at: '2026-05-05T05:05:05.000Z',
+      },
+    ])
+  })
+})
+
+// D-cc: the race loser's async copy — second transaction, rethrow byte-exact, no audit.
+describe('ClaimTask claim_conflict loser copy (D-cc)', () => {
+  it('race loser gets a claim_conflict inbox copy AND still gets the unchanged 409 (D-cc)', async () => {
+    const { db, uow, task } = await setup()
+    const uc = new ClaimTask(uow, fixedClock(), seqIds())
+    await uc.run({ ...agentA, taskId: task.id })
+    await expect(uc.run({ ...agentB, taskId: task.id })).rejects.toMatchObject({
+      code: 'already_claimed',
+      details: { holder_handle: 'hermes-a', holder_display_name: 'Seed a_agent_a' }, // contract byte-exact (ora-14 M-1)
+    })
+    const rows = await db.selectFrom('inbox_items').selectAll().execute()
+    expect(rows.map((r) => [r.actor_id, r.kind, r.task_id])).toEqual([
+      ['a_agent_b', 'claim_conflict', task.id],
+    ])
+    // NOT audited (D-cc): a rejection is not a workspace mutation (D-r doctrine)
+    expect(
+      (await db.selectFrom('audit_log').select('action').execute()).map((a) => a.action)
+    ).not.toContain('claim_conflict')
+    await db.destroy()
+  })
+
+  it('holder re-claiming its OWN task does NOT spam its inbox (D-cc guard)', async () => {
+    const { db, uow, task } = await setup()
+    const uc = new ClaimTask(uow, fixedClock(), seqIds())
+    await uc.run({ ...agentA, taskId: task.id })
+    await expect(uc.run({ ...agentA, taskId: task.id })).rejects.toMatchObject({
+      code: 'already_claimed',
+    })
+    expect(await db.selectFrom('inbox_items').selectAll().execute()).toEqual([])
+    await db.destroy()
+  })
+
+  it('other rejection paths leave no inbox trace (not_found path untouched)', async () => {
+    const { db, uow } = await setup()
+    await expect(
+      new ClaimTask(uow, fixedClock(), seqIds()).run({ ...agentB, taskId: 't_ghost' })
+    ).rejects.toMatchObject({ code: 'not_found' })
+    expect(await db.selectFrom('inbox_items').selectAll().execute()).toEqual([])
+    await db.destroy()
   })
 })
 
@@ -254,7 +327,7 @@ describe('claim/release/status interleavings (model-based, spec §6.4.3/4)', () 
           // shrunk run starves the property of runs.
           try {
             const claimants: Record<'A' | 'B', ActorContext> = { A: agentA, B: agentB }
-            const claimUc = new ClaimTask(uow, fixedClock())
+            const claimUc = new ClaimTask(uow, fixedClock(), seqIds())
             const releaseUc = new ReleaseClaim(uow, fixedClock())
             const statusUc = new UpdateStatus(uow, fixedClock())
 

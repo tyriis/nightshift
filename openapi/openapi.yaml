@@ -20,6 +20,8 @@ tags:
   - name: inbox
   - name: attachments
   - name: links
+  - name: webhooks
+  - name: events
 paths:
   /ping:
     get:
@@ -342,6 +344,29 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
         default: { $ref: "#/components/responses/Problem" }
+  /events:
+    get:
+      tags: [events]
+      operationId: getEvents
+      description: >-
+        global event feed (spec §6.8): the audit spine minus payloads (D-aa), ASCENDING
+        from the cursor; cursor is an audit_log.id — monotonic across restarts (append-only,
+        never purged). Tailing burns the per-actor rate-limit budget (D-dd). SSE is deferred
+        (§6.8/§12): poll this, or register a webhook.
+      parameters:
+        - { name: cursor, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 500, default: 100 },
+          }
+      responses:
+        "200":
+          description: events with cursor strictly increasing; empty when caught up
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Event" } }
+        default: { $ref: "#/components/responses/Problem" }
   /admin/actors:
     get:
       tags: [admin]
@@ -447,6 +472,68 @@ paths:
               schema:
                 type: object
                 properties: { key: { type: string }, value: { type: string } }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/webhooks:
+    get:
+      tags: [webhooks]
+      operationId: listWebhooks
+      description: registered agent wake callbacks (human-only, spec §6.8); secrets are NEVER re-served after creation (D-ff)
+      responses:
+        "200":
+          description: webhook rows, oldest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Webhook" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [webhooks]
+      operationId: createWebhook
+      description: >-
+        register a per-agent callback (spec §6.8): HMAC secret generated and shown
+        EXACTLY ONCE (D-ff); the delivery checkpoint anchors at the current audit
+        watermark (D-bb) — a new webhook sees only subsequent events. url must be
+        http(s) (use-case rule), unique (DDL rule), 8..2000 chars (schema rule).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, url]
+              additionalProperties: false
+              properties:
+                agent_id: { type: string, minLength: 1, maxLength: 60 }
+                url: { type: string, minLength: 8, maxLength: 2000 }
+      responses:
+        "201":
+          description: webhook row + the one-time secret
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookWithSecret" }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/webhooks/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    delete:
+      tags: [webhooks]
+      operationId: deleteWebhook
+      description: remove a webhook; absent is 404 not_found. Delivery stops immediately.
+      responses:
+        "204": { description: removed (no body) }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/webhooks/{id}/rotate-secret:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [webhooks]
+      operationId: rotateWebhookSecret
+      description: >-
+        new HMAC secret shown exactly once; the checkpoint RE-ANCHORS to the current
+        watermark and the backoff clears (rotation IS re-registration, D-bb). 404 on ghost.
+      responses:
+        "200":
+          description: webhook row + the new one-time secret
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookWithSecret" }
         default: { $ref: "#/components/responses/Problem" }
   /tasks/{id}/threads:
     parameters: [{ $ref: "#/components/parameters/TaskId" }]
@@ -853,6 +940,18 @@ components:
         after: {}
         reason: { type: ["string", "null"] }
         created_at: { type: string }
+    Event:
+      type: object
+      description: audit spine minus payloads (D-aa) — before/after snapshots are excluded; the machine reason rides
+      properties:
+        cursor: { type: integer, description: audit_log.id — the restart-monotonic cursor }
+        actor_id: { type: ["string", "null"] }
+        token_id: { type: ["string", "null"] }
+        action: { type: string }
+        entity_type: { type: string }
+        entity_id: { type: string }
+        reason: { type: ["string", "null"] }
+        created_at: { type: string }
     Problem:
       type: object
       description: RFC 9457; `already_claimed` additionally carries holder_handle/holder_display_name
@@ -920,11 +1019,12 @@ components:
       type: object
       description: >-
         inbox entry (ports.ts InboxItemRecord); kind vocabulary mirrors domain
-        INBOX_ITEM_KINDS (D-r) — claim_conflict stays deferred (Plan D-s)
+        INBOX_ITEM_KINDS (D-r, extended by D-cc in Plan C: claim_conflict rides the
+        webhook wake path)
       properties:
         id: { type: string }
         actor_id: { type: string }
-        kind: { type: string, enum: [assigned, mentioned, question_assigned] }
+        kind: { type: string, enum: [assigned, mentioned, question_assigned, claim_conflict] }
         task_id: { type: string }
         thread_id: { type: ["string", "null"] }
         read: { type: boolean }
@@ -951,3 +1051,24 @@ components:
         bytes: { type: integer }
         created_by: { type: string }
         created_at: { type: string }
+    Webhook:
+      type: object
+      description: registered callback (ports.ts WebhookRecord, D-bb); secret exists only in create/rotate responses (D-ff)
+      properties:
+        id: { type: string }
+        actor_id: { type: string }
+        url: { type: string }
+        created_by: { type: string }
+        created_at: { type: string }
+        delivered_cursor: { type: integer, description: audit id the loop delivers AFTER (D-bb) }
+    WebhookWithSecret:
+      description: webhook row + the secret, returned exactly once (D-ff, spec §5 raw_token lineage)
+      allOf:
+        - $ref: "#/components/schemas/Webhook"
+        - type: object
+          properties:
+            secret:
+              {
+                type: string,
+                description: base64url 32-byte HMAC key; signs X-Nightshift-Signature (D-bb),
+              }

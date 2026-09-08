@@ -19,7 +19,7 @@ export interface TestApp {
 
 export const makeTestApp = async (overrides: NodeJS.ProcessEnv = {}): Promise<TestApp> => {
   // rate limit OFF by default (D-v: the suite must never trip it; Task 14 overrides to '2');
-  // file store lands in a temp dir, never the repo
+  // webhook loop OFF by default (the suite must never POST); file store lands in a temp dir, never the repo
   const db = makeDb(':memory:')
   await migrateToLatest(db)
   const deps = makeDepsFromDb(
@@ -27,6 +27,7 @@ export const makeTestApp = async (overrides: NodeJS.ProcessEnv = {}): Promise<Te
     loadConfig({
       NS_DB_PATH: ':memory:',
       NS_RATE_LIMIT_PER_MIN: '0',
+      NS_WEBHOOK_INTERVAL_MS: '0',
       NS_DATA_DIR: join(mkdtempSync(join(tmpdir(), 'ns-test-')), 'data'),
       ...overrides,
     })

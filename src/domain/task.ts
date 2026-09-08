@@ -8,7 +8,8 @@ export const TASK_STATUSES = [
 ] as const
 export type TaskStatus = (typeof TASK_STATUSES)[number]
 
-export type ActorKind = 'human' | 'agent'
+export const ACTOR_KINDS = ['human', 'agent'] as const
+export type ActorKind = (typeof ACTOR_KINDS)[number] // identical union to the prior hand-written type
 
 export interface TaskRecord {
   id: string

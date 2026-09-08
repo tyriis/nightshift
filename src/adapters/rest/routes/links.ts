@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
-import type { LinkKind } from '#root/domain/discussion'
-import { LINK_KINDS } from '#root/domain/discussion'
+import { LINK_KINDS, type LinkKind } from '#root/domain/discussion'
 import { actorCtx } from '#root/adapters/rest/auth'
 import { DomainError } from '#root/domain/errors'
 

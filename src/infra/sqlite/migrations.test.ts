@@ -18,6 +18,15 @@ const TABLES = [
   'inbox_items',
   'attachments',
   'links',
+  'webhooks',
+  // FTS5 (D-gg): names PROBE-CONFIRMED against sqlite_master after migrateToLatest.
+  // External-content FTS5 creates NO `task_fts_content` shadow (the content lives in
+  // `tasks`) — the plan's expected list included it; the probe output is the source of truth.
+  'task_fts',
+  'task_fts_config',
+  'task_fts_data',
+  'task_fts_docsize',
+  'task_fts_idx',
 ]
 
 describe('migrations', () => {
@@ -159,12 +168,15 @@ describe('migrations', () => {
       sql`insert into links (id, task_id, kind, url, created_by, created_at)
             values ('lk_3','t_x','pr','https://x/1','a_x','2026-01-01')`.execute(db)
     ).rejects.toThrow(/UNIQUE/i)
-    // inbox: kind vocabulary — claim_conflict deliberately NOT in the vocabulary (D-r)
+    // inbox: kind vocabulary — claim_conflict IN the vocabulary since Plan C (D-cc
+    // extends D-r's set once wake paths exist); the fourth bogus kind stays rejected
     await sql`insert into inbox_items (id, actor_id, kind, task_id, read, created_at)
                 values ('ib_1','a_x','assigned','t_x',0,'2026-01-01')`.execute(db)
+    await sql`insert into inbox_items (id, actor_id, kind, task_id, read, created_at)
+                values ('ib_cc','a_x','claim_conflict','t_x',0,'2026-01-01')`.execute(db)
     await expect(
       sql`insert into inbox_items (id, actor_id, kind, task_id, read, created_at)
-            values ('ib_2','a_x','claim_conflict','t_x',0,'2026-01-01')`.execute(db)
+            values ('ib_2','a_x','bogus_kind','t_x',0,'2026-01-01')`.execute(db)
     ).rejects.toThrow(/CHECK|check/i)
     // attachments: per-task content identity (D-s dedupe anchor)
     await sql`insert into attachments (id, task_id, filename, content_type, sha256, bytes,
@@ -179,6 +191,32 @@ describe('migrations', () => {
         db
       )
     ).rejects.toThrow(/UNIQUE/i)
+    await db.destroy()
+  })
+
+  it('pins webhook DDL: unique url, integer checkpoint fields (D-bb)', async () => {
+    const db = makeDb(':memory:')
+    await migrateToLatest(db)
+    await seedActorAndTask(db) // a_x (human) + t_x
+    await sql`insert into actors (id, kind, handle, display_name, description, created_at)
+                  values ('a_ag2','agent','ag2','Ag2','','2026-01-01')`.execute(db)
+    await sql`insert into webhooks (id, actor_id, url, secret, created_by, created_at,
+                      delivered_cursor, attempts, next_attempt_at)
+                  values ('wh_1','a_ag2','http://x/cb','s3cr3t','a_x','2026-01-01',0,0,0)`.execute(
+      db
+    )
+    await expect(
+      sql`insert into webhooks (id, actor_id, url, secret, created_by, created_at,
+                      delivered_cursor, attempts, next_attempt_at)
+                  values ('wh_2','a_ag2','http://x/cb','other','a_x','2026-01-01',0,0,0)`.execute(
+        db
+      )
+    ).rejects.toThrow(/UNIQUE/i) // one runner, one wake path (D-bb)
+    await expect(
+      sql`insert into webhooks (id, actor_id, url, secret, created_by, created_at,
+                      delivered_cursor, attempts, next_attempt_at)
+                  values ('wh_3','a_missing','http://x/y','s','a_x','2026-01-01',0,0,0)`.execute(db)
+    ).rejects.toThrow(/FOREIGN KEY|foreign key/i)
     await db.destroy()
   })
 

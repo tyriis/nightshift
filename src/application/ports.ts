@@ -46,6 +46,10 @@ export interface AuditRow {
 export interface AuditRepo {
   append(entry: AuditEntryDraft): Promise<void>
   search(q: { entity_type?: string; entity_id?: string; limit: number }): Promise<AuditRow[]>
+  /** Event-feed read (D-aa): rows with id > after, ASCENDING by id — the cursor advances forward. */
+  tail(after: number, limit: number): Promise<AuditRow[]>
+  /** Highest committed audit id (0 on empty) — the watermark a webhook checkpoint anchors to (D-bb). */
+  watermark(): Promise<number>
 }
 
 // ---- tasks
@@ -334,6 +338,68 @@ export interface LinkRepo {
   listForTask(taskId: string): Promise<LinkRecord[]>
 }
 
+// ---- task search (spec §9 FTS5, D-gg) — READ-ONLY root port: no UI (spec §12), no
+// route (a route without contract entry trips the drift test), no tx writes.
+export interface TaskSearchHit {
+  id: string
+  title: string
+  /** title column, matched terms wrapped in [] */
+  snippet: string
+  /** bm25 flipped: higher = better */
+  score: number
+}
+
+export interface TaskSearchRepo {
+  /** FTS5 MATCH syntax; malformed queries ⇒ DomainError('invalid_request'). */
+  search(query: string, limit: number): Promise<TaskSearchHit[]>
+}
+
+// ---- webhooks (spec §6.8/§9; D-bb/D-ff) — admin-registered agent wake callbacks
+
+export interface WebhookRecord {
+  id: string
+  actor_id: string
+  url: string
+  created_by: string
+  created_at: string
+  delivered_cursor: number
+}
+
+export interface NewWebhookDraft {
+  id: string
+  actor_id: string
+  url: string
+  secret: string
+  created_by: string
+  created_at: string
+  delivered_cursor: number
+}
+
+/** The delivery loop's private read shape — the ONLY type that carries the secret (D-ff). */
+export interface DueWebhook {
+  id: string
+  url: string
+  secret: string
+  delivered_cursor: number
+  attempts: number
+}
+
+export interface WebhookRepo {
+  add(draft: NewWebhookDraft): Promise<void>
+  /** Secret never present (D-ff): the column is excluded by the SELECT, not filtered after. */
+  find(id: string): Promise<WebhookRecord | null>
+  list(): Promise<WebhookRecord[]>
+  remove(id: string): Promise<void>
+  setSecret(id: string, secret: string): Promise<void>
+  /** Due = next_attempt_at <= nowMs (T14 wall-clock domain — caller passes Date.now()). */
+  listDue(nowMs: number): Promise<DueWebhook[]>
+  /** Advance the checkpoint AND reset the backoff counter (successful ACK ⇒ attempts 0). */
+  advance(id: string, deliveredCursor: number): Promise<void>
+  scheduleRetry(id: string, attempts: number, nextAttemptAt: number): Promise<void>
+  /** Rotation re-anchor (D-bb): checkpoint to cursor, backoff cleared, un-parked — one write. */
+  reanchor(id: string, deliveredCursor: number): Promise<void>
+}
+
 // ---- file store (spec §6.6, §9; D-s) — infra adapter, NOT a tx repo
 
 export interface FileRef {
@@ -360,6 +426,7 @@ export interface Repos {
   inbox: InboxRepo
   attachments: AttachmentRepo
   links: LinkRepo
+  webhooks: WebhookRepo
 }
 
 export interface UnitOfWork {

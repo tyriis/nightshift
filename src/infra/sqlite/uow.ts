@@ -10,6 +10,7 @@ import { SqliteLabelRepo } from '#root/infra/sqlite/label-repo'
 import { SqliteLinkRepo } from '#root/infra/sqlite/link-repo'
 import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
 import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
+import { SqliteWebhookRepo } from '#root/infra/sqlite/webhook-repo'
 
 export class SqliteUnitOfWork implements UnitOfWork {
   constructor(private readonly db: Kysely<DB>) {}
@@ -25,6 +26,7 @@ export class SqliteUnitOfWork implements UnitOfWork {
       inbox: new SqliteInboxRepo(tx),
       attachments: new SqliteAttachmentRepo(tx),
       links: new SqliteLinkRepo(tx),
+      webhooks: new SqliteWebhookRepo(tx),
     }
   }
 
