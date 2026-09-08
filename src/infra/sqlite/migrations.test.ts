@@ -19,6 +19,14 @@ const TABLES = [
   'attachments',
   'links',
   'webhooks',
+  // FTS5 (D-gg): names PROBE-CONFIRMED against sqlite_master after migrateToLatest.
+  // External-content FTS5 creates NO `task_fts_content` shadow (the content lives in
+  // `tasks`) — the plan's expected list included it; the probe output is the source of truth.
+  'task_fts',
+  'task_fts_config',
+  'task_fts_data',
+  'task_fts_docsize',
+  'task_fts_idx',
 ]
 
 describe('migrations', () => {

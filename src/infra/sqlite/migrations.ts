@@ -227,6 +227,37 @@ const migrations: Record<string, Migration> = {
       )`.execute(db)
     },
   },
+
+  '2026-09-12_fts_search': {
+    up: async (db: Kysely<DB>) => {
+      // D-gg (spec §9 "nearly free"): EXTERNAL-CONTENT FTS5 — text lives in `tasks`,
+      // the index lives here. content_rowid='rowid': tasks.id is TEXT (RandomIdGen),
+      // which cannot alias rowid, but a rowid table KEEPS its implicit rowid — the
+      // triggers mirror (task_ai/ad/au) keep the index honest. NO UI yet (§12):
+      // reads ship as a repo port only.
+      await sql`create virtual table task_fts using fts5(
+        title, description, acceptance_criteria,
+        content='tasks', content_rowid='rowid', tokenize='unicode61'
+      )`.execute(db)
+      await sql`create trigger task_fts_ai after insert on tasks begin
+        insert into task_fts (rowid, title, description, acceptance_criteria)
+          values (new.rowid, new.title, new.description, new.acceptance_criteria);
+      end`.execute(db)
+      await sql`create trigger task_fts_ad after delete on tasks begin
+        insert into task_fts (task_fts, rowid) values ('delete', old.rowid);
+      end`.execute(db)
+      await sql`create trigger task_fts_au after update on tasks begin
+        insert into task_fts (task_fts, rowid, title, description, acceptance_criteria)
+          values ('delete', old.rowid, old.title, old.description, old.acceptance_criteria);
+        insert into task_fts (rowid, title, description, acceptance_criteria)
+          values (new.rowid, new.title, new.description, new.acceptance_criteria);
+      end`.execute(db)
+      // population: external-content FTS5 does NOT back-fill on its own. The canonical
+      // rebuild ships IN the migration: on CI the content table is empty (no-op) and on
+      // a homelab upgrade it indexes every pre-existing task — one statement, both paths.
+      await sql`insert into task_fts(task_fts) values ('rebuild')`.execute(db)
+    },
+  },
 }
 
 class InCodeMigrationProvider implements MigrationProvider {

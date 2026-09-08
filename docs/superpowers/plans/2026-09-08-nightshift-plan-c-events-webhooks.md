@@ -2546,6 +2546,16 @@ Run: `pnpm test && pnpm lint && pnpm typecheck` — green (domain coverage unaff
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -am "feat(infra): FTS5 external-content search over tasks (repo-port only)"
 ```
 
+> **Amendment (Task 13, FTS5 external-content search over tasks (repo-port only)):** probe-driven divergences, all honest:
+>
+> 1. **Probe-confirmed shadow names ≠ expected list.** The Step 3 probe output was `task_fts`, `task_fts_config`, `task_fts_data`, `task_fts_docsize`, `task_fts_idx` — **NO `task_fts_content`**: external-content FTS5 (`content='tasks'`) stores no content and creates no content shadow. `migrations.test.ts` `TABLES` carries the five probe names verbatim; the Step 5 "expected" list above is superseded by the probe exactly as written ("the probe output is the source of truth"). The TABLES pin went GREEN first-run (the honesty step forces migration-before-pin): there is no RED phase to claim and none is claimed.
+> 2. **The Step 6 repo block's message premise was falsified — prove-RED first.** Against the as-written repo (`if (/^fts5:/i.test(msg))`) the plan's OWN Step 1 test went RED: `AssertionError: expected SqliteError: unterminated string … to be an instance of DomainError` — a malformed `"unbalanced` MATCH throws `SqliteError: unterminated string` with NO `fts5:` prefix. Shipped catch widens the narrow whitelist to the two probe-confirmed malformed-query shapes (`/^fts5:/i.test(msg) || /^unterminated string/i.test(msg)`, both pure functions of the user-supplied MATCH string); everything else still re-throws untouched. Header comment records the probe; taxonomy unchanged (no new codes, `errors.ts` untouched).
+> 3. **`'AND OR'` probe outcome: REJECTED** (`fts5: syntax error near "AND"`) ⇒ pinned as the second case per the Step 1 probe note. The shipped test replaces the instruction comment with the pinned case + probe result, adds `type Kysely`/`type DB` imports, and adds a fourth `it`: `everything else RE-THROWS untouched (no blanket catch swallowing real bugs)` (destroyed-driver Error survives unmapped; non-Error `throw 'boom'` via a `{getExecutor: () => ({transformQuery, compileQuery, executeQuery})}` stub reaches the `String(e)` arm and rethrows verbatim) — added to hold the never-lower coverage floor on the catch arms.
+> 4. **Step 3 probe one-liner execution note:** `tsx --eval` buffers compile as CJS regardless of `"type": "module"` (top-level await rejected; `--ts-format=esm` not honored by this tsx), so the probe ran wrapped in `main().catch(...)` — same query, same output.
+> 5. Step 4 (migration) and Step 6 (`ports.ts`) blocks shipped byte-exact; the `search-repo.ts` block ships per item 2's two deltas and nothing else; the Step 5 schema snippet ships as the inline `DB` entry, bytes unchanged, indented into the interface. `deps.ts` gains `searchRoot: SqliteSearchRepo` + `new SqliteSearchRepo(db)` with a read-only/root-connection comment; `uow.ts`/`Repos` untouched — the port is NOT in the tx seam.
+>
+> Block sync = shipped form.
+
 ---
 
 ## Task 14: `claim_conflict` emission in `ClaimTask` (D-cc — second-tx pattern)

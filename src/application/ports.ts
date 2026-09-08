@@ -338,6 +338,22 @@ export interface LinkRepo {
   listForTask(taskId: string): Promise<LinkRecord[]>
 }
 
+// ---- task search (spec §9 FTS5, D-gg) — READ-ONLY root port: no UI (spec §12), no
+// route (a route without contract entry trips the drift test), no tx writes.
+export interface TaskSearchHit {
+  id: string
+  title: string
+  /** title column, matched terms wrapped in [] */
+  snippet: string
+  /** bm25 flipped: higher = better */
+  score: number
+}
+
+export interface TaskSearchRepo {
+  /** FTS5 MATCH syntax; malformed queries ⇒ DomainError('invalid_request'). */
+  search(query: string, limit: number): Promise<TaskSearchHit[]>
+}
+
 // ---- webhooks (spec §6.8/§9; D-bb/D-ff) — admin-registered agent wake callbacks
 
 export interface WebhookRecord {

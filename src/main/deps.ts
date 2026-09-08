@@ -14,6 +14,7 @@ import { SqliteIdempotencyRepo } from '#root/infra/sqlite/idempotency-repo'
 import { SqliteInboxRepo } from '#root/infra/sqlite/inbox-repo'
 import { SqliteLabelRepo } from '#root/infra/sqlite/label-repo'
 import { SqliteLinkRepo } from '#root/infra/sqlite/link-repo'
+import { SqliteSearchRepo } from '#root/infra/sqlite/search-repo'
 import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
 import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
 import { SqliteUnitOfWork } from '#root/infra/sqlite/uow'
@@ -64,6 +65,8 @@ export interface AppDeps {
   attachmentsRoot: SqliteAttachmentRepo
   linksRoot: SqliteLinkRepo
   webhooksRoot: SqliteWebhookRepo
+  // D-gg: read-only FTS5 search — root connection only, NOT in the tx Repos seam
+  searchRoot: SqliteSearchRepo
   files: FileStore
   deliveryLoop: WebhookDeliveryLoop
   useCases: {
@@ -122,6 +125,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     attachmentsRoot: new SqliteAttachmentRepo(db),
     linksRoot: new SqliteLinkRepo(db),
     webhooksRoot: new SqliteWebhookRepo(db),
+    searchRoot: new SqliteSearchRepo(db),
     files, // shared instance: uploads and content serving hit the same store
     // D-bb loop: constructed here, STARTED only by the composition root (index.ts) —
     // makeTestApp never starts it (intervalMs 0 default there) so the suite stays inert.
