@@ -3,18 +3,11 @@ import type { AppDeps } from '#root/main/deps'
 import type { QuestionState, ThreadKind } from '#root/domain/discussion'
 import { QUESTION_STATES, THREAD_KINDS } from '#root/domain/discussion'
 import { actorCtx } from '#root/adapters/rest/auth'
+import { resolveActorHandle } from '#root/adapters/shared/resolve-handle'
 import { DomainError } from '#root/domain/errors'
 
 const kindEnum = { type: 'string', enum: THREAD_KINDS } as const
 const stateEnum = { type: 'string', enum: QUESTION_STATES } as const
-
-// REST speaks handles (public actor vocabulary); use-cases speak ids (ports.ts).
-// The route resolves handle → id; an unknown handle 404s here, in the ROUTE layer.
-async function handleToId(deps: AppDeps, handle: string): Promise<string> {
-  const hit = await deps.actorsRoot.findByHandle(handle)
-  if (!hit) throw new DomainError('not_found', `actor '@${handle}' not found`)
-  return hit.id
-}
 
 export const registerThreadRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   app.get('/tasks/:id/threads', async (request) => {
@@ -50,7 +43,7 @@ export const registerThreadRoutes = (app: FastifyInstance, deps: AppDeps): void 
       const q = request.query as { meta_note?: boolean }
       const body = request.body as { kind: ThreadKind; body: string; assignee_handle?: string }
       const assigneeId = body.assignee_handle
-        ? await handleToId(deps, body.assignee_handle)
+        ? await resolveActorHandle(deps, body.assignee_handle)
         : undefined
       const result = await deps.useCases.createThread.run({
         taskId: id,
@@ -126,7 +119,7 @@ export const registerThreadRoutes = (app: FastifyInstance, deps: AppDeps): void 
       const { tid } = request.params as { id: string; tid: string }
       const body = request.body as { state?: QuestionState; assignee_handle?: string }
       const assigneeId = body.assignee_handle
-        ? await handleToId(deps, body.assignee_handle)
+        ? await resolveActorHandle(deps, body.assignee_handle)
         : undefined
       return deps.useCases.updateQuestion.run({
         threadId: tid,

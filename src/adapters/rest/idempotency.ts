@@ -6,6 +6,9 @@ const MUTATING = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
 
 export const registerIdempotency = (app: FastifyInstance, deps: AppDeps): void => {
   app.addHook('onRequest', async (request, reply) => {
+    // MCP is at-most-once JSON-RPC (D-ii): a hijacked response never fires onSend,
+    // so a reservation opened here could never complete. Not a new hook — a skip.
+    if (request.url.startsWith('/mcp')) return
     // registers AFTER registerAuth: reservation is per-actor and needs the resolved actor
     if (!MUTATING.has(request.method) || !request.actorRef) return
     const key = request.headers['idempotency-key']

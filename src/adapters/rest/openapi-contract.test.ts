@@ -81,11 +81,22 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
     expect(spec.openapi).toBe('3.1.0')
 
     const t = await makeTestApp()
+    // ready() before printRoutes: /mcp registers inside an encapsulated scope
+    // (mount.ts) and plugin routes only enter the router tree at boot
+    await t.app.ready()
     const served = routeKeys(t.app)
     const documented = specKeys(spec)
     await t.close()
 
-    expect(documented).toEqual(served)
+    // /mcp is the JSON-RPC transport mount — the yaml cannot describe MCP (D-ll).
+    // The exemption is an EXACT set: a fourth /mcp verb, or any non-/mcp route
+    // hidden here, fails the pin. The MCP surface is pinned by the tools-list
+    // snapshot + the §11.4 parity harness instead.
+    const MCP_ROUTES = ['DELETE /mcp', 'GET /mcp', 'POST /mcp']
+    const mcpPresent = served.filter((key) => key.endsWith(' /mcp')).sort()
+    expect(mcpPresent).toEqual(MCP_ROUTES)
+    expect(documented.some((key) => key.includes('/mcp'))).toBe(false)
+    expect(served.filter((key) => !mcpPresent.includes(key))).toEqual(documented)
   })
 
   it('pins schema enums to the domain single sources (no stale-enum drift)', async () => {
