@@ -18,7 +18,9 @@ interface FeedEvent {
 // minus payloads (D-aa, spec §6.8 "everything audit-worthy minus payloads"): the
 // before/after snapshots ARE the payloads; actor/token attribution, the machine
 // action+entity, the machine reason and the timestamp all ride. cursor = audit_log.id.
-const toEvent = (r: AuditRow): FeedEvent => ({
+// EXPORTED single source (D-mm): the MCP get_events tool maps through THIS function,
+// never a forked mapper (Task 7 Step 3 — zero behavior, the route keeps using it).
+export const toEvent = (r: AuditRow): FeedEvent => ({
   cursor: r.id,
   actor_id: r.actor_id,
   token_id: r.token_id,

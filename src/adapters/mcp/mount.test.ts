@@ -98,7 +98,9 @@ describe('mcp mount (D-hh, D-ii)', () => {
     }
   })
 
-  it('tools/list is exactly the current task-6-grown surface snapshot', async () => {
+  it('tools/list is exactly the current task-7-grown surface snapshot', async () => {
+    // (snapshot + name grown by Task 7 — +12 REFERENCE_TOOLS; Task 6 shipped 19 names,
+    // Task 5 shipped 13; see Task 7 Amendment)
     const t = await makeTestApp()
     try {
       const baseUrl = await t.app.listen({ port: 0, host: '127.0.0.1' })
@@ -106,24 +108,36 @@ describe('mcp mount (D-hh, D-ii)', () => {
       const listed = await mcp.list()
       expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
         'add_block',
+        'add_link',
         'add_message',
         'answer_question',
+        'attach_label',
         'claim_task',
+        'create_label',
         'create_task',
         'create_thread',
+        'detach_label',
+        'get_attachment_content',
+        'get_events',
         'get_inbox',
         'get_task',
         'get_task_context',
         'heartbeat_task',
+        'list_attachments',
+        'list_labels',
+        'list_links',
         'list_ready_tasks',
         'list_tasks',
         'list_threads',
         'mark_inbox_read',
         'release_task',
         'remove_block',
+        'remove_link',
+        'search_audit',
         'update_question',
         'update_task',
         'update_task_status',
+        'upload_attachment',
       ])
       await mcp.close()
     } finally {

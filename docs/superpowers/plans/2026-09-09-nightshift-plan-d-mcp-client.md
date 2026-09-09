@@ -689,9 +689,9 @@ describe('mcp mount (D-hh, D-ii)', () => {
     }
   })
 
-  it('tools/list is exactly the current task-6-grown surface snapshot', async () => {
-    // (snapshot + name grown by Task 6 — the 12-tool TASK_TOOLS + the 7-tool DISCUSSION_TOOLS;
-    // Task 5 shipped this with 13 names; see Task 6 Amendment (9))
+  it('tools/list is exactly the current task-7-grown surface snapshot', async () => {
+    // (snapshot + name grown by Task 7 — +12 REFERENCE_TOOLS; Task 6 shipped 19 names,
+    // Task 5 shipped 13; see Task 7 Amendment)
     const t = await makeTestApp()
     try {
       const baseUrl = await t.app.listen({ port: 0, host: '127.0.0.1' })
@@ -699,24 +699,36 @@ describe('mcp mount (D-hh, D-ii)', () => {
       const listed = await mcp.list()
       expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
         'add_block',
+        'add_link',
         'add_message',
         'answer_question',
+        'attach_label',
         'claim_task',
+        'create_label',
         'create_task',
         'create_thread',
+        'detach_label',
+        'get_attachment_content',
+        'get_events',
         'get_inbox',
         'get_task',
         'get_task_context',
         'heartbeat_task',
+        'list_attachments',
+        'list_labels',
+        'list_links',
         'list_ready_tasks',
         'list_tasks',
         'list_threads',
         'mark_inbox_read',
         'release_task',
         'remove_block',
+        'remove_link',
+        'search_audit',
         'update_question',
         'update_task',
         'update_task_status',
+        'upload_attachment',
       ])
       await mcp.close()
     } finally {
@@ -1636,11 +1648,16 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): discussion + inbox 
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
-// src/adapters/mcp/tools/references.test.ts
+// src/adapters/mcp/tools/references.test.ts — sync = shipped form
+// (#root imports; 413 pinned at the config floor; list/ghost arms + lost-blob case for the
+// coverage duty — see Task 7 Amendment)
 import { describe, expect, it } from 'vitest'
-import { DISCUSSION_TOOLS } from './discussion'
-import { REFERENCE_TOOLS } from './references'
-import { TASK_TOOLS } from './tasks'
+import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { DISCUSSION_TOOLS } from '#root/adapters/mcp/tools/discussion'
+import { REFERENCE_TOOLS } from '#root/adapters/mcp/tools/references'
+import { TASK_TOOLS } from '#root/adapters/mcp/tools/tasks'
+import { DiskFileStore } from '#root/infra/files/disk-file-store'
 import { actorContextFor, openInMemoryPair } from '#root/testing/mcp-client'
 import { makeTestApp } from '#root/testing/test-app'
 
@@ -1680,9 +1697,11 @@ describe('reference tools (D-mm)', () => {
         await mcp.call('add_link', { task_id: task.id, kind: 'pr', url: 'https://example.test/1' })
       )
       expect(again.id).toBe(first.id) // D-t insert-or-get
+      expect(result<unknown[]>(await mcp.call('list_links', { task_id: task.id }))).toHaveLength(1)
       expect(
         (await mcp.call('remove_link', { task_id: task.id, link_id: first.id })).structuredContent
-      ).toEqual({ result: null })
+      ).toEqual({ result: null }) // 204 analog
+      expect(result<unknown[]>(await mcp.call('list_links', { task_id: task.id }))).toHaveLength(0)
     }))
 
   it('labels: create/list/attach/detach', () =>
@@ -1738,6 +1757,38 @@ describe('reference tools (D-mm)', () => {
       expect(down.content_type).toBe('application/octet-stream')
       expect(down.content_disposition).toBe('attachment; filename="s_1.svg"') // shared safeFilename (Task 2)
       expect(down.x_content_type_options).toBe('nosniff')
+      const listed = result<{ id: string; sha256: string }[]>(
+        await mcp.call('list_attachments', { task_id: task.id })
+      )
+      // membership + D-s exposure, not strict order: created_at can tie in-ms and the
+      // repo's tiebreak is the random id (attachment-repo.ts:42-43) — order is the repo's
+      // own contract, not this tool's; REST never pins a multi-row list order either
+      expect(listed.map((a) => a.id).sort()).toEqual([png.id, svg.id].sort())
+      expect(listed.every((a) => /^[0-9a-f]{64}$/.test(a.sha256))).toBe(true) // sha256 exposed (D-s)
+      expect(
+        (await mcp.call('list_attachments', { task_id: 'ts_ghost' })).structuredContent
+      ).toEqual({ code: 'not_found', status: 404 }) // ghost-404, never an empty list
+    }))
+
+  it('attachment content: ghost-404, and a lost blob 404s the second verbatim arm', () =>
+    withMcp(async (mcp, t) => {
+      expect(
+        (await mcp.call('get_attachment_content', { attachment_id: 'at_ghost' })).structuredContent
+      ).toEqual({ code: 'not_found', status: 404 })
+      const task = result<{ id: string }>(await mcp.call('create_task', { title: 'orphan' }))
+      const doomed = result<{ id: string; sha256: string }>(
+        await mcp.call('upload_attachment', {
+          task_id: task.id,
+          filename: 'o.png',
+          content_type: 'image/png',
+          content_base64: Buffer.from('doomed').toString('base64'),
+        })
+      )
+      const store = t.deps.files as DiskFileStore
+      await rm(join(store.dir, doomed.sha256.slice(0, 2), doomed.sha256)) // simulate a corrupted store
+      expect(
+        (await mcp.call('get_attachment_content', { attachment_id: doomed.id })).structuredContent
+      ).toEqual({ code: 'not_found', status: 404 }) // 'stored blob is missing' — code-side, prose never rides (D-jj)
     }))
 
   it('oversize upload → payload_too_large from the shared adapter vocabulary (D-jj)', () =>
@@ -1748,11 +1799,11 @@ describe('reference tools (D-mm)', () => {
           task_id: task.id,
           filename: 'b.bin',
           content_type: 'application/octet-stream',
-          content_base64: Buffer.from('way too many bytes').toString('base64'),
+          content_base64: Buffer.alloc(2048, 7).toString('base64'),
         })
         expect(big.structuredContent).toEqual({ code: 'payload_too_large', status: 413 })
       },
-      { NS_MAX_UPLOAD_BYTES: '4' }
+      { NS_MAX_UPLOAD_BYTES: '1024' } // the config floor (min 1024); mirrors the REST 413 test's cap
     ))
 
   it('events carry cursor (AuditRow minus payloads); audit keeps before/after (D-aa)', () =>
@@ -1789,11 +1840,14 @@ describe('reference tools (D-mm)', () => {
 - [ ] **Step 4: Implement `references.ts`**
 
 ```ts
-// src/adapters/mcp/tools/references.ts
+// src/adapters/mcp/tools/references.ts — sync = shipped form
+// (LINK_KINDS domain const, byte-exact route bounds incl. ceilings, decoded-bytes 413 check;
+// `task_created` pin verified verbatim — see Task 7 Amendment)
 import { z } from 'zod'
 import { McpEnvelopeError, defineTool } from '#root/adapters/mcp/bridge'
-import { UNSAFE_INLINE, safeFilename } from '#root/adapters/shared/attachment-safety'
 import { toEvent } from '#root/adapters/rest/routes/events'
+import { UNSAFE_INLINE, safeFilename } from '#root/adapters/shared/attachment-safety'
+import { LINK_KINDS } from '#root/domain/discussion'
 import { DomainError } from '#root/domain/errors'
 
 export const listLinks = defineTool({
@@ -1802,18 +1856,24 @@ export const listLinks = defineTool({
   input: z.object({ task_id: z.string() }),
   run: async (deps, _ctx, { task_id }) => {
     const task = await deps.tasksRoot.findById(task_id)
-    if (!task) throw new DomainError('not_found', `task ${task_id} not found`)
+    if (!task) throw new DomainError('not_found', `task ${task_id} not found`) // existence first — ghost-404 verbatim (routes/links.ts:14)
     return deps.linksRoot.listForTask(task_id)
   },
 })
+
+// Transcription duty (D-mm): input bounds mirror routes/links.ts + labels.ts +
+// attachments.ts fastify schemas byte-exact — url min8/max2000 (URL validity is the
+// SHARED use-case's assertHttpUrl, exactly like REST — a zod .url() here would move
+// that rejection to the SDK layer and fork the error path), label name min1/max60,
+// filename min1/max240, content_type min1/max120; zod STRIPS unknown keys (status quo).
 
 export const addLink = defineTool({
   name: 'add_link',
   description: 'Attach a URL (insert-or-get, always success, D-t; mirrors POST /tasks/{id}/links).',
   input: z.object({
     task_id: z.string(),
-    kind: z.enum(['pr', 'commit', 'doc', 'other']),
-    url: z.string().url(),
+    kind: z.enum(LINK_KINDS), // the route's own enum source — one domain set, no literal fork
+    url: z.string().min(8).max(2000),
   }),
   run: async (deps, ctx, { task_id, kind, url }) =>
     deps.useCases.addLink.run({ taskId: task_id, kind, url, ...ctx }),
@@ -1838,7 +1898,7 @@ export const listLabels = defineTool({
 export const createLabel = defineTool({
   name: 'create_label',
   description: 'Create a label (mirrors POST /labels).',
-  input: z.object({ name: z.string(), color: z.string().optional() }),
+  input: z.object({ name: z.string().min(1).max(60), color: z.string().optional() }),
   run: async (deps, ctx, body) => deps.useCases.createLabel.run({ ...body, ...ctx }),
 })
 
@@ -1867,7 +1927,7 @@ export const listAttachments = defineTool({
   input: z.object({ task_id: z.string() }),
   run: async (deps, _ctx, { task_id }) => {
     const task = await deps.tasksRoot.findById(task_id)
-    if (!task) throw new DomainError('not_found', `task ${task_id} not found`)
+    if (!task) throw new DomainError('not_found', `task ${task_id} not found`) // ghost-404 verbatim (routes/attachments.ts:60)
     return deps.attachmentsRoot.listForTask(task_id)
   },
 })
@@ -1878,14 +1938,16 @@ export const uploadAttachment = defineTool({
     'Upload a file as base64 (mirrors POST /tasks/{id}/attachments; MCP has no octet-stream body, D-mm).',
   input: z.object({
     task_id: z.string(),
-    filename: z.string().min(1),
-    content_type: z.string().min(1),
+    filename: z.string().min(1).max(240),
+    content_type: z.string().min(1).max(120),
     content_base64: z.base64(),
   }),
   run: async (deps, ctx, { task_id, filename, content_type, content_base64 }) => {
     const content = Buffer.from(content_base64, 'base64')
     // REST enforces the cap at the route; MCP self-checks with the SAME config value
     // and the SAME adapter code name (D-mm/D-jj) — 413 never comes from zod.
+    // REST's bodyLimit compares the raw bytes; base64 inflates on the wire, so the
+    // comparison is on the DECODED bytes — the same artifact REST caps.
     if (content.byteLength > deps.config.maxUploadBytes) {
       throw new McpEnvelopeError({ code: 'payload_too_large', status: 413 })
     }
@@ -1928,7 +1990,7 @@ export const getEvents = defineTool({
     limit: z.number().int().min(1).max(500).default(100),
   }),
   run: async (deps, _ctx, { cursor, limit }) =>
-    (await deps.auditRoot.tail(cursor, limit)).map(toEvent),
+    (await deps.auditRoot.tail(cursor, limit)).map(toEvent), // the SHARED REST mapper — id→cursor + payload-strip, one source
 })
 
 export const searchAudit = defineTool({
@@ -1939,7 +2001,7 @@ export const searchAudit = defineTool({
     entity_id: z.string().optional(),
     limit: z.number().int().min(1).max(500).default(50),
   }),
-  run: async (deps, _ctx, q) => deps.auditRoot.search(q),
+  run: async (deps, _ctx, q) => deps.auditRoot.search(q), // payloads INCLUDED (D-aa); the auth gate is the hook chain's job
 })
 
 export const REFERENCE_TOOLS = [
@@ -1960,13 +2022,17 @@ export const REFERENCE_TOOLS = [
 
 (`listAttachments` mirrors the ghost-404 idiom verbatim from `routes/attachments.ts:61-62` — existence first, the SAME message; the attachments suite is the behavior pin, no new RED claimed.)
 
+(Step 3 shipped as written — `const toEvent` → `export const toEvent`, zero behavior — plus a two-line explanatory comment above the arrow naming the D-mm single-source rule; comment-only, `FeedEvent` stays module-local, `pnpm typecheck` and the declaration-emit build both clean. See Task 7 Amendment (6).)
+
 `tools/index.ts` grows to:
 
 ```ts
-import { COMPOSITE_TOOLS } from './composites' // added in Task 8
-import { DISCUSSION_TOOLS } from './discussion'
-import { REFERENCE_TOOLS } from './references'
-import { TASK_TOOLS } from './tasks'
+// sync = shipped form — COMPOSITE_TOOLS import lands in Task 8 (the module does not
+// exist yet); #root imports per the TS2835 convention
+import type { McpTool } from '#root/adapters/mcp/bridge'
+import { DISCUSSION_TOOLS } from '#root/adapters/mcp/tools/discussion'
+import { REFERENCE_TOOLS } from '#root/adapters/mcp/tools/references'
+import { TASK_TOOLS } from '#root/adapters/mcp/tools/tasks'
 
 export const mcpTools: McpTool[] = [...TASK_TOOLS, ...DISCUSSION_TOOLS, ...REFERENCE_TOOLS]
 ```
@@ -1974,9 +2040,11 @@ export const mcpTools: McpTool[] = [...TASK_TOOLS, ...DISCUSSION_TOOLS, ...REFER
 - [ ] **Step 5: Green + gates**, then commit:
 
 ```bash
-git add src/adapters/mcp src/adapters/rest/routes/events.ts
+git add src/adapters/mcp/tools/references.ts src/adapters/mcp/tools/references.test.ts src/adapters/mcp/tools/index.ts src/adapters/mcp/mount.test.ts src/adapters/rest/routes/events.ts docs/superpowers/plans/2026-09-09-nightshift-plan-d-mcp-client.md
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): reference, attachment, event + audit tools (D-mm)"
 ```
+
+> **Amendment (Task 7, byte-sync — shipped divergences, blocks above re-labeled sync = shipped form):** (1) `references.test.ts` imports ship as `#root/...` — the planned `'./discussion'`/`'./tasks'` are TS2835 under `moduleResolution: nodenext` (Task 2–6 precedent); neither shipped file carries the plan's `// src/...` first line (plan-block labels stay plan-side). (2) Step 2 RED, honestly measured, two-stage: first run = `Cannot find module '#root/adapters/mcp/tools/references'` (the module itself is new — file-level RED), then re-run against an empty-registry stub: **6 failed / 0 passed**, every case dying at its first new-tool call with `ProtocolError: Tool list_links|create_label|upload_attachment|get_attachment_content|get_events not found` — the SDK v2 **rejection** shape pinned by Task 3's `bridge.test.ts` (Task 5/6 Amendment precedent), not an isError. (3) **413 pin moves from `'4'` to `NS_MAX_UPLOAD_BYTES: '1024'` + a 2048-byte body:** `config.ts:8` floors the env at `.min(1024)` — `'4'` crashes `loadConfig` (`/invalid env/`) inside `makeTestApp` before any tool call, so the block's pin is unproducible as written. `'1024'`/`Buffer.alloc(2048, 7)` is the smallest legal pin and mirrors the REST 413 test's own numbers (`routes/attachments.test.ts:135-141`: cap 1024, body 2048). **Honest declaration of the REST-divergent edge:** REST's 413 fires in the fastify content-type parser on the raw octet-stream body (`contentLength > limit`) before the handler runs; MCP self-checks inside the tool on the DECODED `content_base64` bytes (`content.byteLength > deps.config.maxUploadBytes`, byte-verbatim to the block) — same config value, same `>` comparison, same artifact (decoded bytes ARE what REST caps; base64 inflates only the JSON-RPC envelope ~4/3×, so decoded-vs-cap is the parity-preserving comparison). 413 never comes from zod (doctrine kept; `z.base64()` guards only the encoding). The `'8'` variant proposed in the review handoff is ALSO below the config floor — rejected for the same reason. (4) Transcription duty (Ruling 6) executed against `routes/links.ts`/`labels.ts`/`attachments.ts` at HEAD: `url` ships `z.string().min(8).max(2000)` (`links.ts:27`) — the block's `z.string().url()` FORKED the error path: REST accepts any 8..2000-char string at the route and rejects non-URLs via the SHARED use-case's `assertHttpUrl` (`manage-links.ts:5-15` ⇒ FLAT `invalid_request` envelope), where zod `.url()` would move that rejection to the SDK input-validation class (D-jj 400-analog) and break the byte-compare on Task 10's error row (REST side flat envelope ⇄ MCP side rejection); bad URLs still reject, same code, same message, same shared code path. `kind` ships `z.enum(LINK_KINDS)` — the route's own enum source, one domain set (Ruling 5; members identical to the block's literals). `create_label` `name` gains `.min(1).max(60)` (`labels.ts:20`), upload `filename` gains `.max(240)` and `content_type` `.max(120)` (`attachments.ts:19`/`:23`) — the Task 5/6 "block carried the floor, ship the ceiling too" precedent. `content_type` stays REQUIRED in the MCP shape as the block wrote it (REST's ajv `default: 'application/octet-stream'` belongs to the octet-stream query contract; the base64 form declares content-type explicitly; no tool-side default added, Ruling 4). (5) **Coverage-duty additions** (never-lower bar; prove, don't document — Task 6 Amendment (4) precedent): test 1 lists links around the remove (`toHaveLength(1)`/`(0)` — `list_links`' ok arm beyond its ghost arm + the removal's effect); test 3 lists attachments (membership + sha256 exposed per D-s — NOT a pinned order: `attachment-repo.ts:42-43` tiebreaks equal-ms `created_at` by the random id, so a strict `[png.id, svg.id]` assert would flake; REST pins no multi-row order either) and ghost-404s `list_attachments` (the block's note pointed the idiom at `attachments.ts:61-62`; at HEAD it is `:59-60` — message byte-verbatim); a new test 4 covers BOTH `get_attachment_content` 404 arms: ghost id and the lost-blob arm via `rm(join(store.dir, sha.slice(0, 2), sha))`, mirroring the REST corrupted-store test (`attachments.test.ts:186-198`). **Honest about the second 404:** the `'stored blob is missing'` arm is reachable and executed, and its string is byte-verbatim code-side to the REST twin — but the MCP envelope carries `{code, status}` only (D-jj mirrors no prose), so the test asserts the envelope, not the message; nothing is faked and the message is not duplicated into a test string. Result: `references.ts` 100×4 (Lines 37/37, Branch 14/14, Funcs 12/12). (6) **FeedEvent mapper single-sourced:** Step 3 shipped `export const toEvent` with no body change, plus a two-line explanatory comment above the arrow naming the D-mm rule (comment-only; `FeedEvent` stays module-local — `pnpm typecheck` AND the declaration-emit `pnpm build` both clean); `get_events` maps through the REST route's OWN `toEvent` (the `id`→`cursor` rename + payload-strip have exactly ONE home; no forked copy). No RED claimed for Step 3, per the step itself — `events.test.ts` passed untouched as the behavior pin. (7) **Audit-action pin discharged with zero correction:** `task_created` IS the shipped action (`create-task.ts:59`, `entity_type: 'task'` at `:60`) — the block's guess confirmed, nothing reworded. Bounds byte-verbatim: `search_audit` min1/max500/default50 (`audit.ts:15`), payloads INCLUDED (D-aa), `get_events` cursor 0../limit 1..500 default 0/100 (`events.ts:43-44`); `_ctx` kept on both read tools — the auth gate is the hook chain's job (D-ii). (8) **Cross-task touches:** the `mount.test.ts` exact-set canary grew 19→31 names, shipped renamed `tools/list is exactly the current task-7-grown surface snapshot` (Task 5/6 precedent; the 35-pin arrives in Task 10, exact-set semantics preserved), and the Task 4 section's block was re-labeled to match, pointer comment inline. `tools/index.ts` DEFERS the block's `COMPOSITE_TOOLS` import to Task 8 — as written it imports a module that does not exist until Task 8 (typecheck failure; and an unused import would lint-fail); the shipped surface grows by the `REFERENCE_TOOLS` spread only (prettier keeps the one-liner at printWidth 100). The Step 5 `git add` line above now carries the real explicit file set (+ this doc). **Gates:** `pnpm test` **440→446 passed / 68→69 files** (the +6 are this file's cases; the one pre-existing edit is the mount snapshot pin); `pnpm lint` 0 issues; `pnpm typecheck` clean; `pnpm build` additionally clean (new export's declaration emit); coverage re-measured A/B (stashed baseline vs shipped): global axes moved UP on all four axes — Stmts 99.18→99.2 / Branch 96.83→96.9 / Funcs 99.72→99.73 / Lines 99.5→99.52 — and the uncovered SET is identical pre/post (11/18/1/6 uncovered stmts/branch/funcs/lines both sides; `tasks.ts:115` and the Plan-C-documented gaps pre-date this task), no new uncovered line anywhere; final-gate recording stays Task 11's.
 
 ## Task 8: Spec §7.1 composites (D-nn)
 
