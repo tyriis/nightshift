@@ -153,4 +153,35 @@ describe('Idempotency-Key middleware (spec §7.3)', () => {
     expect(outcome).toEqual({ state: 'reserved' }) // free again
     await t.close()
   })
+
+  it('never reserves for /mcp — replayed keys there never 409 (D-ii)', async () => {
+    const t = await makeTestApp()
+    try {
+      for (const _ of [1, 2]) {
+        const r = await t.app.inject({
+          method: 'POST',
+          url: '/mcp',
+          headers: {
+            authorization: `Bearer ${t.adminToken}`,
+            'idempotency-key': 'k-mcp',
+            'content-type': 'application/json',
+            // same accept pair as the mount.test malformed case: without it the
+            // 2026-07-28 leg fails at accept-negotiation (406) BEFORE JSON parsing
+            accept: 'application/json, text/event-stream',
+          },
+          payload: 'not json',
+        })
+        expect(r.statusCode).toBe(400) // JSON-RPC parse error, NOT idempotency_in_flight
+      }
+      const after = await t.app.inject({
+        method: 'POST',
+        url: '/tasks',
+        headers: { authorization: `Bearer ${t.adminToken}`, 'idempotency-key': 'k-mcp' },
+        payload: { title: 'key was free' },
+      })
+      expect(after.statusCode).toBe(201) // the key was never reserved by the /mcp calls
+    } finally {
+      await t.close()
+    }
+  })
 })

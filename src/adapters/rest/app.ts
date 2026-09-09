@@ -17,6 +17,7 @@ import { registerTaskRoutes } from '#root/adapters/rest/routes/tasks'
 import { registerThreadRoutes } from '#root/adapters/rest/routes/threads'
 import { registerAttachmentRoutes } from '#root/adapters/rest/routes/attachments'
 import { registerLinkRoutes } from '#root/adapters/rest/routes/links'
+import { mountMcp } from '#root/adapters/mcp/mount'
 
 export interface BuildAppOptions {
   logger?: boolean
@@ -62,6 +63,8 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerLabelRoutes(server, deps)
   registerAdminRoutes(server, deps)
   registerWebhookRoutes(server, deps) // admin surface groups together (plan Task 9)
+
+  mountMcp(server, deps) // adapters/mcp — the /mcp surface (D-hh); keeps hook order intact
 
   return server
 }

@@ -589,7 +589,7 @@ Mounts behind the existing hooks (auth/idempotency/rate-limit all inherit into t
 - [ ] **Step 1: Failing mount test**
 
 ```ts
-// src/adapters/mcp/mount.test.ts
+// src/adapters/mcp/mount.test.ts — sync = shipped form (seeder agent + length pin; see Amendment)
 import { describe, expect, it } from 'vitest'
 import { makeTestApp } from '#root/testing/test-app'
 import { openHttpMcp } from '#root/testing/mcp-client'
@@ -602,10 +602,26 @@ const seedQuestion = async (t: Awaited<ReturnType<typeof makeTestApp>>, assignee
     payload: { title: 'seed' },
   })
   expect(task.statusCode).toBe(201)
+  // D-r: question assignment notifies the assignee but NEVER the creator, so the
+  // seeder is a separate agent — a question nils asks nils books no inbox row.
+  const seeder = await t.app.inject({
+    method: 'POST',
+    url: '/admin/actors',
+    headers: { authorization: `Bearer ${t.adminToken}` },
+    payload: { kind: 'agent', handle: 'a_seed', display_name: 'Seed' },
+  })
+  expect(seeder.statusCode).toBe(201)
+  const seederTok = await t.app.inject({
+    method: 'POST',
+    url: `/admin/actors/${seeder.json().id}/tokens`,
+    headers: { authorization: `Bearer ${t.adminToken}` },
+    payload: { label: 'seed' },
+  })
+  expect(seederTok.statusCode).toBe(201)
   const thread = await t.app.inject({
     method: 'POST',
     url: `/tasks/${task.json().id}/threads`,
-    headers: { authorization: `Bearer ${t.adminToken}` },
+    headers: { authorization: `Bearer ${seederTok.json().raw_token}` },
     payload: { kind: 'question', body: 'seeded?', assignee_handle: assigneeHandle },
   })
   expect(thread.statusCode).toBe(201)
@@ -633,7 +649,7 @@ describe('mcp mount (D-hh, D-ii)', () => {
     const t = await makeTestApp()
     try {
       const baseUrl = await t.app.listen({ port: 0, host: '127.0.0.1' })
-      await seedQuestion(t, 'a_nils') // inbox row for the seeded human actor (D-r)
+      await seedQuestion(t, 'nils') // inbox row for the seeded human actor (D-r)
       const modern = await openHttpMcp(baseUrl, t.adminToken, '2026-07-28')
       const legacy = await openHttpMcp(baseUrl, t.adminToken)
       const rest = await t.app.inject({
@@ -642,6 +658,7 @@ describe('mcp mount (D-hh, D-ii)', () => {
         headers: { authorization: `Bearer ${t.adminToken}` },
       })
       expect(rest.statusCode).toBe(200)
+      expect(rest.json()).toHaveLength(1) // the seed is non-vacuous (D-r notify landed)
       for (const mcp of [modern, legacy]) {
         const r = await mcp.call('get_inbox')
         expect(r.isError).toBeUndefined()
@@ -725,7 +742,7 @@ The `list` line of `openHttpMcp` ships with the Task-3 harness; no RED is claime
 - [ ] **Step 3: Implement `http.ts`** (probe-verbatim; cast comments kept)
 
 ```ts
-// src/adapters/mcp/http.ts — Node http ⇄ Web Request/Response, probed end-to-end (D-hh)
+// src/adapters/mcp/http.ts — Node http ⇄ Web Request/Response, probed end-to-end (D-hh) — sync = shipped form
 import { Readable } from 'node:stream'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import type { FastifyReply, FastifyRequest } from 'fastify'
@@ -792,7 +809,7 @@ export const writeWebResponseToFastify = async (
 - [ ] **Step 4: Implement `mount.ts`**
 
 ```ts
-// src/adapters/mcp/mount.ts
+// src/adapters/mcp/mount.ts — sync = shipped form (sync plugin; see Amendment)
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { ActorContext } from '#root/application/ports'
@@ -816,7 +833,9 @@ export const mountMcp = (app: FastifyInstance, deps: AppDeps): void => {
   // does NOT override it). Hooks inherit downward, so auth → idempotency →
   // rate-limit guard /mcp in the same order as REST (D-ii). GET/DELETE exist so
   // the 2025-era session ops reach the handler's 405, not fastify's 404.
-  void app.register(async (scope) => {
+  // plan block wrote the plugin async; lint (require-await) rejects an await-less
+  // async — fastify accepts a plain sync plugin just the same (app.ts precedent)
+  void app.register((scope) => {
     scope.removeAllContentTypeParsers()
     scope.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, payload, done) =>
       done(null, payload as Uint8Array)
@@ -852,11 +871,11 @@ export const mountMcp = (app: FastifyInstance, deps: AppDeps): void => {
 `src/adapters/rest/app.ts` — after the last route registration line inside `buildApp`:
 
 ```ts
-mountMcp(app, deps) // adapters/mcp — the /mcp surface (D-hh); keeps hook order intact
+mountMcp(server, deps) // adapters/mcp — the /mcp surface (D-hh); keeps hook order intact
 ```
 
 ```ts
-// src/adapters/mcp/tools/tasks.ts — Task 4 seeds; Task 5 completes the family
+// src/adapters/mcp/tools/tasks.ts — Task 4 seeds; Task 5 completes the family — sync = shipped form
 import { z } from 'zod'
 import { defineTool } from '#root/adapters/mcp/bridge'
 import { toTaskDto } from '#root/adapters/rest/dto'
@@ -886,7 +905,7 @@ export const TASK_TOOLS = [getTask, listTasks]
 ```
 
 ```ts
-// src/adapters/mcp/tools/discussion.ts — Task 4 seeds get_inbox; Task 6 completes
+// src/adapters/mcp/tools/discussion.ts — Task 4 seeds get_inbox; Task 6 completes — sync = shipped form
 import { z } from 'zod'
 import { defineTool } from '#root/adapters/mcp/bridge'
 
@@ -909,10 +928,10 @@ export const DISCUSSION_TOOLS = [getInbox]
 ```
 
 ```ts
-// src/adapters/mcp/tools/index.ts — the frozen surface, grown Tasks 4–8
+// src/adapters/mcp/tools/index.ts — the frozen surface, grown Tasks 4–8 — sync = shipped form (#root imports, see Amendment)
 import type { McpTool } from '#root/adapters/mcp/bridge'
-import { DISCUSSION_TOOLS } from './discussion'
-import { TASK_TOOLS } from './tasks'
+import { DISCUSSION_TOOLS } from '#root/adapters/mcp/tools/discussion'
+import { TASK_TOOLS } from '#root/adapters/mcp/tools/tasks'
 
 export const mcpTools: McpTool[] = [...TASK_TOOLS, ...DISCUSSION_TOOLS]
 ```
@@ -937,7 +956,14 @@ it('never reserves for /mcp — replayed keys there never 409 (D-ii)', async () 
       const r = await t.app.inject({
         method: 'POST',
         url: '/mcp',
-        headers: { authorization: `Bearer ${t.adminToken}`, 'idempotency-key': 'k-mcp' },
+        headers: {
+          authorization: `Bearer ${t.adminToken}`,
+          'idempotency-key': 'k-mcp',
+          'content-type': 'application/json',
+          // same accept pair as the mount.test malformed case: without it the
+          // 2026-07-28 leg fails at accept-negotiation (406) BEFORE JSON parsing
+          accept: 'application/json, text/event-stream',
+        },
         payload: 'not json',
       })
       expect(r.statusCode).toBe(400) // JSON-RPC parse error, NOT idempotency_in_flight
@@ -967,11 +993,13 @@ In `src/adapters/rest/openapi-contract.test.ts`, replace the `routeKeys ⇄ spec
 // hidden here, fails the pin. The MCP surface is pinned by the tools-list
 // snapshot + the §11.4 parity harness instead.
 const MCP_ROUTES = ['DELETE /mcp', 'GET /mcp', 'POST /mcp']
-const mcpPresent = routeKeys.filter((key) => key.endsWith(' /mcp')).sort()
+const mcpPresent = served.filter((key) => key.endsWith(' /mcp')).sort()
 expect(mcpPresent).toEqual(MCP_ROUTES)
-expect(specKeys.some((key) => key.includes('/mcp'))).toBe(false)
-expect(routeKeys.filter((key) => !mcpPresent.includes(key))).toEqual(specKeys)
+expect(documented.some((key) => key.includes('/mcp'))).toBe(false)
+expect(served.filter((key) => !mcpPresent.includes(key))).toEqual(documented)
 ```
+
+Shipped with the file's existing local names (`served`/`documented` — the block's `routeKeys`/`specKeys` are the file's helper-function names) and a `await t.app.ready()` before `routeKeys(t.app)` — see Amendment.
 
 - [ ] **Step 8: Green + full gates** — `pnpm test && pnpm lint && pnpm typecheck && pnpm build`. The drift suite passing with the exact-set pin IS the honest-green declaration for Step 7 (first-run green claimed, none invented).
 
@@ -981,6 +1009,8 @@ expect(routeKeys.filter((key) => !mcpPresent.includes(key))).toEqual(specKeys)
 git add src/adapters/mcp src/adapters/rest/app.ts src/adapters/rest/idempotency.ts src/adapters/rest/idempotency.test.ts src/adapters/rest/openapi-contract.test.ts
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): /mcp mount behind the same auth chain (D-hh, D-ii)"
 ```
+
+> **Amendment (Task 4, byte-sync — seven shipped divergences, blocks above re-labeled sync = shipped form):** (1) `mount.test.ts` `seedQuestion` ships differently for two shipped-code reasons: the planned call passed `assignee_handle: 'a_nils'` POSTed by the admin token, but (a) `resolveActorHandle`→`findByHandle` is an EXACT handle match and the test human's handle is `nils` (`'a_nils'` is its id) — the planned call 404s at the seed's own 201 pin; and (b) D-r (create-thread.ts:111) notifies the assignee but NEVER the creator, so a nils→nils question books no inbox row and the "per-actor" seed would be vacuous. The shipped seed creates a throwaway agent `a_seed` + token via the admin API and POSTs the question as THAT actor, assigning to `'nils'` — the notification lands in nils's inbox. Added `expect(rest.json()).toHaveLength(1)` so the byte-parity compare is against a non-empty inbox (an empty⇄empty parity passes vacuously; the pin makes the seed observable). Test names and every other assertion byte-verbatim. (2) Step 2 RED, honestly measured: 3 failed / 1 passed — the unauthenticated test PASSED pre-mount because the auth onRequest hook also guards fastify's 404 leg (missing bearer ⇒ the same problem+json 401 before any route exists; that pin is about the hook chain, so it passing early is its point); the three failures are the honest "mount does not exist" evidence: pinned-version negotiation fails with no `/mcp` handler (both HTTP tests) and `GET /mcp` prints 404, not 405. (3) `mount.ts`: `app.register(async (scope) …)` → plain sync plugin — lint `require-await` rejects the await-less async (same repair and precedent as `app.ts:37`). (4) `app.ts`: block wrote `mountMcp(app, deps)`; `buildApp`'s instance is named `server` — ships `mountMcp(server, deps)`, placement verbatim (after the last `register*Routes`, before `return server`, hence before any listen). (5) `tools/index.ts`: relative `./discussion`/`./tasks` → `#root/adapters/mcp/tools/…` (TS2835 nodenext; Task 2/3 precedent). `http.ts`, `tools/tasks.ts`, `tools/discussion.ts` and the `idempotency.ts` skip shipped byte-identical to their blocks. (6) Step 6 pin ships with TWO headers the block's inject omitted: `'content-type': 'application/json'` (the block's own note) and `accept: 'application/json, text/event-stream'` — probed: the 2026-07-28 leg answers 406 at accept-negotiation BEFORE JSON parsing, so without the pair the pin asserts 406-not-409 (still "never idempotency_in_flight") instead of the block's 400; with it, both replays land the JSON-RPC parse-error 400 exactly as written, and the third call (`POST /tasks`, key `k-mcp`) still proves the key was never reserved. (7) `openapi-contract.test.ts`: the D-ll block ships with the file's existing local names `served`/`documented` (the block's `routeKeys`/`specKeys` are the file's helper-function names — shadowing legal but needless) plus `await t.app.ready()` before `routeKeys(t.app)`: find-my-way's printed tree contains an encapsulated plugin's routes only after boot, and this app is intentionally not ready()-ed by `makeTestApp`; without the line, `mcpPresent` prints `[]` against the exact-set pin. The three exemption assertions are otherwise byte-verbatim; first-run status honestly: the block went RED on the un-booted print as just described, green after the one-line boot — the exact-set pin itself was not first-run-green and none is claimed beyond Step 8's declaration. **Scope-locality evidence (probe lesson honored):** the scope's `removeAllContentTypeParsers` + `'*'` buffer parser does NOT leak — all 66 files / 431 tests green, every REST JSON route test (hundreds of inject POSTs with JSON payloads) parses as before, and the Step 6 pin itself is a two-part proof: `/mcp` malformed POST → 400 via the scope buffer parser while the SAME test's `POST /tasks` JSON body → 201 via the built-in JSON parser, one app, both parsers coexisting. `request.actorRef`/`tokenId` needed NO new fastify augmentation — the existing `declare module 'fastify'` in `auth.ts` (where the decoration lives) already types them program-wide.
 
 ## Task 5: Task-domain 1:1 tools (the byte-parity heart)
 
