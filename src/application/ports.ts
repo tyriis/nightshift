@@ -218,6 +218,21 @@ export interface SessionRepo {
   revoke(id: string, at: string): Promise<void>
 }
 
+// ---- allow-list (D-tt)
+
+export interface AllowlistRow {
+  email: string
+  added_by: string
+  created_at: string
+}
+/** D-tt: admin-managed first-login allow-list rows (emails stored lowercased). */
+export interface AllowlistRepo {
+  list(): Promise<AllowlistRow[]>
+  findByEmail(email: string): Promise<AllowlistRow | null>
+  insert(input: { email: string; added_by: string; created_at: string }): Promise<void>
+  remove(email: string): Promise<boolean>
+}
+
 // ---- idempotency (spec §7.3)
 
 export type IdempotencyOutcome =
@@ -455,6 +470,7 @@ export interface Repos {
   deps: DependencyRepo
   labels: LabelRepo
   actors: ActorRepo
+  allowlist: AllowlistRepo
   threads: ThreadRepo
   inbox: InboxRepo
   attachments: AttachmentRepo

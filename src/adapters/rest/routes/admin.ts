@@ -109,6 +109,8 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
   // 3-arg repair as above. The body enum fences bad values at the edge (400
   // invalid_request via problem.ts's validation branch); SetPolicy's allowlist stays
   // the real gatekeeper for every caller.
+  // D-tt (review R2/B10): the transport enum WIDENS for oidc_provisioning's 'allowlist' —
+  // POLICY_ALLOWLIST remains the per-key semantic gate (review_gate + 'allowlist' 400, pinned).
   app.put(
     '/admin/policy/:key',
     {
@@ -118,7 +120,7 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
           type: 'object',
           required: ['value'],
           additionalProperties: false,
-          properties: { value: { type: 'string', enum: ['on', 'off'] } },
+          properties: { value: { type: 'string', enum: ['on', 'off', 'allowlist'] } },
         },
       },
     },
@@ -127,6 +129,53 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
       const { value } = request.body as { value: string }
       await deps.useCases.setPolicy.run({ ...actorCtx(request), key, value })
       return { key, value }
+    }
+  )
+
+  // D-tt allow-list surface: the three ops join the admin gate (D-ss "ten ops + 3").
+  app.get('/admin/allowlist', { preHandler: [requireHuman, requireAdmin] }, async (request) =>
+    deps.useCases.listAllowlist.run({ ...actorCtx(request) })
+  )
+
+  app.post(
+    '/admin/allowlist',
+    {
+      preHandler: [requireHuman, requireAdmin],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['email'],
+          additionalProperties: false,
+          properties: {
+            // D-tt email rule DECLARED at the edge; the use-case re-validates this
+            // same language and owns the lowercase normalization (pinned both sides).
+            email: {
+              type: 'string',
+              minLength: 3,
+              maxLength: 254,
+              pattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$',
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email } = request.body as { email: string }
+      const res = await deps.useCases.addAllowlist.run({ email, ...actorCtx(request) })
+      // duplicate POST is idempotent: 200 with the existing row, 201 only on create
+      return reply.code(res.created ? 201 : 200).send(res.row)
+    }
+  )
+
+  app.delete(
+    '/admin/allowlist/:email',
+    { preHandler: [requireHuman, requireAdmin] },
+    async (request, reply) => {
+      // fastify delivers the path param URL-decoded; the lowercase rule applies
+      // before lookup in the use-case (pinned via ALICE%40EXAMPLE.com)
+      const { email } = request.params as { email: string }
+      await deps.useCases.removeAllowlist.run({ email, ...actorCtx(request) })
+      return reply.code(204).send()
     }
   )
 }

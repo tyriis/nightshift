@@ -465,7 +465,7 @@ paths:
               type: object
               required: [value]
               additionalProperties: false
-              properties: { value: { type: string, enum: ["on", "off"] } }
+              properties: { value: { type: string, enum: ["on", "off", "allowlist"] } }
       responses:
         "200":
           description: stored
@@ -474,6 +474,61 @@ paths:
               schema:
                 type: object
                 properties: { key: { type: string }, value: { type: string } }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/allowlist:
+    get:
+      tags: [admin]
+      operationId: listAllowlist
+      description: D-tt first-login allow-list rows (emails lowercased), emails ascending
+      responses:
+        "200":
+          description: allow-list entries
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/AllowlistEntry" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [admin]
+      operationId: addAllowlist
+      description: >-
+        add an email to the first-login allow-list (D-tt). Stored LOWERCASED; a
+        duplicate is idempotent — 200 with the existing row (data, not error).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              additionalProperties: false
+              properties:
+                email:
+                  {
+                    type: string,
+                    minLength: 3,
+                    maxLength: 254,
+                    pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                  }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AllowlistEntry" }
+        "200":
+          description: already present — the existing row (idempotent, D-tt)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AllowlistEntry" }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/allowlist/{email}:
+    parameters: [{ name: email, in: path, required: true, schema: { type: string } }]
+    delete:
+      tags: [admin]
+      operationId: removeAllowlist
+      description: remove an entry (lowercase rule applies before lookup); absent is 404 not_found.
+      responses:
+        "204": { description: removed (no body) }
         default: { $ref: "#/components/responses/Problem" }
   /admin/webhooks:
     get:
@@ -934,6 +989,13 @@ components:
         handle: { type: string }
         display_name: { type: string }
         description: { type: string }
+        created_at: { type: string }
+    AllowlistEntry:
+      # D-tt: admin-managed first-login allow-list row (email lowercased by the use-case)
+      type: object
+      properties:
+        email: { type: string }
+        added_by: { type: string }
         created_at: { type: string }
     AuditEntry:
       type: object

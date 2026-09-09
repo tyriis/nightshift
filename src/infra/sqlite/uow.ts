@@ -2,6 +2,7 @@ import type { Kysely } from 'kysely'
 import type { Repos, UnitOfWork } from '#root/application/ports'
 import type { DB } from '#root/infra/sqlite/schema'
 import { SqliteActorRepo } from '#root/infra/sqlite/actor-repo'
+import { SqliteAllowlistRepo } from '#root/infra/sqlite/allowlist-repo'
 import { SqliteAttachmentRepo } from '#root/infra/sqlite/attachment-repo'
 import { SqliteAuditRepo } from '#root/infra/sqlite/audit-repo'
 import { SqliteDependencyRepo } from '#root/infra/sqlite/dependency-repo'
@@ -22,6 +23,7 @@ export class SqliteUnitOfWork implements UnitOfWork {
       deps: new SqliteDependencyRepo(tx),
       labels: new SqliteLabelRepo(tx),
       actors: new SqliteActorRepo(tx),
+      allowlist: new SqliteAllowlistRepo(tx),
       threads: new SqliteThreadRepo(tx),
       inbox: new SqliteInboxRepo(tx),
       attachments: new SqliteAttachmentRepo(tx),

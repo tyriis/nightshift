@@ -359,6 +359,43 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/admin/allowlist': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** @description D-tt first-login allow-list rows (emails lowercased), emails ascending */
+    get: operations['listAllowlist']
+    put?: never
+    /** @description add an email to the first-login allow-list (D-tt). Stored LOWERCASED; a duplicate is idempotent — 200 with the existing row (data, not error). */
+    post: operations['addAllowlist']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/allowlist/{email}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        email: string
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /** @description remove an entry (lowercase rule applies before lookup); absent is 404 not_found. */
+    delete: operations['removeAllowlist']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/admin/webhooks': {
     parameters: {
       query?: never
@@ -689,6 +726,11 @@ export interface components {
       handle?: string
       display_name?: string
       description?: string
+      created_at?: string
+    }
+    AllowlistEntry: {
+      email?: string
+      added_by?: string
       created_at?: string
     }
     AuditEntry: {
@@ -1518,7 +1560,7 @@ export interface operations {
       content: {
         'application/json': {
           /** @enum {string} */
-          value: 'on' | 'off'
+          value: 'on' | 'off' | 'allowlist'
         }
       }
     }
@@ -1534,6 +1576,84 @@ export interface operations {
             value?: string
           }
         }
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  listAllowlist: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description allow-list entries */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AllowlistEntry'][]
+        }
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  addAllowlist: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': {
+          email: string
+        }
+      }
+    }
+    responses: {
+      /** @description already present — the existing row (idempotent, D-tt) */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AllowlistEntry']
+        }
+      }
+      /** @description created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AllowlistEntry']
+        }
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  removeAllowlist: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        email: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description removed (no body) */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
       default: components['responses']['Problem']
     }

@@ -7,6 +7,7 @@ import { SystemClock } from '#root/infra/clock'
 import { RandomIdGen } from '#root/infra/ids'
 import { DiskFileStore } from '#root/infra/files/disk-file-store'
 import { SqliteActorRepo } from '#root/infra/sqlite/actor-repo'
+import { SqliteAllowlistRepo } from '#root/infra/sqlite/allowlist-repo'
 import { SqliteAttachmentRepo } from '#root/infra/sqlite/attachment-repo'
 import { SqliteAuditRepo } from '#root/infra/sqlite/audit-repo'
 import { SqliteDependencyRepo } from '#root/infra/sqlite/dependency-repo'
@@ -35,6 +36,11 @@ import { AddLink, RemoveLink } from '#root/application/usecases/manage-links'
 import { MarkInboxRead } from '#root/application/usecases/mark-inbox-read'
 import { AttachLabel, CreateLabel, DetachLabel } from '#root/application/usecases/labels'
 import { CreateActor, CreateToken, RevokeToken } from '#root/application/usecases/manage-actors'
+import {
+  AddAllowlist,
+  ListAllowlist,
+  RemoveAllowlist,
+} from '#root/application/usecases/manage-allowlist'
 import { GetPolicy, SetPolicy } from '#root/application/usecases/manage-policy'
 import {
   CreateWebhook,
@@ -58,6 +64,9 @@ export interface AppDeps {
   actorsRoot: SqliteActorRepo
   // D-qq: auth-path repo, NOT in the tx Repos seam — same dual-wiring rationale as actorsRoot
   sessionsRoot: SqliteSessionRepo
+  // D-tt: root-connection twin for read paths outside the use-case tx (the auth
+  // callback's allow-list check rides here) — same rationale as sessionsRoot
+  allowlistRoot: SqliteAllowlistRepo
   idemRoot: SqliteIdempotencyRepo
   tasksRoot: SqliteTaskRepo
   depsRoot: SqliteDependencyRepo
@@ -100,6 +109,9 @@ export interface AppDeps {
     createActor: CreateActor
     createToken: CreateToken
     revokeToken: RevokeToken
+    addAllowlist: AddAllowlist
+    removeAllowlist: RemoveAllowlist
+    listAllowlist: ListAllowlist
     getPolicy: GetPolicy
     setPolicy: SetPolicy
     createWebhook: CreateWebhook
@@ -125,6 +137,7 @@ export const makeDepsFromDb = (
     uow,
     actorsRoot: new SqliteActorRepo(db),
     sessionsRoot: new SqliteSessionRepo(db),
+    allowlistRoot: new SqliteAllowlistRepo(db),
     idemRoot: new SqliteIdempotencyRepo(db),
     tasksRoot: new SqliteTaskRepo(db),
     depsRoot: new SqliteDependencyRepo(db),
@@ -181,6 +194,9 @@ export const makeDepsFromDb = (
       createActor: new CreateActor(uow, clock, ids),
       createToken: new CreateToken(uow, clock, ids),
       revokeToken: new RevokeToken(uow, clock),
+      addAllowlist: new AddAllowlist(uow, clock),
+      removeAllowlist: new RemoveAllowlist(uow, clock),
+      listAllowlist: new ListAllowlist(uow),
       getPolicy: new GetPolicy(uow),
       setPolicy: new SetPolicy(uow, clock),
       createWebhook: new CreateWebhook(uow, clock, ids),
