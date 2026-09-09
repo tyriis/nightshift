@@ -2561,6 +2561,7 @@ Scope, stated once (pinned by the snapshot test, not hand-waved): the **31 mirro
 ```ts
 // src/adapters/rest/mcp-parity.test.ts — spec §11.4: each MCP tool ⇄ REST behavior identical
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import type { InjectOptions } from 'fastify'
 import { mcpTools } from '#root/adapters/mcp/tools/index'
 import { makeTestApp } from '#root/testing/test-app'
 import { openHttpMcp } from '#root/testing/mcp-client'
@@ -2580,7 +2581,7 @@ interface Row {
   ok?: {
     method: Method
     path: (w: World) => string
-    body?: unknown
+    body?: unknown // may be ((w: World) => unknown), resolved by restCall against the world (seed-lease bodies)
     headers?: Record<string, string>
   }
   err?: {
@@ -2649,11 +2650,12 @@ const restCall = async (
     headers?: Record<string, string>
   }
 ) => {
+  const body = typeof r.body === 'function' ? (r.body as (w: World) => unknown)(w) : r.body
   const res = await w.t.app.inject({
     method: r.method,
     url: r.path(w),
     headers: { authorization: `Bearer ${w.bearer}`, ...(r.headers ?? {}) },
-    ...(r.body === undefined ? {} : { payload: r.body }), // Buffer bodies ride raw (octet-stream upload rows)
+    ...(body === undefined ? {} : { payload: body as InjectOptions['payload'] }), // Buffer bodies ride raw (octet-stream upload rows)
   })
   return res
 }
@@ -2685,6 +2687,7 @@ const expectReject = async (w: World, row: Row) => {
 World setup — `seedWorld` builds every fixture through the REST twin (admin), recording ids + seed leases:
 
 ```ts
+// World setup — seedWorld builds every fixture through the REST twin (admin), recording ids + seed leases.
 const seedWorld = async (w: World) => {
   const api = async (
     method: Method,
@@ -2696,30 +2699,35 @@ const seedWorld = async (w: World) => {
       method,
       url,
       headers: { authorization: `Bearer ${w.bearer}`, ...headers },
-      ...(payload === undefined ? {} : { payload }),
+      ...(payload === undefined ? {} : { payload: payload as InjectOptions['payload'] }),
     })
     expect(res.statusCode, `seed ${method} ${url} -> ${res.body}`).toBeLessThan(400)
     return res
   }
   const idOf = (res: { json(): unknown }) => String((res.json() as { id: string }).id)
   const ids = w.ids
-  for (const [key, title] of [
-    ['taskA', 'parity A'],
+  // create-task.ts:23 defaults to backlog and the claim gate accepts only todo|in_progress
+  // (claim-task.ts:37) — every fixture whose row claims or moves status ships status:'todo'
+  // (Task 5/8 seed correction, NOT a tool default).
+  for (const [key, title, status] of [
+    ['taskA', 'parity A', 'todo'],
     ['taskB', 'parity B'],
     ['taskB2', 'parity B'],
-    ['taskC', 'parity C'],
-    ['taskC2', 'parity C'],
+    ['taskC', 'parity C', 'todo'],
+    ['taskC2', 'parity C', 'todo'],
     ['taskD', 'parity D'],
     ['taskD2', 'parity D'],
-    ['claimR', 'parity claim'],
-    ['claimM', 'parity claim'],
-    ['relR', 'parity rel'],
-    ['relM', 'parity rel'],
+    ['claimR', 'parity claim', 'todo'],
+    ['claimM', 'parity claim', 'todo'],
+    ['relR', 'parity rel', 'todo'],
+    ['relM', 'parity rel', 'todo'],
     ['host', 'parity host'],
     ['hostM', 'parity host'],
     ['attachS', 'parity attach'],
   ] as const)
-    ids[key] = idOf(await api('POST', '/tasks', { title }))
+    ids[key] = idOf(
+      await api('POST', '/tasks', status === undefined ? { title } : { title, status })
+    )
   await api('POST', `/tasks/${ids.taskA}/claim`) // the permanent already_claimed seed (holder = admin, the harness bearer)
   ids.leaseRelR = (
     (await api('POST', `/tasks/${ids.relR}/claim`)).json() as { lease_token: string }
@@ -2737,24 +2745,44 @@ const seedWorld = async (w: World) => {
     )
   ids.noteR = await newThread('host', { kind: 'note', body: 'seed note' })
   ids.noteM = await newThread('hostM', { kind: 'note', body: 'seed note' })
-  ids.qR = await newThread('host', { kind: 'question', body: 'seed q?', assignee_handle: 'a_nils' })
-  ids.qM = await newThread('hostM', {
-    kind: 'question',
-    body: 'seed q?',
-    assignee_handle: 'a_nils',
+  ids.qR = await newThread('host', { kind: 'question', body: 'seed q?', assignee_handle: 'nils' })
+  ids.qM = await newThread('hostM', { kind: 'question', body: 'seed q?', assignee_handle: 'nils' })
+  // D-r self-notify (create-thread.ts:111): a question the admin bearer ASKS nils books NO
+  // inbox row — the two questions whose assignment feeds mark_inbox_read (qA/qB) are seeded
+  // through a throwaway CREATOR (the a_seed pattern, mount.test.ts/discussion.test.ts
+  // precedent) so the question_assigned notification actually lands in nils's inbox.
+  const seeder = await w.t.app.inject({
+    method: 'POST',
+    url: '/admin/actors',
+    headers: { authorization: `Bearer ${w.bearer}` },
+    payload: { kind: 'agent', handle: 'a_seed', display_name: 'Seed' },
   })
-  ids.qA = await newThread('host', { kind: 'question', body: 'seed q?', assignee_handle: 'a_nils' })
-  ids.qB = await newThread('hostM', {
-    kind: 'question',
-    body: 'seed q?',
-    assignee_handle: 'a_nils',
+  expect(seeder.statusCode).toBe(201)
+  const seederTok = await w.t.app.inject({
+    method: 'POST',
+    url: `/admin/actors/${(seeder.json() as { id: string }).id}/tokens`,
+    headers: { authorization: `Bearer ${w.bearer}` },
+    payload: { label: 'seed' },
   })
-  ids.qE = await newThread('host', { kind: 'question', body: 'seed q?', assignee_handle: 'a_nils' })
-  ids.qF = await newThread('hostM', {
-    kind: 'question',
-    body: 'seed q?',
-    assignee_handle: 'a_nils',
-  })
+  expect(seederTok.statusCode).toBe(201)
+  const seederBearer = String((seederTok.json() as { raw_token: string }).raw_token)
+  const askedBySeeder = async (hostKey: 'host' | 'hostM') =>
+    String(
+      (
+        (
+          await w.t.app.inject({
+            method: 'POST',
+            url: `/tasks/${ids[hostKey]}/threads`,
+            headers: { authorization: `Bearer ${seederBearer}` },
+            payload: { kind: 'question', body: 'seed q?', assignee_handle: 'nils' },
+          })
+        ).json() as { thread: { id: string } }
+      ).thread.id
+    )
+  ids.qA = await askedBySeeder('host')
+  ids.qB = await askedBySeeder('hostM')
+  ids.qE = await newThread('host', { kind: 'question', body: 'seed q?', assignee_handle: 'nils' })
+  ids.qF = await newThread('hostM', { kind: 'question', body: 'seed q?', assignee_handle: 'nils' })
   await api('POST', `/tasks/${ids.host}/threads/${ids.qA}/answer`, { body: 'seed answer' }) // qA/qB answered (update_question ok-rows); qR/qM stay OPEN for answer_question; qE/qF stay open for the transition err
   await api('POST', `/tasks/${ids.hostM}/threads/${ids.qB}/answer`, { body: 'seed answer' })
   ids.lkR = idOf(
@@ -2785,7 +2813,7 @@ const seedWorld = async (w: World) => {
       headers: { authorization: `Bearer ${w.bearer}` },
     })
   ).json() as { id: string; thread_id: string | null }[]
-  ids.inboxR = inbox.find((i) => i.thread_id === ids.qA)!.id // a_nils IS the admin actor — assignment burned their own budget
+  ids.inboxR = inbox.find((i) => i.thread_id === ids.qA)!.id // nils IS the admin actor — the seeder's question burned their budget (D-r)
   ids.inboxM = inbox.find((i) => i.thread_id === ids.qB)!.id
 }
 ```
@@ -2829,8 +2857,8 @@ const ROWS: Row[] = [
     ok: {
       method: 'PATCH',
       path: (w) => `/tasks/${w.ids.taskC}/status`,
-      body: { to: 'in_progress', reason: 'parity' },
-    },
+      body: { status: 'in_progress', reason: 'parity' },
+    }, // REST body key is `status` (routes/tasks.ts:124); the MCP arg is `to` (tasks.ts:75) — D-mm arg mapping, one truth
     err: {
       mcpArgs: (w) => ({
         task_id: w.ids.taskA,
@@ -2841,7 +2869,7 @@ const ROWS: Row[] = [
       rest: {
         method: 'PATCH',
         path: (w) => `/tasks/${w.ids.taskA}/status`,
-        body: { to: 'in_review', reason: 'x', lease_token: 'bogus:0' },
+        body: { status: 'in_review', reason: 'x', lease_token: 'bogus:0' },
       },
     },
     reject: {
@@ -2849,7 +2877,7 @@ const ROWS: Row[] = [
       rest: {
         method: 'PATCH',
         path: (w) => `/tasks/${w.ids.taskA}/status`,
-        body: { to: 'not-a-status', reason: 'x' },
+        body: { status: 'not-a-status', reason: 'x' },
       },
     },
   },
@@ -2868,7 +2896,7 @@ const ROWS: Row[] = [
     ok: {
       method: 'POST',
       path: (w) => `/tasks/${w.ids.relR}/heartbeat`,
-      body: { lease_token: w.ids.leaseRelR },
+      body: (w: World) => ({ lease_token: w.ids.leaseRelR }),
     },
     err: {
       mcpArgs: (w) => ({ task_id: w.ids.taskA, lease_token: 'bogus:0' }),
@@ -2994,11 +3022,11 @@ const ROWS: Row[] = [
       body: { state: 'wont_fix' },
     },
     err: {
-      mcpArgs: (w) => ({ thread_id: w.ids.qF, state: 'answered' }), // qE/qF open → open→answered out-of-band = question_transition on both (D-n)
+      mcpArgs: (w) => ({ thread_id: w.ids.qF, state: 'resolved' }), // qE/qF open → open→resolved violates D-n (resolve implies answered) → question_transition both sides
       rest: {
         method: 'PATCH',
         path: (w) => `/tasks/${w.ids.host}/threads/${w.ids.qE}`,
-        body: { state: 'answered' },
+        body: { state: 'resolved' },
       },
     },
   },
@@ -3099,7 +3127,7 @@ const ROWS: Row[] = [
     }),
     ok: {
       method: 'POST',
-      path: () =>
+      path: (w) =>
         `/tasks/${w.ids.host}/attachments?filename=parity.bin&content_type=application/octet-stream`,
       headers: { 'content-type': 'application/octet-stream' },
       body: Buffer.from('parity bytes'),
@@ -3233,9 +3261,11 @@ The **registry is the single source of the tool set**: the frozen-list `it` comp
 - [ ] **Step 3: Full gates**, then commit:
 
 ```bash
-git add src/adapters/rest/mcp-parity.test.ts
+git add src/adapters/rest/mcp-parity.test.ts docs/superpowers/plans/2026-09-09-nightshift-plan-d-mcp-client.md
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "test(acceptance): §11.4 mcp⇄rest parity harness, every tool"
 ```
+
+> **Amendment (Task 10, byte-sync — shipped divergences; the five blocks above are sync = shipped form: the plan-side `// src/…` label stands in for the shipped header line, bodies byte-verbatim from the first `import`; the `World setup —` prose line above block 3 keeps its shipped twin inside the fence):** (1) **Block transcription bugs — block 4 could not compile as written** (typecheck RED, honestly measured before any behavior run): [a] the heartbeat ok-row `body: { lease_token: w.ids.leaseRelR }` and [b] the upload ok-row `path: () => ...attachments?filename=parity.bin...` referenced the world from MODULE scope — `Cannot find name 'w'` ×2; a static `body` value cannot capture the world, so the `body` slot ships as world-resolvable (`restCall` resolves a `typeof r.body === 'function'` against `w`, the `Row.ok` comment documents the arm) and the rows ship `body: (w: World) => ({ lease_token: w.ids.leaseRelR })` / `path: (w) => …`. [c] Both typed `inject` payload spreads need `as InjectOptions['payload']` — `payload?: unknown` is not `InjectPayload`, and the failed overload resolution cascades (`void & Promise<Response> & Chain` — every `.statusCode`/`.json()` access dies); `import type { InjectOptions } from 'fastify'` ships for exactly this. [d] The shipped file's first line is a doctrine header, not the plan label (Tasks 7–9 ruling: labels stay plan-side). (2) **Binding rulings applied pre-ruled (none of these claims a first-run RED — they were handoff-mandated amendments):** Ruling 1 — all six `assignee_handle: 'a_nils'` ship `'nils'` (exact-handle resolver; `a_nils` is the ID — the planned value 404s the seed's own <400 pin; ghosts `ts_ghost`/`th_ghost`/`a_ghost`/`ib_ghost`/`lk_ghost`/`lb_ghost` ship byte-verbatim — both-sides-404 IS the point). Ruling 2 (D-r) — the two seed-answered questions whose assignment feeds `mark_inbox_read` (plan-named `qA`/`qB`; the handoff's "`qA`/`qA2`") ship seeded through a throwaway creator: `a_seed` agent + token via the admin API, questions POSTed AS `a_seed` assigning `'nils'` (the `mount.test.ts`/`discussion.test.ts` precedent) — a nils→nils question books NO inbox row (`create-thread.ts:111`) and the block's `ids.inboxR`/`ids.inboxM` finds would be `undefined!`. The seed answers still run as admin (read-verified: `answer-question.ts` writes no inbox rows at all, so the capture is stable across the answers). Ruling 3 — seed `status: 'todo'` on the seven claim/status-moving fixtures: `taskA` (the permanent seed claim + the claim/heartbeat/status err rows), `claimR`/`claimM` (ok-row claims), `relR`/`relM` (seed claims + heartbeat/release), `taskC`/`taskC2` (the status row + the unclaimed-release err) — backlog is NOT claimable (`claim-task.ts:37`) and every seed `api()` pins <400. `taskB`/`taskB2` (patch/blocks), `taskD`/`taskD2` (split — Ruling A: no parent-status gate; backlog parents keep backlog children), `host`/`hostM` (threads) and `attachS` (labels) ship bare-backlog, byte-verbatim. (3) **First-run RED evidence — the §11.4 culminating record: two stale plan pins, both harness-side; ZERO tool fixes, ZERO production file touched.** The first executed green run (58/58) carried the two fixes below; to prove the fixes were not fabricating passes, BOTH rows were restored to the plan-block form and re-run: exactly **3 failed / 55 passed**, no collateral — **(a) `update_task_status ⇄ REST identical (success)`: `expected 400 to be less than 300`** — the plan's REST-twin body `{ to: 'in_progress', … }` is not a REST wire key: `routes/tasks.ts:118-131` requires `status` with `additionalProperties: false`, so the REST side 400s its OWN schema. Ships `{ status: 'in_progress', reason: 'parity' }`; the MCP arg stays `to` (`tools/tasks.ts:75` transcribes the use-case input name — D-mm maps arg names, the BODIES are the byte-compare). **(b) `update_task_status ⇄ REST identical (error)`** — same bug one arm deeper: MCP side landed the real `{ code: 'stale_lease', status: 412, claimed: true }` while the plan-body REST side landed `{ code: 'invalid_request', status: 400 }` (schema rejection before the lease check ever ran). Ships `{ status: 'in_review', reason: 'x', lease_token: 'bogus:0' }` — both sides now land the identical FLAT 412 carrying `claimed: true` (the Ruling-4 stale_lease arm, pinned live⇄live). **(c) `update_question ⇄ REST identical (error)`: `error-path succeeded: expected undefined to be true`** — the plan's arm `open→answered` is LEGAL by the shipped D-n table (`domain/discussion.ts:12`; `update-question.test.ts:40` walks open→answered→resolved through `updateQuestion` itself; `:75` DELEGATES the move to the answer verb by leaving it in the table) — the pin predates the table. Ships the genuinely illegal arm `open→resolved` ("resolve implies answered", pinned rejecting at `update-question.test.ts:83`): both sides land `question_transition` 409 `{ from: 'open', to: 'resolved' }`. **The third update_task_status arm (reject-row) PASSED in plan form for the WRONG REASON** (fastify 400'd on required-`status`-missing + additional-`to`, not on the enum) — ships `{ status: 'not-a-status', reason: 'x' }` so the REST side rejects on the same enum class zod rejects on. Every fork fix is harness-only: the shipped tools were byte-identical to REST on all 58 arms including these — where the plan disagreed with REST truth, REST won (D-mm), and no tool-side amendment/test is owed because no tool changed. (4) **First-run status honestly, per group:** 31 ok-its — all green in the first executed run; the `update_task_status` ok-arm needed fix (a) to get there and its plan form is the proven RED above, the other 30 carry the "tools shipped green in Tasks 4–8, no RED invented" declaration untouched. 20 err-its — 18 first-run green byte-for-byte (already_claimed FLAT `{holder_handle:'nils', holder_display_name:'Nils'}` ⇄ problem body, stale_lease `claimed:false` on unclaimed release, ghost-404s, note-answer 400, a_ghost resolver 404, 204-analogs); (b)/(c) are the two stale pins. 3 reject-its — all green (update_task_status with the wrong-reason note). 4 special its — ALL first-run green: `get_attachment_content` header+byte equality held at STRICT `toBe` (fastify's `.type('text/plain')` + Buffer send adds NO charset — the `toContain` defensiveness of `attachments.test.ts` was not the wire truth); frozen-35 registry⇄wire⇄list with the side-door filter empty (D-nn); strip-parity (`smuggled_actor` gone from both transports); D-dd `400/400/429` — the hook order intact with rate_limited landing before the MCP parse layer. Consumption pairs held in declaration order (add_block→remove_block, seed-claims→heartbeat→release, seed-answers→wont_fix, seed-attach→detach, links, inbox capture→mark-read). (5) **Scope, honestly stated (the section's "pinned by the snapshot test, not hand-waved"):** 58 its = 31 ok + 20 err + 3 reject over 31 rows; 32 of 35 tools carry rows (31 mirrors + `split_task`); `claim_next`/`post_update`/`ask_question` are rest-less by definition (Task 8 pinned their constituents); `get_attachment_content`'s ok arm is the standalone binary its, its 404 arms ship in `references.test.ts`. `mount.test.ts` untouched — the frozen-35 contract gate lives HERE (its pointer comment always said Task 10 owns it). The Step 3 `git add` line above now carries the real explicit set (+ this doc). **Gates:** `pnpm test` **455→513 passed / 72→73 files** (the +58 are this file's its); `pnpm lint` 0 issues; `pnpm typecheck` clean; prettier-verified before commit. No production file touched — the culminating §11.4 verdict is that none was needed: every tool byte-matched its REST twin, success AND error, first try, once the harness itself stopped lying about REST. Coverage axes move only via more executed shipped lines (the whole-plan gate records it, Task 11).
 
 ## Task 11: Final whole-plan gate + record + STOP
 
