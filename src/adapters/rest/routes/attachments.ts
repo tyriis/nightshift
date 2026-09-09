@@ -1,10 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import { actorCtx } from '#root/adapters/rest/auth'
+import { safeFilename, UNSAFE_INLINE } from '#root/adapters/shared/attachment-safety'
 import { DomainError } from '#root/domain/errors'
-
-// spec §10: never render HTML/SVG from attachment origin
-const UNSAFE_INLINE = /^text\/html|^application\/xhtml|^image\/svg/i
 
 export const registerAttachmentRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   app.post(
@@ -70,10 +68,7 @@ export const registerAttachmentRoutes = (app: FastifyInstance, deps: AppDeps): v
     const bytes = await deps.files.get(row.sha256)
     if (!bytes) throw new DomainError('not_found', 'stored blob is missing')
     const safe = UNSAFE_INLINE.test(row.content_type)
-    // filename sanitized for the disposition header: EVERY control char (\x00-\x1f, \x7f —
-    // node's header validator rejects anything outside \t\x20-\x7e\x80-\xff with a raw
-    // ERR_INVALID_CHAR 500) plus quote and backslash, all folded to '_'
-    const filename = row.filename.replace(/[\x00-\x1f\x7f"\\]/g, '_')
+    const filename = safeFilename(row.filename)
     return reply
       .header('x-content-type-options', 'nosniff')
       .header('content-disposition', `${safe ? 'attachment' : 'inline'}; filename="${filename}"`)

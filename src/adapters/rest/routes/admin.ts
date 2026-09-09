@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import { actorCtx, requireHuman } from '#root/adapters/rest/auth'
-import type { ActorKind } from '#root/domain/task'
-import { ACTOR_KINDS } from '#root/domain/task'
+import { ACTOR_KINDS, type ActorKind } from '#root/domain/task'
 
 // human-only guard: requireHuman is async (auth.ts) — a sync-throwing preHandler would
 // deadlock fastify's hook iterator (R4); fixed at the source, so routes wire it directly.

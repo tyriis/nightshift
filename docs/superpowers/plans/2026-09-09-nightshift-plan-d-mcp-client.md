@@ -167,12 +167,19 @@ Zero behavior; the existing suites are the behavior pins (this is a verbatim rel
 Copy the current function body from `routes/threads.ts:13` unchanged — error messages included (they are REST-pinned) — into:
 
 ```ts
-// src/adapters/shared/resolve-handle.ts — MOVED VERBATIM from routes/threads.ts:13
-// (blockquote the source hash when the move lands)
+// src/adapters/shared/resolve-handle.ts — sync = shipped form (moved VERBATIM from routes/threads.ts:13; source hash quoted in the file header: 328dea8)
+// MOVED VERBATIM from routes/threads.ts @ 328dea8 (`handleToId`) — the error
+// messages are REST-pinned; the MCP `ask_question` composite shares this single
+// resolver so no handle grammar forks (Task 2 / D-nn).
+// REST speaks handles (public actor vocabulary); use-cases speak ids (ports.ts).
+// The route resolves handle → id; an unknown handle 404s here, in the ROUTE layer.
 import type { AppDeps } from '#root/main/deps'
+import { DomainError } from '#root/domain/errors'
 
 export const resolveActorHandle = async (deps: AppDeps, handle: string): Promise<string> => {
-  /* verbatim relocated body — sync = shipped form after the move */
+  const hit = await deps.actorsRoot.findByHandle(handle)
+  if (!hit) throw new DomainError('not_found', `actor '@${handle}' not found`)
+  return hit.id
 }
 ```
 
@@ -181,7 +188,10 @@ In `routes/threads.ts`: delete the local function, `import { resolveActorHandle 
 - [ ] **Step 2: Move the attachment-safety pair**
 
 ```ts
-// src/adapters/shared/attachment-safety.ts — MOVED VERBATIM from routes/attachments.ts:7 + :74
+// src/adapters/shared/attachment-safety.ts — sync = shipped form (moved VERBATIM from routes/attachments.ts:7 + :74)
+// MOVED VERBATIM from routes/attachments.ts @ 328dea8 (UNSAFE_INLINE :7 + the inline
+// filename sanitizer :74) — one source for REST and the MCP `get_attachment_content` tool.
+// spec §10: never render HTML/SVG from attachment origin
 export const UNSAFE_INLINE = /^text\/html|^application\/xhtml|^image\/svg/i
 
 // filename sanitized for the disposition header: EVERY control char (\x00-\x1f, \x7f —
@@ -211,9 +221,9 @@ import { ACTOR_KINDS, type ActorKind } from '#root/domain/task'
 - [ ] **Step 4: Pin the pure helpers (first-run GREEN by design — declared)**
 
 ```ts
-// src/adapters/shared/attachment-safety.test.ts
+// src/adapters/shared/attachment-safety.test.ts — sync = shipped form (see Amendment: #root import + \u007f escape)
 import { describe, expect, it } from 'vitest'
-import { safeFilename, UNSAFE_INLINE } from './attachment-safety'
+import { safeFilename, UNSAFE_INLINE } from '#root/adapters/shared/attachment-safety'
 
 describe('attachment safety (D-s, moved verbatim)', () => {
   it('downgrades html/xhtml/svg origins — pinned matrix', () => {
@@ -228,7 +238,7 @@ describe('attachment safety (D-s, moved verbatim)', () => {
   it('folds control chars, quote and backslash to _ — never a raw ERR_INVALID_CHAR', () => {
     expect(safeFilename('a"b\\c')).toBe('a_b_c')
     expect(safeFilename('tab\there\nlf')).toBe('tab_here_lf')
-    expect(safeFilename('del')).toBe('del_')
+    expect(safeFilename('del\u007f')).toBe('del_')
     expect(safeFilename('ünïcode ✓.md')).toBe('ünïcode ✓.md')
   })
 })
@@ -244,6 +254,8 @@ Run: `pnpm test && pnpm lint && pnpm typecheck` — expect unchanged-green: ever
 git add src/adapters/shared src/adapters/rest/routes/threads.ts src/adapters/rest/routes/attachments.ts src/adapters/rest/routes/admin.ts
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "refactor(api): shared handle resolver + attachment safety (D-mm)"
 ```
+
+> **Amendment (Task 2, move lands — three byte-sync notes):** (1) `resolve-handle.ts` ships with a second import, `import { DomainError } from '#root/domain/errors'` — the verbatim body throws it and the stub block listed only the `AppDeps` import; the source `:11-12` explanatory comments relocate verbatim with the function (orphaning them in the route would strand the doctrine note), and the stub's "(blockquote the source hash when the move lands)" is discharged by the `@ 328dea8` reference in the file header. The relocated statements are byte-identical to `328dea8:src/adapters/rest/routes/threads.ts` `:14-16` (diffed, zero diff); the `handleToId` → `resolveActorHandle` rename and arrow-const form are the block's own signature, not a divergence. (2) `attachment-safety.ts` ships keeping the `// spec §10: never render HTML/SVG from attachment origin` comment above `UNSAFE_INLINE` (relocated verbatim with the regex; the stub omitted it). Both regex literals are byte-identical to source `:7`/`:76`; the sanitizer's only deltas from `:76` are the indentation and the `row.` receiver dropped by the helper extraction — the block's own `safeFilename = (filename: string) =>` shape, prettier-confirmed (`pnpm exec prettier --check`: all files already formatted). (3) Step 4's test block ships with two changes: the DEL case is `safeFilename('del\u007f')` — the planned block carried a literal 0x7f byte (od-verified), which cannot be transcribed into source text, so the explicit escape carries the identical intent and identical assertion — and the import ships as `#root/adapters/shared/attachment-safety` instead of `'./attachment-safety'`: the relative form is `TS2835` under this repo's `moduleResolution: nodenext` (typecheck fails) and no existing test in the repo imports relatively (`#root/*` is the convention). First-run GREEN as declared: both new cases passed on first execution — there is no RED phase to claim and none is claimed. Behavior pin: `pnpm test` 420 passed / 64 files (418 before the task, +2 from this file — no existing test added, deleted or edited); every threads/attachments route pin passed untouched; lint and typecheck clean. Step 3's admin fold is byte-identical to the block. Blocks sync = shipped form.
 
 ## Task 3: Envelope bridge + server builder (D-jj)
 
