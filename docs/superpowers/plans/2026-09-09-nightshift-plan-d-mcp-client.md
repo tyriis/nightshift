@@ -2059,22 +2059,25 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): reference, attachme
 // src/adapters/mcp/tools/composites.test.ts — sync = shipped form (#root imports, seed/handle
 // pins, throw-site string pin, TaskWithCounts wrapper hop; see Task 8 Amendment)
 import { describe, expect, it } from 'vitest'
-import { COMPOSITE_TOOLS } from './composites'
-import { DISCUSSION_TOOLS } from './discussion'
-import { REFERENCE_TOOLS } from './references'
-import { TASK_TOOLS } from './tasks'
+import { COMPOSITE_TOOLS, postUpdate } from '#root/adapters/mcp/tools/composites'
+import { DISCUSSION_TOOLS } from '#root/adapters/mcp/tools/discussion'
+import { REFERENCE_TOOLS } from '#root/adapters/mcp/tools/references'
+import { TASK_TOOLS } from '#root/adapters/mcp/tools/tasks'
 import { actorContextFor, openInMemoryPair } from '#root/testing/mcp-client'
 import { makeTestApp } from '#root/testing/test-app'
 
 const ALL = [...TASK_TOOLS, ...DISCUSSION_TOOLS, ...REFERENCE_TOOLS, ...COMPOSITE_TOOLS]
 const withMcp = async (
-  fn: (mcp: Awaited<ReturnType<typeof openInMemoryPair>>) => Promise<void>
+  fn: (
+    mcp: Awaited<ReturnType<typeof openInMemoryPair>>,
+    t: Awaited<ReturnType<typeof makeTestApp>>
+  ) => Promise<void>
 ) => {
   const t = await makeTestApp()
   try {
     const mcp = await openInMemoryPair(t.deps, await actorContextFor(t.deps, t.adminToken), ALL)
     try {
-      await fn(mcp)
+      await fn(mcp, t)
     } finally {
       await mcp.close()
     }
@@ -2093,7 +2096,7 @@ describe('spec §7.1 composites (D-nn)', () => {
         task: null,
         claim: null,
       })
-      await mcp.call('create_task', { title: 'work' })
+      await mcp.call('create_task', { title: 'work', status: 'todo' }) // ready leaves seeded explicitly (create defaults to backlog)
       const got = result<{
         claimed: boolean
         task: { status: string }
@@ -2106,8 +2109,10 @@ describe('spec §7.1 composites (D-nn)', () => {
 
   it('post_update: comment-only creates a note thread; with lease+status the full loop lands', () =>
     withMcp(async (mcp) => {
-      const task = result<{ id: string }>(await mcp.call('create_task', { title: 'loop' }))
-      const note = result<{ thread: { kind: string }; message: { body: string } }>(
+      const task = result<{ id: string }>(
+        await mcp.call('create_task', { title: 'loop', status: 'todo' })
+      )
+      const note = result<{ thread: { id: string; kind: string }; message: { body: string } }>(
         await mcp.call('post_update', { task_id: task.id, body: 'progress: half' })
       )
       expect(note.thread.kind).toBe('note')
@@ -2128,7 +2133,7 @@ describe('spec §7.1 composites (D-nn)', () => {
     }))
 
   it('post_update: missing reason with status is invalid_request (no synthesized audit reason, D-nn)', () =>
-    withMcp(async (mcp) => {
+    withMcp(async (mcp, t) => {
       const task = result<{ id: string }>(await mcp.call('create_task', { title: 'why' }))
       const err = await mcp.call('post_update', {
         task_id: task.id,
@@ -2136,11 +2141,18 @@ describe('spec §7.1 composites (D-nn)', () => {
         status: 'in_progress',
       })
       expect(err.isError).toBe(true)
-      expect(err.structuredContent).toEqual({
-        code: 'invalid_request',
-        status: 400,
-        detail: 'status in post_update requires reason',
-      })
+      // D-jj: the FLAT envelope mirrors no prose (message is transport, not data), so the
+      // envelope pins code+status and the plan-pinned machine STRING is pinned at its
+      // throw site — the DomainError message, never reworded.
+      expect(err.structuredContent).toEqual({ code: 'invalid_request', status: 400 })
+      const ctx = await actorContextFor(t.deps, t.adminToken)
+      await expect(
+        postUpdate.run(t.deps, ctx, {
+          task_id: task.id,
+          body: 'y',
+          status: 'in_progress',
+        } as never)
+      ).rejects.toThrow(/status in post_update requires reason/)
     }))
 
   it('post_update is NOT transactional: a stale lease propagates AFTER the comment stayed booked (D-nn)', () =>
@@ -2159,13 +2171,15 @@ describe('spec §7.1 composites (D-nn)', () => {
     }))
 
   it('ask_question resolves the handle via the shared resolver and opens the gate question', () =>
-    withMcp(async (mcp) => {
+    withMcp(async (mcp, t) => {
       const task = result<{ id: string }>(await mcp.call('create_task', { title: 'ask' }))
+      // the seeded human's HANDLE is 'nils' ('a_nils' is its id); D-r — a question nils
+      // asks nils books NO inbox row, and nothing here asserts one.
       const q = result<{ thread: { kind: string; state: string }; message: { body: string } }>(
         await mcp.call('ask_question', {
           task_id: task.id,
           text: 'which port?',
-          assignee: 'a_nils',
+          assignee: 'nils',
         })
       )
       expect(q.thread).toMatchObject({ kind: 'question', state: 'open' })
@@ -2176,14 +2190,25 @@ describe('spec §7.1 composites (D-nn)', () => {
       })
       expect(ghost.isError).toBe(true)
       expect(ghost.structuredContent).toMatchObject({ code: 'not_found', status: 404 })
+      // REST twin: the SAME shared resolver, the SAME machine code on both sides (D-nn, no grammar fork)
+      const rest = await t.app.inject({
+        method: 'POST',
+        url: `/tasks/${task.id}/threads`,
+        headers: { authorization: `Bearer ${t.adminToken}` },
+        payload: { kind: 'question', body: 'x', assignee_handle: 'a_ghost' },
+      })
+      expect(rest.statusCode).toBe(404)
+      expect(rest.json().code).toBe((ghost.structuredContent as { code: string }).code)
     }))
 
   it('split_task mirrors POST /tasks/{id}/split verbatim (parent claim released, pinned reason rides)', () =>
     withMcp(async (mcp) => {
-      const parent = result<{ id: string }>(await mcp.call('create_task', { title: 'parent' }))
+      const parent = result<{ id: string }>(
+        await mcp.call('create_task', { title: 'parent', status: 'todo' })
+      )
       await mcp.call('claim_task', { task_id: parent.id })
       const split = result<{
-        parent: { claim_token_id: string | null }
+        parent: { task: { claim_token_id: string | null } } // un-DTO'd SplitTaskResult: parent is the TaskWithCounts wrapper
         created: { status: string }[]
       }>(
         await mcp.call('split_task', {
@@ -2191,7 +2216,7 @@ describe('spec §7.1 composites (D-nn)', () => {
           children: [{ title: 'child one' }, { title: 'child two', status: 'backlog' }],
         })
       )
-      expect(split.parent.claim_token_id).toBeNull() // D-d release rides
+      expect(split.parent.task.claim_token_id).toBeNull() // D-d release rides
       expect(split.created.map((c) => c.status)).toEqual(['todo', 'backlog']) // Dev-2 defaults
       const audit = result<{ reason: string }[]>(
         await mcp.call('search_audit', { entity_type: 'task', entity_id: parent.id })
@@ -2210,10 +2235,10 @@ describe('spec §7.1 composites (D-nn)', () => {
 // threading into updateStatus, mirrored SplitChildDraft keys + route bounds; see Task 8 Amendment)
 import { z } from 'zod'
 import { defineTool } from '#root/adapters/mcp/bridge'
+import { resolveActorHandle } from '#root/adapters/shared/resolve-handle'
 import { toTaskDto } from '#root/adapters/rest/dto'
 import { TASK_STATUSES } from '#root/domain/task'
 import { DomainError } from '#root/domain/errors'
-import { resolveActorHandle } from '#root/adapters/shared/resolve-handle'
 
 export const claimNext = defineTool({
   name: 'claim_next',
@@ -2222,11 +2247,13 @@ export const claimNext = defineTool({
   run: async (deps, ctx, { label }) => {
     const ready = await deps.useCases.getNext.run({ label, limit: 1 })
     if (ready.length === 0) return { claimed: false, task: null, claim: null } // empty is DATA (D-nn)
-    const head = ready[0]!
-    const claim = await deps.useCases.claimTask.run({ taskId: head.id, ...ctx }) // lost race ⇒ ordinary already_claimed FLAT envelope + D-cc inbox copy — no new string, no new code
+    const head = ready[0] // TaskWithCounts wrapper — the record lives under .task
+    // lost race ⇒ ordinary already_claimed FLAT envelope + D-cc inbox copy rides from
+    // claimTask.run itself — no new string, no new code, zero extra lines (D-nn)
+    const claim = await deps.useCases.claimTask.run({ taskId: head.task.id, ...ctx })
     return {
       claimed: true,
-      task: toTaskDto((await deps.tasksRoot.findWithCounts(head.id))!),
+      task: toTaskDto((await deps.tasksRoot.findWithCounts(head.task.id))!),
       claim,
     }
   },
@@ -2238,7 +2265,7 @@ export const postUpdate = defineTool({
     'Comment, optionally refresh the lease and move status — the §7.4 loop in one call (composite, spec §7.1).',
   input: z.object({
     task_id: z.string(),
-    body: z.string().min(1),
+    body: z.string().min(1).max(20000), // thread-body bounds per routes/threads.ts (D-mm duty)
     thread_id: z.string().optional(),
     lease_token: z.string().optional(),
     status: z.enum(TASK_STATUSES).optional(),
@@ -2272,6 +2299,9 @@ export const postUpdate = defineTool({
         taskId: a.task_id,
         to: a.status,
         reason: a.reason,
+        // update-status invariant 3: a claimed task requires its current lease — the
+        // §7.4 loop threads its lease into EVERY lease-gated step, exactly like REST's body
+        lease_token: a.lease_token,
         ...ctx,
       })
     }
@@ -2283,7 +2313,11 @@ export const askQuestion = defineTool({
   name: 'ask_question',
   description:
     'Open a gate question for a human assignee (composite: handle + question thread, spec §7.1).',
-  input: z.object({ task_id: z.string(), text: z.string().min(1), assignee: z.string().min(1) }),
+  input: z.object({
+    task_id: z.string(),
+    text: z.string().min(1).max(20000), // thread-body bounds (routes/threads.ts:35)
+    assignee: z.string().min(1).max(60), // assignee_handle bounds (routes/threads.ts:36)
+  }),
   run: async (deps, ctx, { task_id, text, assignee }) => {
     const assigneeId = await resolveActorHandle(deps, assignee) // same resolver as REST (Task 2) — no grammar fork
     return deps.useCases.createThread.run({
@@ -2301,8 +2335,18 @@ export const splitTask = defineTool({
   description: 'Atomically split a task into children (spec §7.1 name for POST /tasks/{id}/split).',
   input: z.object({
     task_id: z.string(),
+    // SplitChildDraft keys verbatim (split-task.ts:11-16 carries description and
+    // acceptance_criteria — mirrored per the Step 3 duty); child bounds transcribe
+    // routes/tasks.ts:159-173 (title min1/max300, minItems 1).
     children: z
-      .array(z.object({ title: z.string(), status: z.enum(TASK_STATUSES).optional() }))
+      .array(
+        z.object({
+          title: z.string().min(1).max(300),
+          description: z.string().optional(),
+          acceptance_criteria: z.string().optional(),
+          status: z.enum(TASK_STATUSES).optional(),
+        })
+      )
       .min(1),
   }),
   run: async (deps, ctx, { task_id, children }) =>
@@ -2332,7 +2376,7 @@ git add src/adapters/mcp/tools/composites.ts src/adapters/mcp/tools/composites.t
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): spec §7.1 composites (D-nn)"
 ```
 
-> **Amendment (Task 8, byte-sync — shipped divergences, blocks above re-labeled sync = shipped form):** (1) `composites.test.ts` imports ship as `#root/...` — the planned `'./composites'`/`'./discussion'`/`'./references'`/`'./tasks'` are TS2835 under `moduleResolution: nodenext` (Task 2–7 precedent); neither shipped file carries the plan's `// src/...` first line. (2) `withMcp` ships with `t` (the `makeTestApp` result) as a second callback arg, the `tasks.test.ts` helper shape — two shipped pins need deps/app: the throw-site string pin (5) and the REST-twin inject (6). (3) Seed `status: 'todo'` on the three claim-needing creates (test 1 `work`, test 2 `loop`, test 6 `parent`): `create-task.ts:23` defaults to **backlog** and both `getNext` (ready) and the claim gate (`todo|in_progress`) exclude it — the planned bare creates made `claim_next`'s `claimed: true` and the `claim_task` pins unproducible (Ruling 4, Task 5 Amendment (6): a test-seed correction, NOT a tool default). Tests 3 `why`, 4 `partial`, 5 `ask` need no claim/ready and ship bare, byte-verbatim. (4) `ask_question`'s assignee ships `'nils'`, not `'a_nils'` (Ruling 1 / Task 6 Amendment (3): `findByHandle` is exact-match and `'a_nils'` is the seeded human's ID — the planned value 404s the success arm). D-r: a question nils asks nils books **no** inbox row — the test asserts none (Ruling 8); nothing in this file asserts inbox rows. The `'a_ghost'` arm ships byte-verbatim. (5) **The reason-required pin moves the string to its throw site:** the planned `toEqual({code, status, detail: 'status in post_update requires reason'})` is unshippable — the D-jj FLAT envelope is `{code, status, ...details}` and mirrors no prose (Task 7 Amendment (5) established: the envelope carries `{code, status}`, tests assert the envelope, not the message). Shipped: `toEqual({code: 'invalid_request', status: 400})` on the envelope PLUS a direct `postUpdate.run(deps, ctx, {…} as never)` asserting `rejects.toThrow(/status in post_update requires reason/)` — the plan-pinned machine string pinned verbatim at its throw site, never reworded, code+status pinned by the envelope arm. (The direct call books one further note thread before throwing — the same D-nn non-transactional reality test 4 pins; it breaks no assertion.) (6) Test 5's ghost arm gains the **REST-twin same-code** inject: `POST /tasks/{id}/threads` with `assignee_handle: 'a_ghost'` → 404 and `rest.json().code` asserted EQUAL to the MCP envelope's code — the same shared resolver answers both surfaces with the same machine code (D-nn, no grammar fork). (7) `postUpdate` ships `lease_token: a.lease_token` as a third `updateStatus` key: invariant 3 (`update-status.ts:40-46`) requires the live lease on a CLAIMED task, so the block's dropped lease made its own test-2 pin (`full.task.status === 'in_review'` after `claim_task`) always die at `stale_lease`; the §7.4 loop threads its lease into every lease-gated step exactly like REST's body (`PATCH /tasks/{id}/status` takes `lease_token`). Zero new logic. (8) **`TaskWithCounts` wrapper hop (field-name pin duty, two places):** `getNext` returns `TaskWithCounts` (`ports.ts:57-61`) — the record lives under `.task`. The block's `ready[0]!.id` is TS2339; the shipped tool reads `head.task.id` (`!` dropped: lint `no-unnecessary-type-assertion`, `noUncheckedIndexedAccess` is off). The split test's annotation missed the same wrapper: `parent: {claim_token_id}` → `parent: {task: {claim_token_id}}`, asserted `split.parent.task.claim_token_id` (un-DTO'd `SplitTaskResult` passes through exactly like the REST route's body; REST's own split pin reads it via a re-GET, `routes/tasks.test.ts:110-113`). (9) Bounds transcription duty: `post_update` `body` and `ask_question` `text` ship `.min(1).max(20000)` (the thread-body ceiling, `routes/threads.ts:35`/`:68` — the block carried only the floors) and `assignee` ships `.min(1).max(60)` (`:36`) — the Task 5/6 "block carried the floor, ship the ceiling too" precedent. (10) **SplitChildDraft key duty executed:** the duty's module pointer is stale — `SplitTaskInput`/`SplitChildDraft` live in `#root/application/usecases/split-task` (`:11-21`), not `ports.ts` (no split symbols there — `rg` confirmed). The draft DOES carry optional `description`/`acceptance_criteria` (exactly the "then mirror them" branch): the shipped child schema mirrors all four keys with `title: z.string().min(1).max(300)` (`routes/tasks.ts:167`) and the array's `.min(1)` byte-verbatim (`minItems: 1`, `:161`); `children` passes to the uc untouched — the call site `{taskId, children, ...ctx}` is byte-identical to the route (`:180-185`). (11) Test 2's `note` annotation gains `id` — the block's own next line uses `note.thread.id` while its annotation omitted it (typecheck rejects). (12) Step 2 RED, honestly measured, two-stage: first run = `Cannot find module '#root/adapters/mcp/tools/composites'` (the module itself is new — file-level RED), re-run against an empty-registry stub: **6 failed / 0 passed**, every case dying at its first new-tool call with `ProtocolError: Tool claim_next|post_update|ask_question|split_task not found` — the SDK v2 **rejection** shape pinned by Task 3's `bridge.test.ts` (Task 5/6/7 precedent), not an isError. (13) Cross-task touches: the `mount.test.ts` exact-set canary grew **31→35** names (`ask_question`, `claim_next`, `post_update`, `split_task`), shipped renamed `tools/list is exactly the current task-8-grown surface snapshot` with the pointer comment updated inline (Task 5/6/7 precedent; the final 35-pin contract gate stays Task 10's own test, D-ll); `tools/index.ts` ships the Step 4 block byte-verbatim (prettier's multi-line spread at printWidth); the Task 7 section's registry block was re-labeled to point here; the Step 5 `git add` line above now carries the real explicit file set (+ this doc). **Gates:** `pnpm test` **446→452 passed / 69→70 files** (the +6 are this file's cases; the one pre-existing edit is the mount snapshot pin); `pnpm lint` 0 issues; `pnpm typecheck` clean; coverage: `composites.ts` 100×4 (absent from the reduced uncovered table like its siblings), the documented-uncovered set unchanged (`bridge.ts:36`, `http.ts`, `mount.ts:45-48`, `tasks.ts:115`, `auth.ts:47`, `rate-limit.ts:35`, `migrations.ts:274`, `task-repo.ts:151-164`, `thread-repo.ts:96/132`), every global axis at-or-above the Task 7 record (Stmts 99.2→99.22 / Branch 96.9→96.95 / Funcs 99.73→99.73 / Lines 99.52→99.53); final-gate recording stays Task 11's.
+> **Amendment (Task 8, byte-sync — shipped divergences; the two blocks above now carry the shipped bodies byte-verbatim):** The Task 8 commit re-labeled the two block headers `sync = shipped form` while their bodies still carried the planned pre-amendment text — a claim the protocol only allows once identical, caught in review; this child commit of `9e28044` replaces both bodies with the shipped files. Convention (Tasks 2–7 rulings): the block's first line(s) are the plan-side `// src/…` label — kept above and it stands in for the shipped file's leading comment (`composites.ts` ships a two-line descriptive header, exactly the `references.ts` case where the label replaces it) — and from the first `import` each body is byte-equal to the shipped files at `9e28044`. The enumerated divergences below are unchanged and now describe the blocks: (1) `composites.test.ts` imports ship as `#root/...` — the planned `'./composites'`/`'./discussion'`/`'./references'`/`'./tasks'` are TS2835 under `moduleResolution: nodenext` (Task 2–7 precedent); neither shipped file carries the plan's `// src/...` first line. (2) `withMcp` ships with `t` (the `makeTestApp` result) as a second callback arg, the `tasks.test.ts` helper shape — two shipped pins need deps/app: the throw-site string pin (5) and the REST-twin inject (6). (3) Seed `status: 'todo'` on the three claim-needing creates (test 1 `work`, test 2 `loop`, test 6 `parent`): `create-task.ts:23` defaults to **backlog** and both `getNext` (ready) and the claim gate (`todo|in_progress`) exclude it — the planned bare creates made `claim_next`'s `claimed: true` and the `claim_task` pins unproducible (Ruling 4, Task 5 Amendment (6): a test-seed correction, NOT a tool default). Tests 3 `why`, 4 `partial`, 5 `ask` need no claim/ready and ship bare, byte-verbatim. (4) `ask_question`'s assignee ships `'nils'`, not `'a_nils'` (Ruling 1 / Task 6 Amendment (3): `findByHandle` is exact-match and `'a_nils'` is the seeded human's ID — the planned value 404s the success arm). D-r: a question nils asks nils books **no** inbox row — the test asserts none (Ruling 8); nothing in this file asserts inbox rows. The `'a_ghost'` arm ships byte-verbatim. (5) **The reason-required pin moves the string to its throw site:** the planned `toEqual({code, status, detail: 'status in post_update requires reason'})` is unshippable — the D-jj FLAT envelope is `{code, status, ...details}` and mirrors no prose (Task 7 Amendment (5) established: the envelope carries `{code, status}`, tests assert the envelope, not the message). Shipped: `toEqual({code: 'invalid_request', status: 400})` on the envelope PLUS a direct `postUpdate.run(deps, ctx, {…} as never)` asserting `rejects.toThrow(/status in post_update requires reason/)` — the plan-pinned machine string pinned verbatim at its throw site, never reworded, code+status pinned by the envelope arm. (The direct call books one further note thread before throwing — the same D-nn non-transactional reality test 4 pins; it breaks no assertion.) (6) Test 5's ghost arm gains the **REST-twin same-code** inject: `POST /tasks/{id}/threads` with `assignee_handle: 'a_ghost'` → 404 and `rest.json().code` asserted EQUAL to the MCP envelope's code — the same shared resolver answers both surfaces with the same machine code (D-nn, no grammar fork). (7) `postUpdate` ships `lease_token: a.lease_token` as a third `updateStatus` key: invariant 3 (`update-status.ts:40-46`) requires the live lease on a CLAIMED task, so the block's dropped lease made its own test-2 pin (`full.task.status === 'in_review'` after `claim_task`) always die at `stale_lease`; the §7.4 loop threads its lease into every lease-gated step exactly like REST's body (`PATCH /tasks/{id}/status` takes `lease_token`). Zero new logic. (8) **`TaskWithCounts` wrapper hop (field-name pin duty, two places):** `getNext` returns `TaskWithCounts` (`ports.ts:57-61`) — the record lives under `.task`. The block's `ready[0]!.id` is TS2339; the shipped tool reads `head.task.id` (`!` dropped: lint `no-unnecessary-type-assertion`, `noUncheckedIndexedAccess` is off). The split test's annotation missed the same wrapper: `parent: {claim_token_id}` → `parent: {task: {claim_token_id}}`, asserted `split.parent.task.claim_token_id` (un-DTO'd `SplitTaskResult` passes through exactly like the REST route's body; REST's own split pin reads it via a re-GET, `routes/tasks.test.ts:110-113`). (9) Bounds transcription duty: `post_update` `body` and `ask_question` `text` ship `.min(1).max(20000)` (the thread-body ceiling, `routes/threads.ts:35`/`:68` — the block carried only the floors) and `assignee` ships `.min(1).max(60)` (`:36`) — the Task 5/6 "block carried the floor, ship the ceiling too" precedent. (10) **SplitChildDraft key duty executed:** the duty's module pointer is stale — `SplitTaskInput`/`SplitChildDraft` live in `#root/application/usecases/split-task` (`:11-21`), not `ports.ts` (no split symbols there — `rg` confirmed). The draft DOES carry optional `description`/`acceptance_criteria` (exactly the "then mirror them" branch): the shipped child schema mirrors all four keys with `title: z.string().min(1).max(300)` (`routes/tasks.ts:167`) and the array's `.min(1)` byte-verbatim (`minItems: 1`, `:161`); `children` passes to the uc untouched — the call site `{taskId, children, ...ctx}` is byte-identical to the route (`:180-185`). (11) Test 2's `note` annotation gains `id` — the block's own next line uses `note.thread.id` while its annotation omitted it (typecheck rejects). (12) Step 2 RED, honestly measured, two-stage: first run = `Cannot find module '#root/adapters/mcp/tools/composites'` (the module itself is new — file-level RED), re-run against an empty-registry stub: **6 failed / 0 passed**, every case dying at its first new-tool call with `ProtocolError: Tool claim_next|post_update|ask_question|split_task not found` — the SDK v2 **rejection** shape pinned by Task 3's `bridge.test.ts` (Task 5/6/7 precedent), not an isError. (13) Cross-task touches: the `mount.test.ts` exact-set canary grew **31→35** names (`ask_question`, `claim_next`, `post_update`, `split_task`), shipped renamed `tools/list is exactly the current task-8-grown surface snapshot` with the pointer comment updated inline (Task 5/6/7 precedent; the final 35-pin contract gate stays Task 10's own test, D-ll); `tools/index.ts` ships the Step 4 block byte-verbatim (prettier's multi-line spread at printWidth); the Task 7 section's registry block was re-labeled to point here; the Step 5 `git add` line above now carries the real explicit file set (+ this doc). **Gates:** `pnpm test` **446→452 passed / 69→70 files** (the +6 are this file's cases; the one pre-existing edit is the mount snapshot pin); `pnpm lint` 0 issues; `pnpm typecheck` clean; coverage: `composites.ts` 100×4 (absent from the reduced uncovered table like its siblings), the documented-uncovered set unchanged (`bridge.ts:36`, `http.ts`, `mount.ts:45-48`, `tasks.ts:115`, `auth.ts:47`, `rate-limit.ts:35`, `migrations.ts:274`, `task-repo.ts:151-164`, `thread-repo.ts:96/132`), every global axis at-or-above the Task 7 record (Stmts 99.2→99.22 / Branch 96.9→96.95 / Funcs 99.73→99.73 / Lines 99.52→99.53); final-gate recording stays Task 11's.
 
 ## Task 9: `nightshift-client` — generated schema, drift pin, typed wrapper (D-kk)
 
