@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadConfig } from '#root/main/config'
+import { loadConfig, oidcEnabled } from '#root/main/config'
 
 describe('loadConfig', () => {
   it('applies defaults', () => {
@@ -13,6 +13,13 @@ describe('loadConfig', () => {
       webhookIntervalMs: 1000,
       webhookTimeoutMs: 5000,
       webhookMaxBackoffMs: 300_000,
+      oidcIssuer: undefined,
+      oidcClientId: undefined,
+      oidcClientSecret: undefined,
+      oidcScope: 'openid profile email',
+      publicUrl: undefined,
+      sessionKey: undefined,
+      sessionTtlS: 28_800,
     })
   })
 
@@ -54,5 +61,45 @@ describe('loadConfig', () => {
     expect(loadConfig({ NS_WEBHOOK_INTERVAL_MS: '0' }).webhookIntervalMs).toBe(0)
     expect(() => loadConfig({ NS_WEBHOOK_TIMEOUT_MS: '1' })).toThrow(/invalid env/)
     expect(() => loadConfig({ NS_WEBHOOK_MAX_BACKOFF_MS: '5' })).toThrow(/invalid env/)
+  })
+})
+
+describe('plan E config seams (D-pp/D-qq)', () => {
+  const oidcEnv = {
+    NS_DB_PATH: ':memory:',
+    NS_OIDC_ISSUER: 'https://id.example.com/',
+    NS_OIDC_CLIENT_ID: 'nightshift',
+    NS_PUBLIC_URL: 'http://localhost:3123/',
+    NS_SESSION_KEY: 'k'.repeat(32),
+  }
+
+  it('strips trailing slashes from issuer and public URL', () => {
+    const c = loadConfig(oidcEnv)
+    expect(c.oidcIssuer).toBe('https://id.example.com')
+    expect(c.publicUrl).toBe('http://localhost:3123')
+  })
+
+  it('OIDC configured WITHOUT a session key is invalid env', () => {
+    const { NS_SESSION_KEY: _drop, ...env } = oidcEnv
+    expect(() => loadConfig(env)).toThrow(/invalid env/)
+  })
+
+  it('OIDC configured WITHOUT NS_PUBLIC_URL is invalid env', () => {
+    const { NS_PUBLIC_URL: _drop, ...env } = oidcEnv
+    expect(() => loadConfig(env)).toThrow(/invalid env/)
+  })
+
+  it('session key WITHOUT OIDC is legal (dormant); issuer WITHOUT client id is dormant', () => {
+    expect(() =>
+      loadConfig({ NS_DB_PATH: ':memory:', NS_SESSION_KEY: 'k'.repeat(32) })
+    ).not.toThrow()
+    expect(() =>
+      loadConfig({ NS_DB_PATH: ':memory:', NS_OIDC_ISSUER: 'https://id.example.com' })
+    ).not.toThrow()
+  })
+
+  it('oidcEnabled is the single truth for the enabled posture', () => {
+    expect(oidcEnabled(loadConfig(oidcEnv))).toBe(true)
+    expect(oidcEnabled(loadConfig({ NS_DB_PATH: ':memory:' }))).toBe(false)
   })
 })

@@ -194,45 +194,61 @@ describe('plan E config seams (D-pp/D-qq)', () => {
 
 - [ ] **Step 3: Run to verify RED**: `pnpm test src/main/config.test.ts` → FAIL (unknown keys' defaults + missing `oidcEnabled` export).
 
-- [ ] **Step 4: Implement (`src/main/config.ts`)** — EnvSchema gains, in declaration order after the webhook keys:
+- [ ] **Step 4: Implement (`src/main/config.ts`)** — EnvSchema gains, in declaration order after the webhook keys, plus the object-level fail-closed matrix BEFORE `.safeParse` usage (superRefine on `EnvSchema` via `.superRefine`). Shipped form below: prettier merged the gains block and the superRefine block into ONE `EnvSchema` const chain (see Amendment):
 
 ```ts
-  // Plan E (D-pp/D-qq): OIDC RP + cookie sessions. All optional — the suite and
-  // every pre-E deployment stays byte-identical when absent (dormant). Trailing
-  // slashes are STRIPPED here once: issuer string-equality (D-pp) and the
-  // redirect_uri are built from these exact values.
-  NS_OIDC_ISSUER: z
-    .string()
-    .min(1)
-    .optional()
-    .transform((v) => v?.replace(/\/+$/, '')),
-  NS_OIDC_CLIENT_ID: z.string().min(1).optional(),
-  // D-ff posture: env-only, never logged, never printed in tests; sent in the
-  // token-endpoint BODY only (client_secret_post), never the URL.
-  NS_OIDC_CLIENT_SECRET: z.string().min(8).optional(),
-  NS_OIDC_SCOPE: z.string().min(1).default('openid profile email'),
-  NS_PUBLIC_URL: z
-    .string()
-    .min(1)
-    .optional()
-    .transform((v) => v?.replace(/\/+$/, '')),
-  NS_SESSION_KEY: z.string().min(32).optional(),
-  NS_SESSION_TTL_S: z.coerce.number().int().min(60).max(2_592_000).default(28_800),
-```
-
-and the object-level fail-closed matrix BEFORE `.safeParse` usage (superRefine on `EnvSchema` via `.superRefine`):
-
-```ts
-  // fail-closed matrix (D-qq): once OIDC is configured (issuer AND client id),
-  // the session key and our own public URL are REQUIRED — a half-configured
-  // login surface is worse than no login surface.
+// src/main/config.ts — EnvSchema (gains + fail-closed matrix, chain merged by prettier) — sync = shipped form (see Amendment)
+const EnvSchema = z
+  .object({
+    NS_PORT: z.coerce.number().int().min(1024).max(65535).default(3123),
+    NS_DB_PATH: z.string().min(1).default('./nightshift.db'),
+    NS_BOOTSTRAP_TOKEN: z.string().min(32).optional(),
+    NS_DATA_DIR: z.string().min(1).default('./data'),
+    NS_MAX_UPLOAD_BYTES: z.coerce.number().int().min(1024).default(20_971_520),
+    NS_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(0).default(120),
+    NS_WEBHOOK_INTERVAL_MS: z.coerce.number().int().min(0).default(1_000),
+    NS_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(100).default(5_000),
+    NS_WEBHOOK_MAX_BACKOFF_MS: z.coerce.number().int().min(1_000).default(300_000),
+    // Plan E (D-pp/D-qq): OIDC RP + cookie sessions. All optional — the suite and
+    // every pre-E deployment stays byte-identical when absent (dormant). Trailing
+    // slashes are STRIPPED here once: issuer string-equality (D-pp) and the
+    // redirect_uri are built from these exact values.
+    NS_OIDC_ISSUER: z
+      .string()
+      .min(1)
+      .optional()
+      .transform((v) => v?.replace(/\/+$/, '')),
+    NS_OIDC_CLIENT_ID: z.string().min(1).optional(),
+    // D-ff posture: env-only, never logged, never printed in tests; sent in the
+    // token-endpoint BODY only (client_secret_post), never the URL.
+    NS_OIDC_CLIENT_SECRET: z.string().min(8).optional(),
+    NS_OIDC_SCOPE: z.string().min(1).default('openid profile email'),
+    NS_PUBLIC_URL: z
+      .string()
+      .min(1)
+      .optional()
+      .transform((v) => v?.replace(/\/+$/, '')),
+    NS_SESSION_KEY: z.string().min(32).optional(),
+    NS_SESSION_TTL_S: z.coerce.number().int().min(60).max(2_592_000).default(28_800),
+    // fail-closed matrix (D-qq): once OIDC is configured (issuer AND client id),
+    // the session key and our own public URL are REQUIRED — a half-configured
+    // login surface is worse than no login surface.
+  })
   .superRefine((e, ctx) => {
     if (e.NS_OIDC_ISSUER && e.NS_OIDC_CLIENT_ID) {
       if (!e.NS_SESSION_KEY) {
-        ctx.addIssue({ code: 'custom', message: 'NS_SESSION_KEY is required when OIDC is configured', path: ['NS_SESSION_KEY'] })
+        ctx.addIssue({
+          code: 'custom',
+          message: 'NS_SESSION_KEY is required when OIDC is configured',
+          path: ['NS_SESSION_KEY'],
+        })
       }
       if (!e.NS_PUBLIC_URL) {
-        ctx.addIssue({ code: 'custom', message: 'NS_PUBLIC_URL is required when OIDC is configured', path: ['NS_PUBLIC_URL'] })
+        ctx.addIssue({
+          code: 'custom',
+          message: 'NS_PUBLIC_URL is required when OIDC is configured',
+          path: ['NS_PUBLIC_URL'],
+        })
       }
     }
   })
@@ -259,6 +275,8 @@ export const oidcEnabled = (
 git add package.json pnpm-lock.yaml src/main/config.ts src/main/config.test.ts
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(config): OIDC/session env seams with fail-closed matrix (D-pp/D-qq)"
 ```
+
+> **Amendment (Task 1, @implementer — prettier merged the Step-4 blocks; sync = shipped form):** (1) The two Step-4 code blocks ship as ONE `EnvSchema` const: prettier (printWidth 100) reflows `z.object({...}).superRefine(...)` as the chain `z\n  .object({…})\n  .superRefine(…)`, so the gains sit at +2 indent inside the object and the planned single-line `ctx.addIssue({ code: 'custom', … })` arms (118/112 chars) exceed printWidth and ship multi-line. The block above was replaced with the shipped bytes verbatim and labeled `sync = shipped form`; key order, transforms, messages and paths are byte-verbatim from the plan. (2) Step 2's test additions ship byte-verbatim — the appended `describe` block and the `oidcEnabled` export block are identical to their planned text (`prettier --check`: unchanged); the defaults-`toEqual` gains landed as the comment's listed keys in `Config` return-order. (3) Step 3 RED honestly measured: **5 failed / 9 passed** — defaults `toEqual` (missing `oidcScope`/`sessionTtlS` values), trailing-slash strip, both fail-closed arms, and `TypeError: oidcEnabled is not a function` — exactly the step's predicted "unknown keys' defaults + missing `oidcEnabled` export"; honest footnote: the fourth new test ("session key WITHOUT OIDC is legal (dormant)") PASSED pre-implementation because the pre-E schema already ignores unknown env keys — it is a dormant-legality pin, not RED evidence, and none is claimed from it. (4) Step 1 installs first-run clean: `jose@6.2.12` + `@fastify/static@10.1.3` exact-pinned (no carets); `@fastify/static` sorts alphabetically above `@modelcontextprotocol/server` in `dependencies` — pnpm placement, not a divergence; `pnpm-workspace.yaml` `onlyBuiltDependencies` untouched (`{esbuild, better-sqlite3}`); the `openapi-typescript ✕ unmet peer typescript@^5.x` warning PRE-DATES this task (repo pins TS 6.0.3) and is unrelated. (5) zod@4.5.4 nuance: `ctx.addIssue({ code: 'custom', … })` compiles and runs green as planned — no repair needed. **Gates:** `pnpm test` **517→522 passed / 74 files** (+5, all in `config.test.ts`; no other test file added/edited); `pnpm lint` 0 issues; `pnpm typecheck` clean; the suite-wide defaults `toEqual` pin proves zero behavior drift for pre-E env.
 
 ## Task 2: Identity persistence — roles, oidc_subject, sessions, allow-list, contract + client regen
 
