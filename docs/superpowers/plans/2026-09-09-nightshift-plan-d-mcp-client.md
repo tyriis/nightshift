@@ -266,11 +266,11 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "refactor(api): shared handle r
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
-// src/adapters/mcp/bridge.test.ts
+// src/adapters/mcp/bridge.test.ts — sync = shipped form (#root imports + SDK-rejection pin for unknown tools; see Amendment)
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { defineTool, McpEnvelopeError, okResult, runTool } from './bridge'
-import { buildMcpServer } from './server'
+import { defineTool, McpEnvelopeError, okResult, runTool } from '#root/adapters/mcp/bridge'
+import { buildMcpServer } from '#root/adapters/mcp/server'
 import { InMemoryTransport } from '@modelcontextprotocol/client'
 import { Client } from '@modelcontextprotocol/client'
 import { DomainError } from '#root/domain/errors'
@@ -374,8 +374,9 @@ describe('buildMcpServer over the in-memory pair', () => {
       expect(ok.structuredContent).toEqual({ result: { msg: 'hey' } })
       const badArgs = await client.callTool({ name: 'echo', arguments: { msg: 42 } })
       expect(badArgs.isError).toBe(true) // SDK input-validation shape — declared scope (D-jj)
-      const unknown = await client.callTool({ name: 'nope', arguments: {} })
-      expect(unknown.isError).toBe(true)
+      // SDK v2 answers an unknown tool with a JSON-RPC REJECTION (ProtocolError),
+      // not isError:true — the "rejected ⇄ rejected" SDK-level scope of D-jj.
+      await expect(client.callTool({ name: 'nope', arguments: {} })).rejects.toThrow(/nope/)
     } finally {
       await client.close()
     }
@@ -390,7 +391,7 @@ Run: `pnpm test src/adapters/mcp/bridge.test.ts` — FAIL: cannot resolve `./bri
 - [ ] **Step 3: Implement the bridge**
 
 ```ts
-// src/adapters/mcp/bridge.ts
+// src/adapters/mcp/bridge.ts — sync = shipped form (McpEnvelopeError message lint-fix; see Amendment)
 import type { CallToolResult } from '@modelcontextprotocol/server'
 import type { z } from 'zod'
 import type { ActorContext } from '#root/application/ports'
@@ -424,7 +425,9 @@ export const defineTool = <S extends z.ZodType>(def: ToolDef<S>): McpTool =>
 // throw DomainError, exactly like the REST twins.
 export class McpEnvelopeError extends Error {
   constructor(readonly envelope: Record<string, unknown>) {
-    super(String(envelope.code ?? 'internal_error'))
+    // string-typed by the ADAPTER vocabulary (every code is a string literal);
+    // non-string degrades to internal_error, mirroring the ?? fallback intent
+    super(typeof envelope.code === 'string' ? envelope.code : 'internal_error')
   }
 }
 
@@ -458,8 +461,9 @@ export const runTool = async (
 ```
 
 ```ts
-// src/adapters/mcp/server.ts
+// src/adapters/mcp/server.ts — sync = shipped form (inputSchema cast to StandardSchemaWithJSON; see Amendment)
 import { McpServer } from '@modelcontextprotocol/server'
+import type { StandardSchemaWithJSON } from '@modelcontextprotocol/server'
 import type { ActorContext } from '#root/application/ports'
 import { runTool } from '#root/adapters/mcp/bridge'
 import type { McpTool } from '#root/adapters/mcp/bridge'
@@ -475,9 +479,13 @@ export const buildMcpServer = (deps: AppDeps, ctx: ActorContext, tools: McpTool[
   for (const tool of tools) {
     server.registerTool(
       tool.name,
-      // `as never`: satisfies the StandardSchemaWithJSON generic at the erased
-      // registry edge; the runtime schema is the real zod object (probe-verified).
-      { description: tool.description, inputSchema: tool.input as never },
+      // Cast at the erased registry edge: satisfies the StandardSchemaWithJSON
+      // generic (SDK v2 registerTool infers cb: never from an `as never` schema);
+      // the runtime schema is the real zod object (probe-verified).
+      {
+        description: tool.description,
+        inputSchema: tool.input as unknown as StandardSchemaWithJSON,
+      },
       (args) => runTool(tool, deps, ctx, args)
     )
   }
@@ -486,19 +494,28 @@ export const buildMcpServer = (deps: AppDeps, ctx: ActorContext, tools: McpTool[
 ```
 
 ```ts
-// src/testing/mcp-client.ts — harness: in-memory pair + real-HTTP client + actor ctx lookup
+// src/testing/mcp-client.ts — harness: in-memory pair + real-HTTP client + actor ctx lookup — sync = shipped form (hashToken home + McpHarness return types; see Amendment)
 import {
   Client,
   InMemoryTransport,
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client'
+import type { CallToolResult, ListToolsResult } from '@modelcontextprotocol/client'
 import { buildMcpServer } from '#root/adapters/mcp/server'
 import type { McpTool } from '#root/adapters/mcp/bridge'
 import type { ActorContext } from '#root/application/ports'
 import type { AppDeps } from '#root/main/deps'
-import { hashToken } from '#root/application/token-hash'
-// ^ Step 3 discovery pin: `rg "export const hashToken" src/` — use the ACTUAL home
-// module path under #root; the pin is the function, not this guessed path (amend if moved).
+import { hashToken } from '#root/infra/token-hash'
+// ^ `rg "export const hashToken" src/` — the function's ACTUAL home module (D-jj
+// discovery pin; the plan block guessed application/token-hash — amended).
+
+// Shared handle of both open helpers (explicit by lint: exported arrows need
+// return types; declaration emit requires the name exported).
+export interface McpHarness {
+  call(tool: string, args?: Record<string, unknown>): Promise<CallToolResult>
+  list(): Promise<ListToolsResult>
+  close(): Promise<void>
+}
 
 export const actorContextFor = async (deps: AppDeps, rawToken: string): Promise<ActorContext> => {
   const lookup = await deps.actorsRoot.findActiveTokenByHash(hashToken(rawToken))
@@ -506,7 +523,11 @@ export const actorContextFor = async (deps: AppDeps, rawToken: string): Promise<
   return { actor: lookup.actor, tokenId: lookup.token.id }
 }
 
-export const openInMemoryPair = async (deps: AppDeps, ctx: ActorContext, tools: McpTool[]) => {
+export const openInMemoryPair = async (
+  deps: AppDeps,
+  ctx: ActorContext,
+  tools: McpTool[]
+): Promise<McpHarness> => {
   const server = buildMcpServer(deps, ctx, tools)
   const [clientEnd, serverEnd] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'test-harness', version: '1.0.0' })
@@ -520,7 +541,11 @@ export const openInMemoryPair = async (deps: AppDeps, ctx: ActorContext, tools: 
 }
 
 // pin='2026-07-28' forces the modern era; pin=undefined keeps the default legacy handshake.
-export const openHttpMcp = async (baseUrl: string, bearer: string, pin?: '2026-07-28') => {
+export const openHttpMcp = async (
+  baseUrl: string,
+  bearer: string,
+  pin?: '2026-07-28'
+): Promise<McpHarness> => {
   const client = new Client(
     { name: 'test-harness', version: '1.0.0' },
     pin === undefined ? undefined : { versionNegotiation: { mode: { pin } } }
@@ -549,6 +574,8 @@ If `registerTool`'s typings reject the bridge shapes, fix minimally and record a
 git add src/adapters/mcp src/testing/mcp-client.ts
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): envelope bridge + server builder (D-jj)"
 ```
+
+> **Amendment (Task 3, byte-sync — six shipped divergences, blocks above re-labeled sync = shipped form):** (1) `bridge.test.ts` imports ship as `#root/adapters/mcp/bridge` / `#root/adapters/mcp/server` — the planned `./bridge`/`./server` are TS2835 under this repo's `moduleResolution: nodenext` (Task 2 precedent; zero relative imports in src/). The Step 2 RED ran against these paths: `Cannot find module '#root/adapters/mcp/bridge'` (the step's `./bridge` wording describes the pre-amendment form). (2) `bridge.test.ts` unknown-tool row: SDK v2 answers `callTool({ name: 'nope' })` with a JSON-RPC **rejection** (`ProtocolError: Tool nope not found`), not `isError:true` — the assertion ships as `rejects.toThrow(/nope/)`. Doctrine unchanged: D-jj's declared scope ("SDK-level rejections — unknown tool, input validation — keep SDK error shapes", "rejected ⇄ rejected"); the `msg: 42` input-validation row keeps `isError:true` exactly as planned. (3) `server.ts`: `inputSchema: tool.input as never` → `as unknown as StandardSchemaWithJSON` (+ `import type { StandardSchemaWithJSON } from '@modelcontextprotocol/server'`): SDK v2's two `registerTool` overloads resolve `InputArgs` from the schema, so `never` collapses `cb` to `never` and BOTH overloads reject the handler (the exact rejection Step 4 sanctions fixing); the named interface is the constraint the block's own comment names, and the runtime schema stays the real zod object (zod 4.5.4 schemas satisfy StandardSchemaV1 structurally). Callback otherwise byte-identical. (4) `mcp-client.ts`: `hashToken` ships from `#root/infra/token-hash` — the Step 3 discovery pin resolves `rg "export const hashToken" src/` → `src/infra/token-hash.ts:3` (also `#root/testing/test-app.ts`'s import); the block's `application/token-hash` was the declared guess. (5) `mcp-client.ts` ships with `export interface McpHarness` + `: Promise<McpHarness>` on both openers (eslint `explicit-function-return-type` fires on exported arrow consts even with `allowExpressions`; `declaration: true` requires the return type's name exported) and the matching type-only import from the client barrel. Additive typing; zero behavior delta. (6) `bridge.ts`: `McpEnvelopeError`'s message ships as `typeof envelope.code === 'string' ? envelope.code : 'internal_error'` (eslint `no-base-to-string` rejects `String()` of `unknown`); identical for every reachable envelope — all `ADAPTER_ERROR_CODES` are string literals. Gates: 420→426 passed / 64→65 files; lint + typecheck clean; the four `// src/...` first lines are plan-side labels, not shipped (Task 2 convention).
 
 ## Task 4: The `/mcp` mount — same hook chain, drift exemption, seed tools
 
