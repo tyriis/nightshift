@@ -20,6 +20,39 @@
 - Environment facts (planner-verified 2026-09-09): node 24.20.0 / pnpm 10.33.0 via mise; `~/.cache/ms-playwright` ABSENT (browser binaries not installed); pnpm registry reachable.
 - Decision letters: continue Plan D's `D-oo` at **`D-pp`**. Note: Plan D's line 37 cites a `D-uu` precedent that exists in NO plan record (dangling reference in the merged doc — observed, not repaired; merged records stay untouched). Plan E therefore **skips the `D-uu` letter** to keep the namespace unambiguous.
 
+### Pre-dispatch amendment ledger (plan-review FAIL + artifact preflight, 2026-09-09)
+
+Independent review returned **FAIL** (findings B1–B12 + notes); the artifact preflight machine-verified every embedded block against the pinned deps (jose@6.2.12 / fastify@5.12.3 / @fastify/static@10.1.3 / zod@4.5.4 / kysely@0.29.5 / better-sqlite3@13.0.3; TS 6.0.3 nodenext + declaration emit; node 24.20.0 / pnpm 10.33 via mise). All revisions below are LOGGED here and applied to the blocks; a **re-review (attempt 2 of 3) is required before implementer dispatch**. The byte-sync protocol still governs shipped-vs-plan divergences.
+
+- [preflight P1/fix1] Task 5 + D-pp: the `createRemoteJWKSet` fetch seam is jose's exported `customFetch` SYMBOL — a plain `{ fetch }` option does not exist and is silently ignored (jose would hit `globalThis.fetch` ⇒ real sockets in tests); the "Planner preflight note" paragraph is consumed and `remoteJwks` ships its probed form.
+- [preflight P2/fix2] Task 5 stub-idp: fastify@5.12.3 has NO built-in urlencoded parser — the stub registers an `addContentTypeParser(...)` or every token POST answers 415.
+- [preflight P2/fix3] Task 5 makeInjectFetch: `payload` must stringify a URLSearchParams body (exchangeCode posts `body: form`) — the plan form dropped it and token exchange could never go green.
+- [preflight P2/fix4] Task 5 test list: the expired arm signs exp-120s — exp-10s sits inside the pinned clockTolerance:60 and never throws.
+- [preflight P2] Task 5 shipped-form note: the `discover` cache block ran green AS-WRITTEN — ships unchanged.
+- [preflight P4/fix5] Task 2 migration: the actors `_v2` rebuild is REPLACED by ADD COLUMN + unique index + UPDATE backfill — dropping the PARENT table (eight pre-E tables reference it) under `foreign_keys=ON` throws inside the Migrator transaction on deployed DBs (`defer_foreign_keys` still fails at COMMIT; in-txn `foreign_keys=OFF` is a no-op — probe-recorded; actors-only fixtures cannot see it); D-ss records the why.
+- [preflight P4/fix6] Task 2 Step-1 test: migrateTo target `'2026-09-12_webhooks'` — kysely sorts migration names lexicographically; fts_search is NOT the pre-E head.
+- [preflight P4/fix7] Task 2 Step-1 test: `.orderBy('id')` on the actors select (rowid order returns the human first; the pinned array order was RED).
+- [preflight P6/fix8] Task 3 Step-1 test: pins the SHIPPED attribute order `; HttpOnly; Secure; SameSite=Lax; Path=/` (regex + c1) — the old pin contradicted the task's own implementation (the RED could never go green).
+- [review R1/B6 + preflight fix10] D-rr records credential precedence: valid cookie + bearer ⇒ SESSION wins (the arm resolves first); Task 4 pin #9 INVERTED accordingly; D-ww both-credentials consequence (the 403 session rejection answers on /mcp).
+- [preflight P7/fix11] Task 10 ui.ts: the scope registers `{ prefix: '/ui' }` with static `prefix: '/'` — the plan shape threw 'Not found handler already set for Fastify instance with prefix: /' at boot; the dead `deps.deliveryLoop` line is deleted (2-arg signature kept, `app.log` warns).
+- [preflight P7/fix12] Task 10 drift test: routeKeys learns the wildcard leaf (sentinel `GET *` — pretty-print carries NO path for wildcards in any mode); the fails-loudly test re-pins in the SAME edit; the `GET /ui/*` spelling is pinned via `hasRoute` (GET ⇒ uiBuildPresent, POST ⇒ false) captured before `t.close()`; D-vv ruling #2 + the Task 10 title/files lines updated.
+- [preflight P7/fix13] Task 10 U5: inject (and every UA) normalizes dot-segments BEFORE the hook — U5 re-pinned honestly (normalizer unit + /uix 401; a dot-segment inject answers the PUBLIC spec route, never the UI nor the API-under-test).
+- [review R6/preflight n9] Task 7 hook arm: `(AUTH_PRE_SESSION as readonly string[]).includes(path)` — readonly-tuple `.includes(string)` is TS2345 (arm position unchanged: Task 7 Step 4).
+- [review R2/B10] Task 6: the `PUT /admin/policy/{key}` body enum `['on','off']` (admin.ts:107 + openapi.yaml ~:466) widens to `['on','off','allowlist']`; NEW test arm: review_gate STILL rejects 'allowlist' (400 — POLICY_ALLOWLIST stays the per-key semantic gate).
+- [review R3/B12] Task 9 Step 0: the board DTO gains `labels: string[]` (`TaskWithCounts` + `toTaskDto` + batched `labelsFor` in the task-repo list/get paths, no N+1) + the yaml `Task` schema + gen:client artifact in the Task 9 commit; §11.2 body-pins update mechanically; D-vv records the contract addition; the board chip filters `t.labels.includes(fLabel)`.
+- [review R4/B9] Task 9 events.ts: /events returns a BARE ARRAY (`rows.map(toEvent)`; cursor = audit id) — FeedPage → FeedEvent[]; the state reducers + loop take the array; the unused `import { api }` is dropped.
+- [review R5/B11] Task 11: the probe is `playwright screenshot ... about:blank` (a real headless launch — the 1.63 CLI has no `launch` command); D-xx + Step 1 updated.
+- [review R7/B2/B3] Task 2: `bootstrap.ts` create gains `role: 'admin'` ("bootstrap IS the admin — role-NULL would 403 the first boot") + the ActorRef/ActorRow typecheck ripple enumerated (bootstrap.test.ts, actor-repo.test.ts, bridge.test.ts, usecase ctx test files) with the `pnpm typecheck` sweep rule; the Task 2 header, commit list and file-structure section grow.
+- [review notes a] D-zz: eight → SEVEN new yaml operations (4 `auth` incl. `/auth/me` + 3 `admin`).
+- [review notes b] D-tt: the handle grammar is restated cleanly — D-q grammar `[A-Za-z0-9][A-Za-z0-9_-]*` with lowercase normalization; Task 7's sanitize governs.
+- [review notes c] Task 7 L1: routes/auth.ts must call `sendProblem(reply, 500, 'internal_error', 'oidc not configured')` EXPLICITLY (the generic Error path answers detail 'internal error' — problem.ts:59-65).
+- [review notes d] all plan commit subjects ≤72 chars (Tasks 2/4/5/6/7/8/9 rewritten).
+- [review notes e] Task 11: global-setup writes the bootstrap token to an `os.tmpdir()` path — no repo `.tokens.json`; `.gitignore` gains only `playwright-report/` + `test-results/`.
+- [review notes f] Task 1: honest defaults-comment — undefined members are listed for grep-visibility + future-default tripwire; vitest toEqual tolerates undefined either way.
+- [review notes g/h] Task 9: the ready-only predicate ships DIRECTLY in Step 3 in its amended form (plain-leaf + `unmet_blockers === 0` + `claim_token_id === null`, both on the DTO); the children tab renders NESTED per §8-2; the self-correction paragraph reduced to one honest sentence.
+- [review notes i] Task 6/7: the `deps.useCases` additions are named — `addAllowlist`/`removeAllowlist`/`listAllowlist` + `useCases.provisionHumanFromOidc` (key spelling aligned everywhere).
+- [review notes j] D-zz + Task 7 Step 6: `/auth/logout` carries `security: []` DELIBERATELY — the drift test pins path×method only and cannot see the security field (honest documentation, stated where the yaml shape is owned).
+
 ### Inherited binding rulings (Plans A+B+C+D — obey; violation = task failure)
 
 - **Error taxonomy ONE map:** no Plan E task adds a `DomainErrorCode` WITHOUT a recorded decision; `src/domain/errors.ts` and the yaml `Problem.code` enum move only via a recorded ruling + the enum pin (`domain ∪ adapter === enum`, exact). Adapter codes live in `problem.ts` `ADAPTER_ERROR_CODES` (currently exactly `{internal_error:500, payload_too_large:413, unsupported_media_type:415}`). Plan E's PRE-FERRIED seam: a bare `Error{statusCode:401}` already maps to `unauthenticated` problem+json (`problem.ts` setErrorHandler; `app.test.ts:73-83` pins the Plan E expectation) — session-layer rejections SHOULD ride that, not new codes.
@@ -51,25 +84,25 @@ The code blocks below are the planned text. If shipped code lands byte-different
 
 ## Decision records (Plan E — D-pp … D-zz; letters continue Plan D's D-oo; **`D-uu` intentionally skipped** — it appears as a dangling citation at Plan D line 37 with no defining record anywhere in the repo; E does not define a second `D-uu` and does not edit the merged Plan D doc)
 
-**D-pp — OIDC RP line: `jose@6.2.12` as the sanctioned runtime-dep exception; authorization-code + PKCE(S256) against Pocket ID; ALL RP traffic behind an injectable fetch seam; tests are in-process `inject()` only.** Pocket ID v2.14 facts pinned from vendor docs/source (lib-1): discovery at `{issuer}/.well-known/openid-configuration`; **single active signing key, default RS256** (`id_token_signing_alg_values_supported` contains exactly one value); `at_hash` IS emitted with the digest derived from the id_token header `alg`; RFC 9207 `iss` on the authorization redirect (`authorization_response_iss_parameter_supported: true`); PKCE is enforced for public clients; confidential clients use `client_secret_post`; `code_challenge_methods_supported` includes S256. Why jose and not hand-rolled `node:crypto`: JWT BCP (`draft-ietf-oauth-rfc8725bis-10`, Aug 2026, obsoletes RFC 8725) and OWASP WSTG both land on "use a maintained library, restrict algorithms explicitly"; the hand-rolled path's ES256 raw⇄DER footgun class and `alg`-confusion history is exactly the risk a self-hosted security boundary must not own. `jose` is MIT, **zero runtime dependencies**, tree-shakeable (~19 kB gzip used); it joins `openapi-fetch` and `@modelcontextprotocol/server` as the THIRD and FINAL sanctioned runtime exception under the inherited "no new runtime deps" posture (D-hh/D-kk precedent; D14 license check: MIT). Usage is two subpaths only: `jose/jwt/verify` (`jwtVerify` with `{issuer, audience, algorithms:['RS256'], clockTolerance: 60}`) and `jose/jwks/remote` (`createRemoteJWKSet(new URL(jwks_uri), { fetch: deps.fetch })`). **The `deps.fetch` seam is the test-safety mechanism:** `AppDeps.fetch` defaults to `globalThis.fetch`; `makeTestApp` injects an inject-backed fetch that routes the configured issuer to an in-process `Fastify.inject()` stub IdP (librarian-verified pattern — Plan D's client smoke already ships `injectFetch`); **no test ever opens a socket** (ticket: "never network"). Additional validations the RP performs beyond jose's (each pinned by a stub-IdP negative test): state match (timingSafe), RFC 9207 `iss` parameter when present, `nonce` byte-match against the flow cookie, `at_hash` (half-hash of access_token under the **signing alg's** hash — SHA-256 for RS256), `sub` present, `email_verified === true` when the allow-list path reads email. Config (config.ts zod style, Task 1): `NS_OIDC_ISSUER` (string, `.endsWith('/')` → strip; optional), `NS_OIDC_CLIENT_ID` (optional), `NS_OIDC_CLIENT_SECRET` (optional — absent ⇒ `token_endpoint_auth_method: none` public client + PKCE, present ⇒ `client_secret_post` in the BODY only, never the URL, never logged — D-ff posture stated), `NS_OIDC_SCOPE` default `'openid profile email'`, `NS_PUBLIC_URL` (our own origin; redirect_uri = `NS_PUBLIC_URL + /auth/callback`). OIDC-DORMANT rule: issuer or client-id absent ⇒ `/auth/login` and `/auth/callback` answer the pinned `500 internal_error` + detail `'oidc not configured'` (Task 5) — routes EXIST regardless of config so the drift ⇄ yaml set stays config-invariant (no conditional registration). Pocket-ID-ops note (QUEUED HUMAN): `INTERNAL_APP_URL`, when set on the IdP, rewrites `jwks_uri`/`token_endpoint` to a host only reachable from the IdP's network — the operator either leaves it unset or moves the RP closer to the IdP; stated here so the morning operator is not surprised. `nonce` echo is Fosite-conformant but was NOT confirmed in Pocket ID's repo (lib-1 flag 1): the stub asserts it, the RP requires it, and a verify-once against the real instance is QUEUED (HUMAN).
+**D-pp — OIDC RP line: `jose@6.2.12` as the sanctioned runtime-dep exception; authorization-code + PKCE(S256) against Pocket ID; ALL RP traffic behind an injectable fetch seam; tests are in-process `inject()` only.** Pocket ID v2.14 facts pinned from vendor docs/source (lib-1): discovery at `{issuer}/.well-known/openid-configuration`; **single active signing key, default RS256** (`id_token_signing_alg_values_supported` contains exactly one value); `at_hash` IS emitted with the digest derived from the id_token header `alg`; RFC 9207 `iss` on the authorization redirect (`authorization_response_iss_parameter_supported: true`); PKCE is enforced for public clients; confidential clients use `client_secret_post`; `code_challenge_methods_supported` includes S256. Why jose and not hand-rolled `node:crypto`: JWT BCP (`draft-ietf-oauth-rfc8725bis-10`, Aug 2026, obsoletes RFC 8725) and OWASP WSTG both land on "use a maintained library, restrict algorithms explicitly"; the hand-rolled path's ES256 raw⇄DER footgun class and `alg`-confusion history is exactly the risk a self-hosted security boundary must not own. `jose` is MIT, **zero runtime dependencies**, tree-shakeable (~19 kB gzip used); it joins `openapi-fetch` and `@modelcontextprotocol/server` as the THIRD and FINAL sanctioned runtime exception under the inherited "no new runtime deps" posture (D-hh/D-kk precedent; D14 license check: MIT). Usage is two subpaths only: `jose/jwt/verify` (`jwtVerify` with `{issuer, audience, algorithms:['RS256'], clockTolerance: 60}`) and `jose/jwks/remote` (`createRemoteJWKSet(new URL(jwks_uri), { [customFetch]: (url, options) => deps.fetch(url, options) })` — PREFLIGHT-PROBED (P1/fix1): jose@6.2.12's fetch seam is the exported `customFetch` SYMBOL; a plain `fetch` option key does not exist and is silently ignored — jose would fall through to `globalThis.fetch` and open real sockets in tests). **The `deps.fetch` seam is the test-safety mechanism:** `AppDeps.fetch` defaults to `globalThis.fetch`; `makeTestApp` injects an inject-backed fetch that routes the configured issuer to an in-process `Fastify.inject()` stub IdP (librarian-verified pattern — Plan D's client smoke already ships `injectFetch`); **no test ever opens a socket** (ticket: "never network"). Additional validations the RP performs beyond jose's (each pinned by a stub-IdP negative test): state match (timingSafe), RFC 9207 `iss` parameter when present, `nonce` byte-match against the flow cookie, `at_hash` (half-hash of access_token under the **signing alg's** hash — SHA-256 for RS256), `sub` present, `email_verified === true` when the allow-list path reads email. Config (config.ts zod style, Task 1): `NS_OIDC_ISSUER` (string, `.endsWith('/')` → strip; optional), `NS_OIDC_CLIENT_ID` (optional), `NS_OIDC_CLIENT_SECRET` (optional — absent ⇒ `token_endpoint_auth_method: none` public client + PKCE, present ⇒ `client_secret_post` in the BODY only, never the URL, never logged — D-ff posture stated), `NS_OIDC_SCOPE` default `'openid profile email'`, `NS_PUBLIC_URL` (our own origin; redirect_uri = `NS_PUBLIC_URL + /auth/callback`). OIDC-DORMANT rule: issuer or client-id absent ⇒ `/auth/login` and `/auth/callback` answer the pinned `500 internal_error` + detail `'oidc not configured'` (Task 5) — routes EXIST regardless of config so the drift ⇄ yaml set stays config-invariant (no conditional registration). Pocket-ID-ops note (QUEUED HUMAN): `INTERNAL_APP_URL`, when set on the IdP, rewrites `jwks_uri`/`token_endpoint` to a host only reachable from the IdP's network — the operator either leaves it unset or moves the RP closer to the IdP; stated here so the morning operator is not surprised. `nonce` echo is Fosite-conformant but was NOT confirmed in Pocket ID's repo (lib-1 flag 1): the stub asserts it, the RP requires it, and a verify-once against the real instance is QUEUED (HUMAN).
 
 **D-qq — Session store: server-side `sessions` table is authoritative; the cookie is a signed envelope carrying `{sid, exp}`; NO sweeper loop.** Spec §10 says "signed httpOnly cookies"; OWASP's session-management sheet says server-side state for anything meaningful, ≥128-bit entropy id, expiry inside the signed payload, `timingSafeEqual`, `__Host-` prefix (Secure, `Path=/`, no `Domain`), `SameSite=Lax`, HttpOnly. Reconciled: cookie value = `base64url(json({sid, exp}))` + `.` + `HMAC-SHA256(NS_SESSION_KEY, payload)`; the hook verifies the signature (constant-time) BEFORE any db touch (cheap reject for garbage cookies — never-lower coverage: both arms tested), then loads the row; the table is the revocation truth (`revoked_at` + lazy `expires_at` expiry checked per read — an expired/revoked row 401s regardless of what the cookie claims; the signed `exp` is the outer bound). `NS_SESSION_KEY: z.string().min(32).optional()` (env-only; with OIDC configured but no key, boot FAILS with the pinned loadConfig `/invalid env/` story — a config matrix test pins the three legs: no-oidc⇒no-key-ok, oidc⇒key-required, key-alone-ok) + `NS_SESSION_TTL_S` default `28800` (8 h absolute, no idle-refresh in v1 — stated). Logout revokes the row (audited) + clears both cookies (`Max-Age=0`, same attributes); restart does NOT invalidate sessions (table survives — stated). Key rotation is deliberately deferred: single active key, env-keyed, rotation story = operator reissues key ⇒ all sessions die on the exp bound — QUEUED (HUMAN) if the operator wants dual-key rotation. Session rows carry `actor_id`, `csrf` (D-rr), `created_at`, `expires_at`, `revoked_at`; a session is valid iff `revoked_at IS NULL AND expires_at > now` (via `Clock` port).
 
-**D-rr — CSRF: session-bound synchronizer token delivered via a JS-readable companion cookie, ENFORCED INSIDE the existing `auth.ts` onRequest hook — recorded deviation-adjacent, not a new hook (D-ii's idempotency-skip precedent).** OWASP 2026: naive random double-submit is DISCOURAGED; the token MUST be session-bound ("signed double-submit" = recommended). Shape: at login the session row gets `csrf = randomBytes(32).base64url`; `Set-Cookie: __Host-ns_csrf=<csrf>; Secure; SameSite=Lax; Path=/` (deliberately NOT HttpOnly — the SPA must read it and mirror it into `X-CSRF-Token`). Enforcement arm in the hook (after a SESSION actor resolves; bearer actors skip CSRF — no ambient-credential attack surface): if `request.method ∈ {POST,PATCH,PUT,DELETE}` (same `MUTATING` vocabulary as idempotency) AND `authVia === 'session'` ⇒ require header `X-CSRF-Token` timingSafe-equal to the row's token; mismatch ⇒ `DomainError('forbidden', 'missing or invalid CSRF token (D-rr)')` — EXISTING code, zero taxonomy move. Exempt: `/auth/logout` needs it (state-changing, session actor — uniform); `/auth/login`/`/auth/callback` are actor-LESS (the OIDC `state` parameter is their CSRF). `Sec-Fetch-Site` second-layer rejection: explicitly NOT built (YAGNI stated + fail-closed fallback complexity; SameSite=Lax + token is the v1 posture — §12 candidate). Companion cookie is set ONLY at login (never re-derived — the CSRF row value is truth), cleared at logout with the session cookie.
+**D-rr — CSRF: session-bound synchronizer token delivered via a JS-readable companion cookie, ENFORCED INSIDE the existing `auth.ts` onRequest hook — recorded deviation-adjacent, not a new hook (D-ii's idempotency-skip precedent).** OWASP 2026: naive random double-submit is DISCOURAGED; the token MUST be session-bound ("signed double-submit" = recommended). Shape: at login the session row gets `csrf = randomBytes(32).base64url`; `Set-Cookie: __Host-ns_csrf=<csrf>; Secure; SameSite=Lax; Path=/` (deliberately NOT HttpOnly — the SPA must read it and mirror it into `X-CSRF-Token`). Enforcement arm in the hook (after a SESSION actor resolves; bearer actors skip CSRF — no ambient-credential attack surface): if `request.method ∈ {POST,PATCH,PUT,DELETE}` (same `MUTATING` vocabulary as idempotency) AND `authVia === 'session'` ⇒ require header `X-CSRF-Token` timingSafe-equal to the row's token; mismatch ⇒ `DomainError('forbidden', 'missing or invalid CSRF token (D-rr)')` — EXISTING code, zero taxonomy move. Exempt: `/auth/logout` needs it (state-changing, session actor — uniform); `/auth/login`/`/auth/callback` are actor-LESS (the OIDC `state` parameter is their CSRF). `Sec-Fetch-Site` second-layer rejection: explicitly NOT built (YAGNI stated + fail-closed fallback complexity; SameSite=Lax + token is the v1 posture — §12 candidate). Companion cookie is set ONLY at login (never re-derived — the CSRF row value is truth), cleared at logout with the session cookie. **Credential precedence (review R1, probe-recorded):** a VALID session cookie resolves BEFORE the bearer header is read — cookie+bearer ⇒ SESSION wins; an explicit bearer does NOT preempt an ambient cookie. Stated consequences: a human browser carrying both cannot bypass CSRF, and agents never hold a session cookie, so bearer paths are unaffected (the `/mcp` both-credentials shape rides D-ww: the 403 session rejection answers).
 
-**D-ss — Roles: `actors` gains `role` + `oidc_subject` in ONE `_v2` table rebuild; enforcement is a new `requireAdmin` preHandler attached to EXACTLY the ten `/admin/*` ops; `requireHuman` stays and stays green.** There is no role concept today (lib-2: zero `role` matches in `src`; `requireHuman` = kind gate only). Storage choice A (actors columns) over choice B (side table): the auth hot path already loads the actor row per request, role must ride `ActorRef` into every gate, and a second table would fork actor truth (audit is the one spine — actor identity is too). One migration `2026-09-13_human_identity` follows the CHECK-widening `_v2` exemplar (`migrations.ts:181-207`): create `actors_v2` with explicit columns + `role text check (role in ('admin','member') or role is null)` + `oidc_subject text unique` (nullable — agents and pre-E humans have none), `insert … select`, humans backfill **`'admin'`** (every pre-E human created the board or was admin-created with a login token; MEMBERS arrive only via D-tt provisioning), agents `NULL`; drop/rename; RE-CREATE any dropped index; plus `sessions` + `oidc_allowlist` tables + `policy` seed `('oidc_provisioning','off')` in the SAME migration; `schema.ts` interfaces + `DB` registry + the `migrations.test.ts:6-30` `TABLES` exact-set grows by exactly `['oidc_allowlist','sessions']`. Vocabulary lives domain-side next to `ACTOR_KINDS` (`domain/task.ts`): `HUMAN_ROLES = ['admin','member'] as const` (domain 100×4 duty — the tests cover it). `ActorRow`/`ActorRef` gain `role: HumanRole | null`; ripple: `actor-repo` explicit mappings (`findActiveTokenByHash`'s trimmed actor — role rides; `create()` input gains `role`), `test-app.ts`/`fixtures.ts` seeds set it, and the **yaml `Actor` schema gains `role: { type: ["string","null"], enum: ['admin','member','null'] }`-honest shape + `pnpm gen:client` regen + committed artifact** (D-zz). Enforcement: `requireAdmin` (async — R4 shape identical to `requireHuman`) throws `DomainError('forbidden', 'this endpoint requires the admin role (spec §5)')`; attached as `preHandler: [requireHuman, requireAdmin]` to EXACTLY the ten existing admin ops (`admin.ts` ×6, `webhooks.ts` ×4 — enumerated) plus the three new allow-list ops (D-tt); member matrix pinned per-op (10×2 + 3×2), `requireHuman` agent-rejection pins byte-untouched; NO silent narrowing (GET-list/policy reads do NOT become member-readable — the ticket's "do not silently widen or narrow /admin/\* acceptance", both directions pinned by the matrix). Bootstrap `a_bootstrap` and test `a_nils` are `'admin'` (seeded); member actors are provisioned-only.
+**D-ss — Roles: `actors` gains `role` + `oidc_subject` in ONE `_v2` table rebuild; enforcement is a new `requireAdmin` preHandler attached to EXACTLY the ten `/admin/*` ops; `requireHuman` stays and stays green.** There is no role concept today (lib-2: zero `role` matches in `src`; `requireHuman` = kind gate only). Storage choice A (actors columns) over choice B (side table): the auth hot path already loads the actor row per request, role must ride `ActorRef` into every gate, and a second table would fork actor truth (audit is the one spine — actor identity is too). One migration `2026-09-13_human_identity` adds the columns IN PLACE: `ALTER TABLE actors ADD COLUMN role text CHECK (role in ('admin','member'))` + `ADD COLUMN oidc_subject text` plus a UNIQUE INDEX on `actors(oidc_subject)` (subject nullable — agents and pre-E humans have none; a unique index permits multiple NULLs), humans backfill **`'admin'`** (every pre-E human created the board or was admin-created with a login token; MEMBERS arrive only via D-tt provisioning), agents stay `NULL`; plus `sessions` + `oidc_allowlist` tables + `policy` seed `('oidc_provisioning','off')` in the SAME migration. The `_v2` CHECK-widening exemplar (`migrations.ts:181-207`) is deliberately NOT followed — honest why: that exemplar drops a CHILD table, while `actors` is a PARENT (eight pre-E tables carry `references actors(id)`), and under the repo's `foreign_keys=ON` a parent DROP throws `FOREIGN KEY constraint failed` inside the migration transaction on any deployed DB with child rows (preflight P4: `defer_foreign_keys` still fails at COMMIT even with the parent restored by name; `foreign_keys=OFF` is a no-op mid-transaction — probe-recorded, amendment ledger); `schema.ts` interfaces + `DB` registry + the `migrations.test.ts:6-30` `TABLES` exact-set grows by exactly `['oidc_allowlist','sessions']`. Vocabulary lives domain-side next to `ACTOR_KINDS` (`domain/task.ts`): `HUMAN_ROLES = ['admin','member'] as const` (domain 100×4 duty — the tests cover it). `ActorRow`/`ActorRef` gain `role: HumanRole | null`; ripple: `actor-repo` explicit mappings (`findActiveTokenByHash`'s trimmed actor — role rides; `create()` input gains `role`), `test-app.ts`/`fixtures.ts` seeds set it, and the **yaml `Actor` schema gains `role: { type: ["string","null"], enum: ['admin','member','null'] }`-honest shape + `pnpm gen:client` regen + committed artifact** (D-zz). Enforcement: `requireAdmin` (async — R4 shape identical to `requireHuman`) throws `DomainError('forbidden', 'this endpoint requires the admin role (spec §5)')`; attached as `preHandler: [requireHuman, requireAdmin]` to EXACTLY the ten existing admin ops (`admin.ts` ×6, `webhooks.ts` ×4 — enumerated) plus the three new allow-list ops (D-tt); member matrix pinned per-op (10×2 + 3×2), `requireHuman` agent-rejection pins byte-untouched; NO silent narrowing (GET-list/policy reads do NOT become member-readable — the ticket's "do not silently widen or narrow /admin/\* acceptance", both directions pinned by the matrix). Bootstrap `a_bootstrap` and test `a_nils` are `'admin'` (seeded); member actors are provisioned-only.
 
-**D-tt — First-login/allow-list: fail-closed policy `oidc_provisioning` (`off|allowlist`, default `off`) + `oidc_allowlist` email table managed by admins; unrecognized ⇒ pinned 403 deny + audit; login outcomes are audited.** §8.4 "admin enables accounts on first login or by allow-list" realized as the allow-list leg (a UI approval queue would widen admin surface beyond the ten ops +3 pinned ones — YAGNI). The decision tree inside `/auth/callback` AFTER id*token verification (Task 5): (1) actor found by `oidc_subject` → login (session mint). (2) none: read policy `oidc_provisioning` fail-closed `(gate ?? 'off')` (the `update-status.ts:72-79` lineage). (3) `off` → DENY: no session, 302 `/ui/login?error=pending` for browser navigation, `403 forbidden` problem+json for `accept: application/json` requests — pinned detail string `'oidc identity not recognized (allow-list first)'`; audit `login_denied`. (4) `allowlist`: `email_verified === true` AND `email` ∈ `oidc_allowlist` ⇒ PROVISION via new use-case `ProvisionHumanFromOidc`: handle derivation is a PINNED algorithm — `preferred_username` → else email local-part → sanitize to the D-q mention alphabet (`[^A-Za-z0-9*-]`stripped, leading non-alnum stripped, lowercased, max 60) → collisions append`-2`, `-3`, … (`handle_taken`NEVER thrown at provision time; exhaustion >20 →`invalid_request`arm tested); actor row`kind:'human', role:'member', oidc_subject=sub`, audits `human_provisioned`(reason`'oidc first-login allow-list'`) then login; email not listed ⇒ same DENY as (3). Login SUCCESS audits `login_success`(entity actor, after`{sub}`) — the §14-7 "audit reconstructs the whole story" demands auth events on the spine; **bootstrap stays unaudited by inherited ruling** (`bootstrap.ts:4`) and the distinction is stated, not silently crossed. New audit ACTIONS (`login_success`, `login_denied`, `human_provisioned`, `session_revoked`) are audit vocabulary like `actor_created`/`policy_set`— grep-pinned in their tests, ZERO new`DomainErrorCode`/adapter codes. Allow-list admin ops (all `requireHuman + requireAdmin`): `GET /admin/allowlist`(200 array),`POST /admin/allowlist`body`{email}`(201; the email rule is DECLARED here — no repo validator pre-exists (lib-2 zero matches): JSON-schema`{type:'string', minLength: 3, maxLength: 254, pattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'}`on the route schema, stored LOWERCASED by the use-case — the matching side lowercases id_token emails identically, pinned both sides),`DELETE /admin/allowlist/{email}`(204 ghost-404 doctrine verbatim; no-entry ⇒`not_found`ghost-404 verbatim). Duplicate POST is idempotent **200** with the existing row (data, not error — a`409`would need a new code: forbidden), PINNED. Policy flip rides the EXISTING`PUT /admin/policy/:key`—`POLICY_ALLOWLIST`gains`oidc_provisioning: ['off','allowlist']`(one line;`manage-policy.test.ts` extends).
+**D-tt — First-login/allow-list: fail-closed policy `oidc_provisioning` (`off|allowlist`, default `off`) + `oidc_allowlist` email table managed by admins; unrecognized ⇒ pinned 403 deny + audit; login outcomes are audited.** §8.4 "admin enables accounts on first login or by allow-list" realized as the allow-list leg (a UI approval queue would widen admin surface beyond the ten ops +3 pinned ones — YAGNI). The decision tree inside `/auth/callback` AFTER id*token verification (Task 5): (1) actor found by `oidc_subject` → login (session mint). (2) none: read policy `oidc_provisioning` fail-closed `(gate ?? 'off')` (the `update-status.ts:72-79` lineage). (3) `off` → DENY: no session, 302 `/ui/login?error=pending` for browser navigation, `403 forbidden` problem+json for `accept: application/json` requests — pinned detail string `'oidc identity not recognized (allow-list first)'`; audit `login_denied`. (4) `allowlist`: `email_verified === true` AND `email` ∈ `oidc_allowlist` ⇒ PROVISION via new use-case `ProvisionHumanFromOidc`: handle derivation is a PINNED algorithm — `preferred_username` → else email local-part → sanitize to the D-q mention grammar — `[A-Za-z0-9][A-Za-z0-9_-]*`with lowercase normalization (strip every char outside`[a-z0-9_-]`, strip leading chars until alphanumeric, lowercase, max 60; Task 7's sanitize governs) — then collisions append `-2`, `-3`, … (`handle_taken`NEVER thrown at provision time; exhaustion >20 →`invalid_request`arm tested); actor row`kind:'human', role:'member', oidc_subject=sub`, audits `human_provisioned`(reason`'oidc first-login allow-list'`) then login; email not listed ⇒ same DENY as (3). Login SUCCESS audits `login_success`(entity actor, after`{sub}`) — the §14-7 "audit reconstructs the whole story" demands auth events on the spine; **bootstrap stays unaudited by inherited ruling** (`bootstrap.ts:4`) and the distinction is stated, not silently crossed. New audit ACTIONS (`login_success`, `login_denied`, `human_provisioned`, `session_revoked`) are audit vocabulary like `actor_created`/`policy_set`— grep-pinned in their tests, ZERO new`DomainErrorCode`/adapter codes. Allow-list admin ops (all `requireHuman + requireAdmin`): `GET /admin/allowlist`(200 array),`POST /admin/allowlist`body`{email}`(201; the email rule is DECLARED here — no repo validator pre-exists (lib-2 zero matches): JSON-schema`{type:'string', minLength: 3, maxLength: 254, pattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'}`on the route schema, stored LOWERCASED by the use-case — the matching side lowercases id_token emails identically, pinned both sides),`DELETE /admin/allowlist/{email}`(204 ghost-404 doctrine verbatim; no-entry ⇒`not_found`ghost-404 verbatim). Duplicate POST is idempotent **200** with the existing row (data, not error — a`409`would need a new code: forbidden), PINNED. Policy flip rides the EXISTING`PUT /admin/policy/:key`—`POLICY_ALLOWLIST`gains`oidc_provisioning: ['off','allowlist']`(one line;`manage-policy.test.ts` extends).
 
-**D-vv — UI: SvelteKit-2 static SPA at repo-root `adapters/sveltekit/` (NOT under `src/`), served under `/ui` by `@fastify/static` in its own encapsulated scope; two NEW exact-set pins; `/` and PUBLIC_PATHS byte-untouched.** Toolchain-boundary: `tsc -p tsconfig.json` (`include:["src"]`), `eslint src`, and vitest (`src/**/*.test.ts`) would ALL capture a UI inside `src/` — Kit's generated `.svelte-kit/` tree and untested `.ts` helpers would poison typecheck/lint/coverage. Repo-root `adapters/sveltekit/` (spec §9's placement literal) sits OUTSIDE all three (verified: vitest include `src/**`, eslint `pnpm lint` = `eslint src`, tsc include `src`) while prettier still formats it (`--write .`; `.svelte` unknown-extension → prettier's glob skips unsupported files — honest statement; adding `prettier-plugin-svelte` is a plan-pinned devDep so `format:check` covers `.svelte` too — MIT, devDep, decided HERE). Kit 2.70.3 + `adapter-static@3.0.10` (both MIT), SPA mode (`+layout.ts` `ssr=false, prerender=false`), `fallback:'index.html'`, `kit.paths.base='/ui'`, `precompress:true`, system-font stack, no external URLs in build (pinned by a build-output grep test), vite 8.2.2 (already the repo's transitive vite via vitest — dedupe stated). Serving: `@fastify/static@10.1.3` (MIT, fastify-5-compatible ≥8.x per its compat table) registered via `mountUi(server, deps)` AFTER `mountMcp` (last mount, mirrors D-ii's mount posture): encapsulated scope `{ prefix: '/ui' }`, `root: join(process.cwd(),'adapters','sveltekit','build')` — the SAME cwd-relative asset story as `/openapi.yaml` (`app.ts:45-48`; Docker asset-shipping stays F), `wildcard: true` INSIDE the scope only (registers exactly `GET /ui/*` — the scope's `setNotFoundHandler` answers scope-404s with `sendFile('index.html')` ⇒ SPA deep-links, while the ROOT `notFound` stays problem+json byte-untouched and API ghost-404s keep their doctrine), `preCompressed: true` (pairs `precompress`), hashed assets `immutable, maxAge 30d`, `index.html` `no-cache`. Missing build dir ⇒ mount SKIPS with a logged notice + `/ui/*` 404s as normal (pinned — dev/test without a build never crashes boot; the Playwright smoke builds first). **Exact-set ruling #1 (auth):** the hook gains TWO new pinned exemption arms, both recorded here, never widened silently: (a) `isUiPath` — `GET/HEAD` only, under the `/ui` root (single-member exact set, same fail-closed normalization as PUBLIC_PATHS' slash-collapse); (b) `AUTH_PRE_SESSION = ['/auth/login', '/auth/callback']` — `GET`-only exact set (D-pp: these legs run BEFORE any identity exists; every other method on those paths keeps the bearer requirement and answers the byte-identical missing-bearer 401 — pinned). `/auth/logout` is deliberately NOT exempt (state-changing, session actor — CSRF-guarded like every session mutation). PUBLIC_PATHS literal stays EXACTLY `{/ping,/openapi.yaml}` and its pin test byte-untouched; matrix pinned (GET exempt, POST not, `/auth/login/..` not, `/uiz` not). **Exact-set ruling #2 (drift, D-ll precedent):** `STATIC_ROUTES = ['GET /ui/*']` — served-keys minus `MCP_ROUTES` minus `STATIC_ROUTES` must equal yaml keys EXACTLY; the yaml never mentions `/ui`; a second static route or a non-`/ui` member fails the pin. Human sessions reach `/ui` only as statics (no data); data flows through the API with cookies. Five §8 views are file-based routes (`board`, `tasks/[id]` with the six §8-2 tabs, `inbox`, `admin` (renders a member-visible 403 state), `login`) — structure is the requirement; the plan pins component boundaries + the `client.ts` cookie/CSRF fetch wrapper + `/events?cursor=` poll loop (2 s, cursor monotonic, backoff to 10 s on error — constants named, tests pin the reducer not the clock). Design polish is explicitly NOT tonight (spec §8; @designer is a human-hours concern — structural fidelity only, stated honestly in the final record).
+**D-vv — UI: SvelteKit-2 static SPA at repo-root `adapters/sveltekit/` (NOT under `src/`), served under `/ui` by `@fastify/static` in its own encapsulated scope; two NEW exact-set pins; `/` and PUBLIC_PATHS byte-untouched.** Toolchain-boundary: `tsc -p tsconfig.json` (`include:["src"]`), `eslint src`, and vitest (`src/**/*.test.ts`) would ALL capture a UI inside `src/` — Kit's generated `.svelte-kit/` tree and untested `.ts` helpers would poison typecheck/lint/coverage. Repo-root `adapters/sveltekit/` (spec §9's placement literal) sits OUTSIDE all three (verified: vitest include `src/**`, eslint `pnpm lint` = `eslint src`, tsc include `src`) while prettier still formats it (`--write .`; `.svelte` unknown-extension → prettier's glob skips unsupported files — honest statement; adding `prettier-plugin-svelte` is a plan-pinned devDep so `format:check` covers `.svelte` too — MIT, devDep, decided HERE). Kit 2.70.3 + `adapter-static@3.0.10` (both MIT), SPA mode (`+layout.ts` `ssr=false, prerender=false`), `fallback:'index.html'`, `kit.paths.base='/ui'`, `precompress:true`, system-font stack, no external URLs in build (pinned by a build-output grep test), vite 8.2.2 (already the repo's transitive vite via vitest — dedupe stated). Serving: `@fastify/static@10.1.3` (MIT, fastify-5-compatible ≥8.x per its compat table) registered via `mountUi(server, deps)` AFTER `mountMcp` (last mount, mirrors D-ii's mount posture): encapsulated scope `{ prefix: '/ui' }`, `root: join(process.cwd(),'adapters','sveltekit','build')` — the SAME cwd-relative asset story as `/openapi.yaml` (`app.ts:45-48`; Docker asset-shipping stays F), `wildcard: true` INSIDE the scope only (registers exactly `GET /ui/*` — the scope's `setNotFoundHandler` answers scope-404s with `sendFile('index.html')` ⇒ SPA deep-links, while the ROOT `notFound` stays problem+json byte-untouched and API ghost-404s keep their doctrine), `preCompressed: true` (pairs `precompress`), hashed assets `immutable, maxAge 30d`, `index.html` `no-cache`. Missing build dir ⇒ mount SKIPS with a logged notice + `/ui/*` 404s as normal (pinned — dev/test without a build never crashes boot; the Playwright smoke builds first). **Exact-set ruling #1 (auth):** the hook gains TWO new pinned exemption arms, both recorded here, never widened silently: (a) `isUiPath` — `GET/HEAD` only, under the `/ui` root (single-member exact set, same fail-closed normalization as PUBLIC_PATHS' slash-collapse); (b) `AUTH_PRE_SESSION = ['/auth/login', '/auth/callback']` — `GET`-only exact set (D-pp: these legs run BEFORE any identity exists; every other method on those paths keeps the bearer requirement and answers the byte-identical missing-bearer 401 — pinned). `/auth/logout` is deliberately NOT exempt (state-changing, session actor — CSRF-guarded like every session mutation). PUBLIC_PATHS literal stays EXACTLY `{/ping,/openapi.yaml}` and its pin test byte-untouched; matrix pinned (GET exempt, POST not, `/auth/login/..` not, `/uiz` not). **Exact-set ruling #2 (drift, D-ll precedent; AMENDED pre-dispatch, preflight P7/fix12):** registering `GET /ui/*` prints in find-my-way's pretty-print as a BARE wildcard leaf (`*`) with NO path segment — served-keys therefore carries the sentinel `GET *`, not `GET /ui/*`; the routeKeys grammar learns that leaf, served-keys minus `MCP_ROUTES` minus the sentinel set must equal yaml keys EXACTLY, and `app.hasRoute({ method: 'GET', url: '/ui/*' }) === uiBuildPresent()` (plus `POST ⇒ false`) pins the exact spelling the printer cannot show; the yaml never mentions `/ui`; a second wildcard or a non-`/ui` mount spelling fails the pin. Human sessions reach `/ui` only as statics (no data); data flows through the API with cookies. Five §8 views are file-based routes (`board`, `tasks/[id]` with the six §8-2 tabs, `inbox`, `admin` (renders a member-visible 403 state), `login`) — structure is the requirement; the plan pins component boundaries + the `client.ts` cookie/CSRF fetch wrapper + `/events?cursor=` poll loop (2 s, cursor monotonic, backoff to 10 s on error — constants named, tests pin the reducer not the clock). Design polish is explicitly NOT tonight (spec §8; @designer is a human-hours concern — structural fidelity only, stated honestly in the final record). **Contract addendum (review R3/B12):** the §8-1 label chip REQUIRES the board DTO to carry `labels` — the Task 9 Step 0 read-side expansion is a recorded contract addition (D-zz duty), not a silent widening.
 
 **D-ww — `/mcp` stays bearer-only: the auth hook decorates `authVia: 'bearer' | 'session' | null` (set where identity resolves, zero re-lookup) and the `/mcp` handler refuses `session` with a pinned `403 forbidden` `'mcp requires a bearer token (D-ww)'`.** Spec §5/§10 bind agents to bearer; the 35-tool parity harness pins BEARER semantics end-to-end; a cookie identity inside `/mcp` would fork the identity posture the entire D-mm transcription doctrine rests on. Defense-in-depth: the hook arm ALSO refuses `session`-actor requests to `/mcp` up front, and the mount-level check remains as the pinned second layer (a future hook refactor cannot silently open `/mcp`) — the mount.ts test proves the arm is REACHABLE (mount-level pin) and the hook test proves it never fires first. Session-actor `GET/POST /mcp` → 403; bearer byte-unchanged; 35-tool snapshot unmoved.
 
-**D-xx — §11.5 Playwright: the smoke suite SHIPS and is REAL; tonight's gate attempts a real headless run and records the honest result — `pnpm test:e2e` is NOT part of the lefthook/CI gates (untouched files stay untouched).** Runner reality (measured): `~/.cache/ms-playwright` absent; Playwright 1.63 does not support Arch (`playwright install-deps` shells `apt-get` → 127; browsers need pacman-shared-libs = root = impossible unattended; the Night-shift rule "no global installs" bars any pacman call). Protocol: `pnpm exec playwright install chromium --only-shell` (project-local binaries into `~/.cache/ms-playwright` — NOT a global install; registry-free CDN fetch), launch probe; iff launch succeeds ⇒ run the smoke (stub IdP + app both `webServer`-spawned; setup project authenticates once through `/auth/login` ⇄ stub-IdP page interactions, saves `storageState`, `__Host-` cookies survive in the context; asserts `X-CSRF-Token` companion presence + a full comment/status mutation round-trip); iff launch fails (missing shared libs) ⇒ NO system-package surgery tonight: record `E2E NOT RUN: <captured probe error>`, the suite ships green-by-construction in CI-shape (ubuntu runners can run it — QUEUED (HUMAN): operator adds the CI job + any `pacman -S` libs), and the final-gate record states the posture with the probe output quoted (ticket: "states the honest posture either way"). Suite lives at repo-root `e2e/` (vitest `src/**` includes never see it; `playwright.config.ts` root-level, eslint ignores `*.config.ts`); `*.e2e.ts` naming + `testDir: 'e2e'`.
+**D-xx — §11.5 Playwright: the smoke suite SHIPS and is REAL; tonight's gate attempts a real headless run and records the honest result — `pnpm test:e2e` is NOT part of the lefthook/CI gates (untouched files stay untouched).** Runner reality (measured): `~/.cache/ms-playwright` absent; Playwright 1.63 does not support Arch (`playwright install-deps` shells `apt-get` → 127; browsers need pacman-shared-libs = root = impossible unattended; the Night-shift rule "no global installs" bars any pacman call). Protocol: `pnpm exec playwright install chromium --only-shell` (project-local binaries into `~/.cache/ms-playwright` — NOT a global install; registry-free CDN fetch), then a screenshot-launch probe (review R5/B11: the 1.63 CLI has NO `launch` command — `pnpm exec playwright screenshot --browser chromium about:blank <tmp png>` IS a real headless launch); iff the probe exits 0 ⇒ run the smoke (stub IdP + app both `webServer`-spawned; setup project authenticates once through `/auth/login` ⇄ stub-IdP page interactions, saves `storageState`, `__Host-` cookies survive in the context; asserts `X-CSRF-Token` companion presence + a full comment/status mutation round-trip); iff launch fails (missing shared libs) ⇒ NO system-package surgery tonight: record `E2E NOT RUN: <captured probe error>`, the suite ships green-by-construction in CI-shape (ubuntu runners can run it — QUEUED (HUMAN): operator adds the CI job + any `pacman -S` libs), and the final-gate record states the posture with the probe output quoted (ticket: "states the honest posture either way"). Suite lives at repo-root `e2e/` (vitest `src/**` includes never see it; `playwright.config.ts` root-level, eslint ignores `*.config.ts`); `*.e2e.ts` naming + `testDir: 'e2e'`.
 
 **D-yy — CLI (D-oo handoff): SLICED to F — explicit, not orphaned.** Plan D deferred `nightshift claim|report|next` to E "with the OIDC/UI wave"; ticket #9 explicitly opens the slice choice. Decision: slice. Tonight's critical path is a security boundary (RP + sessions + CSRF + a new public surface) — mixing in a human-facing CLI multiplies review surface with zero board value while nobody's awake; the substrate is DONE and stays done (D-kk generated client, drift-pinned); §12's CLI entry stays listed; **F's plan owns the CLI** (with the deploy work it rides), stated in this plan AND restated in the final-gate record + PR body so the handoff chain shows no break. Nothing in tonight's scope is CLI-shaped except the Playwright smoke, which rides the UI.
 
-**D-zz — Contract-regen duty: eight new yaml operations, the `Actor.role` addition, and the regenerated committed client artifact are ONE recorded contract move.** New documented ops (`tag: auth`): `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout` (3xx/redirect ops documented with their problem+json `default`; `security: []` — pre-session/cookie-posture stated in descriptions) and `GET /auth/me` (identity echo for the SPA shell: returns the caller's `ActorRef` incl. role — any authenticated actor; the UI nav/admin-gate need it and inventing a UI-only endpoint would fork identity truth); `tag: admin`: `GET/POST /admin/allowlist`, `DELETE /admin/allowlist/{email}` (`requireHuman+requireAdmin` — `security: bearerAuth` global default). `Actor` schema gains `role` (`type: ["string","null"], enum: ['admin','member',null]`). Every addition lands in the SAME commit as the route that serves it (drift `toEqual(documented)` is the machine enforcer — a yaml entry without a route or a route without yaml is RED), and every such commit ALSO runs `pnpm gen:client` and commits the regenerated `src/client/schema.d.ts` byte-clean (the D-kk drift test byte-compares regen+repo-prettier against the artifact — a stale artifact breaks the suite, same load-bearing posture Plan D shipped). STATIC_ROUTES/MCP_ROUTES are the ONLY undocumentable served keys, both exact-set-pinned (D-ll precedent; D-vv). `Problem.code` enum byte-untouched (zero new codes across all of Plan E — D-tt/D-ss/D-ww all reuse `forbidden`/`invalid_request`/`not_found`/`unauthenticated`).
+**D-zz — Contract-regen duty: seven new yaml operations (4 `auth` incl. `GET /auth/me` + 3 `admin`), the `Actor.role` addition, and the regenerated committed client artifact are ONE recorded contract move.** New documented ops (`tag: auth`): `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout` (3xx/redirect ops documented with their problem+json `default`; `security: []` — pre-session/cookie-posture stated in descriptions; `[]` on logout is DELIBERATE — the drift test pins path×method only and cannot see the security field, so that is honest documentation, not a machine pin — review note (j)) and `GET /auth/me` (identity echo for the SPA shell: returns the caller's `ActorRef` incl. role — any authenticated actor; the UI nav/admin-gate need it and inventing a UI-only endpoint would fork identity truth); `tag: admin`: `GET/POST /admin/allowlist`, `DELETE /admin/allowlist/{email}` (`requireHuman+requireAdmin` — `security: bearerAuth` global default). `Actor` schema gains `role` (`type: ["string","null"], enum: ['admin','member',null]`). Every addition lands in the SAME commit as the route that serves it (drift `toEqual(documented)` is the machine enforcer — a yaml entry without a route or a route without yaml is RED), and every such commit ALSO runs `pnpm gen:client` and commits the regenerated `src/client/schema.d.ts` byte-clean (the D-kk drift test byte-compares regen+repo-prettier against the artifact — a stale artifact breaks the suite, same load-bearing posture Plan D shipped). STATIC_ROUTES/MCP_ROUTES are the ONLY undocumentable served keys, both exact-set-pinned (D-ll precedent; D-vv). `Problem.code` enum byte-untouched (zero new codes across all of Plan E — D-tt/D-ss/D-ww all reuse `forbidden`/`invalid_request`/`not_found`/`unauthenticated`).
 
 ## Backlog disposition (ticket #9 scope table → tasks)
 
@@ -89,7 +122,7 @@ The code blocks below are the planned text. If shipped code lands byte-different
 **Create (production, `src/`):** `src/adapters/shared/session-codec.ts` (pure cookie sign/verify/parse — D-qq), `src/infra/sqlite/session-repo.ts` + `src/infra/sqlite/allowlist-repo.ts`, `src/adapters/shared/oidc-rp.ts` (discovery/token/verify + flow cookie — D-pp), `src/application/usecases/provision-human.ts` + `src/application/usecases/manage-allowlist.ts`, `src/adapters/rest/routes/auth.ts`, `src/adapters/rest/ui.ts` (static mount — D-vv).
 **Create (test-side):** `src/testing/stub-idp.ts` (+ `src/testing/stub-idp-main.ts` runner for e2e), `src/adapters/shared/session-codec.test.ts`, `src/adapters/shared/oidc-rp.test.ts`, `src/adapters/rest/routes/auth.test.ts`, `src/adapters/rest/scenarios-auth.test.ts`, `src/adapters/rest/ui.test.ts`, `src/infra/sqlite/session-repo.test.ts` + allowlist-repo test, usecase tests colocated, `e2e/*.e2e.ts` + `playwright.config.ts`.
 **Create (UI, outside `src/`):** `adapters/sveltekit/{package.json,svelte.config.js,vite.config.ts,src/**,static/**}` (Task 8 scaffold, Task 9 views).
-**Modify:** `package.json` (deps + `ui:*`/`test:e2e` scripts), `pnpm-workspace.yaml` (`packages:` gains `adapters/sveltekit`), `.prettierrc` (svelte override), `src/main/config.ts`+test, `src/main/deps.ts` (`sessionsRoot`, `allowlistRoot`, `fetch` seam, 2 use-cases), `src/domain/task.ts` (`HUMAN_ROLES`), `src/infra/sqlite/migrations.ts`+`schema.ts`+`migrations.test.ts`, `src/application/ports.ts`, `src/infra/sqlite/actor-repo.ts`, `src/adapters/rest/auth.ts` (role on bearer ActorRef in Task 2; session arm + CSRF + `requireAdmin` + `authVia` + UI-path arm in Tasks 4/10), `src/adapters/rest/app.ts` (`registerAuthRoutes`, `mountUi`), `src/adapters/rest/routes/admin.ts` + `webhooks.ts` (`requireAdmin` attach), `src/adapters/mcp/mount.ts` (D-ww defensive arm), `src/testing/test-app.ts` (+role seed, optional `fetch`), `src/testing/fixtures.ts`, `openapi/openapi.yaml` (D-zz), `src/client/schema.d.ts` (regen, D-zz).
+**Modify:** `package.json` (deps + `ui:*`/`test:e2e` scripts), `pnpm-workspace.yaml` (`packages:` gains `adapters/sveltekit`), `.prettierrc` (svelte override), `src/main/config.ts`+test, `src/main/deps.ts` (`sessionsRoot`, `allowlistRoot`, `fetch` seam, 2 use-cases), `src/domain/task.ts` (`HUMAN_ROLES`), `src/main/bootstrap.ts` + its test (bootstrap `role:'admin'`; the ActorRef/ActorRow typecheck ripple enumerated in Task 2 Step 4 also hits `actor-repo.test.ts`, `bridge.test.ts` and usecase ctx test files — R7), `src/infra/sqlite/migrations.ts`+`schema.ts`+`migrations.test.ts`, `src/application/ports.ts`, `src/infra/sqlite/actor-repo.ts`, `src/adapters/rest/auth.ts` (role on bearer ActorRef in Task 2; session arm + CSRF + `requireAdmin` + `authVia` + UI-path arm in Tasks 4/10), `src/adapters/rest/app.ts` (`registerAuthRoutes`, `mountUi`), `src/adapters/rest/routes/admin.ts` + `webhooks.ts` (`requireAdmin` attach), `src/adapters/mcp/mount.ts` (D-ww defensive arm), `src/testing/test-app.ts` (+role seed, optional `fetch`), `src/testing/fixtures.ts`, `openapi/openapi.yaml` (D-zz), `src/client/schema.d.ts` (regen, D-zz).
 **Untouched (pinned):** `vitest.config.ts`, `lefthook.yaml`, `.github/workflows/ci.yaml`, `src/domain/errors.ts`, `mount.test.ts` 35-snapshot, PUBLIC_PATHS literal + its test arm, root `setNotFoundHandler`, `problem.ts`, idempotency/rate-limit hooks.
 
 ## Task 1: Runtime deps + OIDC/session config seams
@@ -112,8 +145,8 @@ The defaults `toEqual` block (config.test.ts:6-16) gains the new members; the ma
 
 ```ts
 // appended to the existing describe in src/main/config.test.ts — the defaults
-// toEqual block ABOVE gains these keys (honor exact equality; undefined members
-// are listed explicitly so a future defaulted key cannot land silently):
+// toEqual block ABOVE gains these keys (undefined members listed for grep-visibility
+// + future-default tripwire; vitest toEqual tolerates undefined either way):
 //   oidcIssuer: undefined, oidcClientId: undefined, oidcClientSecret: undefined,
 //   oidcScope: 'openid profile email', publicUrl: undefined,
 //   sessionKey: undefined, sessionTtlS: 28_800,
@@ -231,16 +264,17 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(config): OIDC/session env
 
 **Files:**
 
-- Modify: `src/domain/task.ts` (+`HUMAN_ROLES`), `src/infra/sqlite/migrations.ts` (ONE new migration), `src/infra/sqlite/schema.ts`, `src/infra/sqlite/migrations.test.ts` (`TABLES` pin), `src/application/ports.ts` (`ActorRow`/`ActorRef` +role), `src/infra/sqlite/actor-repo.ts`, `src/adapters/rest/auth.ts` (bearer ActorRef +role), `src/adapters/rest/routes/admin.ts` (createActor body `role`), `src/application/usecases/manage-actors.ts` (role input), `openapi/openapi.yaml` (`Actor.role`, createActor body), `src/client/schema.d.ts` (regen), `src/testing/test-app.ts` + `src/testing/fixtures.ts` (role in seeds)
+- Modify: `src/domain/task.ts` (+`HUMAN_ROLES`), `src/infra/sqlite/migrations.ts` (ONE new migration), `src/infra/sqlite/schema.ts`, `src/infra/sqlite/migrations.test.ts` (`TABLES` pin), `src/application/ports.ts` (`ActorRow`/`ActorRef` +role), `src/infra/sqlite/actor-repo.ts`, `src/adapters/rest/auth.ts` (bearer ActorRef +role), `src/adapters/rest/routes/admin.ts` (createActor body `role`), `src/application/usecases/manage-actors.ts` (role input), `openapi/openapi.yaml` (`Actor.role`, createActor body), `src/client/schema.d.ts` (regen), `src/testing/test-app.ts` + `src/testing/fixtures.ts` (role in seeds), `src/main/bootstrap.ts` (bootstrap `role: 'admin'` — R7) + the Step-4 typecheck-ripple test files (`bootstrap.test.ts`, `actor-repo.test.ts`, `bridge.test.ts`, usecase ctx test files)
 
-- [ ] **Step 1: Failing migration tests** (`src/infra/sqlite/migrations.test.ts`): `TABLES` gains `'oidc_allowlist'` and `'sessions'` (sorted-exact pin ⇒ RED first run); plus the backfill test — run the migrator to the PRE-E head, insert humans+agents, then `migrateToLatest` (requires the one-line `export const MIGRATIONS = migrations` added beside the provider at the top of `migrations.ts` — the test uses it to stop at the pre-E key):
+- [ ] **Step 1: Failing migration tests** (`src/infra/sqlite/migrations.test.ts`): `TABLES` gains `'oidc_allowlist'` and `'sessions'` (sorted-exact pin ⇒ RED first run); plus the backfill test — run the migrator to the PRE-E head, insert humans+agents, then `migrateToLatest` (requires the one-line `export const MIGRATIONS = migrations` added beside the provider at the top of `migrations.ts` — the test uses it to stop at the PRE-E HEAD (fix6: `'2026-09-12_webhooks'` — kysely sorts migration names LEXICOGRAPHICALLY: `2026-09-12_fts_search < 2026-09-12_inbox_claim_conflict < 2026-09-12_webhooks`, so fts_search is NOT the head)):
 
 ```ts
 it('human-identity migration: humans pre-E backfill to admin, agents NULL; tables exist', async () => {
   const db = makeDb(':memory:')
   const { MIGRATIONS } = await import('#root/infra/sqlite/migrations')
   const migrator = new Migrator({ db, provider: { getMigrations: async () => MIGRATIONS } })
-  const { error } = await migrator.migrateTo('2026-09-12_fts_search')
+  // PRE-E HEAD = webhooks (fix6): kysely sorts names lexicographically; fts_search is NOT the head
+  const { error } = await migrator.migrateTo('2026-09-12_webhooks')
   expect(error).toBeUndefined()
   await db
     .insertInto('actors')
@@ -264,7 +298,11 @@ it('human-identity migration: humans pre-E backfill to admin, agents NULL; table
     ])
     .execute()
   await migrateToLatest(db)
-  const rows = await db.selectFrom('actors').select(['id', 'role', 'oidc_subject']).execute()
+  const rows = await db
+    .selectFrom('actors')
+    .select(['id', 'role', 'oidc_subject'])
+    .orderBy('id') // fix7: no implicit row order after the migration — pin the array's order
+    .execute()
   expect(rows).toEqual([
     { id: 'a_pre_agent', role: null, oidc_subject: null },
     { id: 'a_pre_human', role: 'admin', oidc_subject: null },
@@ -288,29 +326,24 @@ it('human-identity migration: humans pre-E backfill to admin, agents NULL; table
 ```ts
   '2026-09-13_human_identity': {
     up: async (db: Kysely<DB>) => {
-      // D-ss: roles + OIDC subject ride the actors row itself (the auth hot path
-      // already loads it; a side table would fork actor truth). _v2 rebuild per
-      // the 2026-09-12_inbox_claim_conflict CHECK-widening exemplar. Backfill:
-      // every PRE-E human created the board or was admin-created with a login
-      // token => 'admin'; MEMBERS arrive only via the D-tt provisioning path.
-      // First: verify no actors-referencing index exists (none did at ship):
-      await sql`create table actors_v2 (
-        id text primary key,
-        kind text not null check (kind in ('human','agent')),
-        handle text not null unique,
-        display_name text not null,
-        description text not null default '',
-        created_at text not null,
-        role text check (role in ('admin','member')),
-        oidc_subject text unique
-      )`.execute(db)
-      await sql`insert into actors_v2 (id, kind, handle, display_name, description, created_at, role, oidc_subject)
-        select id, kind, handle, display_name, description, created_at,
-               case when kind = 'human' then 'admin' else null end,
-               null
-        from actors`.execute(db)
-      await sql`drop table actors`.execute(db)
-      await sql`alter table actors_v2 rename to actors`.execute(db)
+      // D-ss (AMENDED pre-dispatch, preflight P4/fix5 — amendment ledger): ADD
+      // COLUMN, NOT a _v2 rebuild. The 2026-09-12_inbox_claim_conflict exemplar
+      // drops a CHILD table; actors is a PARENT — eight pre-E tables carry
+      // references actors(id) — and with makeDb's foreign_keys=ON a parent DROP
+      // throws FOREIGN KEY constraint failed inside the migration transaction on
+      // any deployed DB with child rows (defer_foreign_keys still fails at COMMIT
+      // even with the parent restored by name; foreign_keys=OFF is a no-op
+      // mid-transaction — both probe-recorded; actors-only test fixtures cannot
+      // see it). ADD COLUMN + a UNIQUE INDEX enforce the identical semantics: the
+      // CHECK rejects non-vocabulary roles; the index rejects duplicate subjects
+      // and permits many NULLs. Roles + subject ride the actors row itself (the
+      // auth hot path already loads it; a side table would fork actor truth).
+      await sql`alter table actors add column role text check (role in ('admin','member'))`.execute(db)
+      await sql`alter table actors add column oidc_subject text`.execute(db)
+      await sql`create unique index actors_oidc_subject_u on actors (oidc_subject)`.execute(db)
+      // Backfill: every PRE-E human created the board or was admin-created with a
+      // login token => 'admin'; MEMBERS arrive only via the D-tt provisioning path.
+      await sql`update actors set role = 'admin' where kind = 'human'`.execute(db)
 
       // D-qq: server-side sessions are the revocation truth; the cookie is a
       // signed pointer, not the state. Lazy expiry on read — no sweeper loop.
@@ -336,14 +369,14 @@ it('human-identity migration: humans pre-E backfill to admin, agents NULL; table
   },
 ```
 
-- [ ] **Step 4: Schema + ports + repo + seeds ripple.** `schema.ts`: `ActorsTable` gains `role: 'admin' | 'member' | null; oidc_subject: string | null`; new `SessionsTable`/`OidcAllowlistTable` interfaces + `DB` registry entries (`sessions: SessionsTable`, `oidc_allowlist: OidcAllowlistTable`). `domain/task.ts` beside `ACTOR_KINDS`:
+- [ ] **Step 4: Schema + ports + repo + seeds ripple.** `schema.ts`: `ActorsTable` gains `role: 'admin' | 'member' | null; oidc_subject: string | null`; new `SessionsTable`/`OidcAllowlistTable` interfaces + `DB` registry entries (`sessions: SessionsTable`, `oidc_allowlist: OidcAllowlistTable`) (NO table rebuild — the migration ADDs the two columns to `ActorsTable` in place; the interfaces just grow). `domain/task.ts` beside `ACTOR_KINDS`:
 
 ```ts
 export const HUMAN_ROLES = ['admin', 'member'] as const
 export type HumanRole = (typeof HUMAN_ROLES)[number]
 ```
 
-`ports.ts`: `import type { HumanRole } from '#root/domain/task'`; `ActorRow` and `ActorRef` gain `role: HumanRole | null`. `actor-repo.ts`: `create` input gains `role: HumanRole | null` (into the insert), `findActiveTokenByHash`'s trimmed-actor literal gains `role: <row>.role` (the explicit-mapping site — read the file, add the ONE field, nothing else), and any `selectAll('actors')`-backed mapping rides role automatically. `test-app.ts` human seed values gain `role: 'admin'` (the actors insert); `fixtures.ts` `seedActor` gains a `role` param defaulting `kind === 'human' ? ('admin' as const) : null`. `auth.ts` bearer leg ActorRef literal gains `role: hit.actor.role`. `manage-actors.ts` `CreateActorInput` gains `role?: 'admin' | 'member'`; `CreateActor.run` human creations take `input.role ?? 'member'` (members are the default — admins stay an explicit decision), agents force `null`. `routes/admin.ts` createActor body schema gains `role: { type: 'string', enum: ['admin', 'member'], description: 'humans only; default member' }` (dropped for agents by the use-case, never an error).
+`ports.ts`: `import type { HumanRole } from '#root/domain/task'`; `ActorRow` and `ActorRef` gain `role: HumanRole | null`. `actor-repo.ts`: `create` input gains `role: HumanRole | null` (into the insert), `findActiveTokenByHash`'s trimmed-actor literal gains `role: <row>.role` (the explicit-mapping site — read the file, add the ONE field, nothing else), and any `selectAll('actors')`-backed mapping rides role automatically. `test-app.ts` human seed values gain `role: 'admin'` (the actors insert); `fixtures.ts` `seedActor` gains a `role` param defaulting `kind === 'human' ? ('admin' as const) : null`. `bootstrap.ts`'s `ensureBootstrapAdmin` create literal gains `role: 'admin'` — comment it `bootstrap IS the admin — D-ss fresh-row rule; role-NULL would 403 the first boot` (review R7/B2). TYPECHECK RIPPLE (review R7/B3): after the ports change run `pnpm typecheck` and fix EVERY failing literal — `role: null` for agent ctx, `role: 'admin'` for human ctx; expected sites: `src/main/bootstrap.test.ts` (if its create-literal needs the field), `src/infra/sqlite/actor-repo.test.ts`, `src/adapters/mcp/bridge.test.ts`, and the application-usecase test files holding ActorContext literals — enumerate the files the sweep found in this task's amendment note and add them all to the commit. `auth.ts` bearer leg ActorRef literal gains `role: hit.actor.role`. `manage-actors.ts` `CreateActorInput` gains `role?: 'admin' | 'member'`; `CreateActor.run` human creations take `input.role ?? 'member'` (members are the default — admins stay an explicit decision), agents force `null`. `routes/admin.ts` createActor body schema gains `role: { type: 'string', enum: ['admin', 'member'], description: 'humans only; default member' }` (dropped for agents by the use-case, never an error).
 
 - [ ] **Step 5: Contract + regen (D-zz).** `openapi.yaml` `Actor` schema gains `role: { type: ['string', 'null'], enum: ['admin', 'member', null] }`; the `createActor` requestBody properties gain `role: { type: string, enum: [admin, member] }` (optional). Then:
 
@@ -357,8 +390,9 @@ git diff --stat src/client/schema.d.ts   # MUST show the role addition; the drif
 - [ ] **Step 7: Commit:**
 
 ```bash
-git add src/domain/task.ts src/infra/sqlite/migrations.ts src/infra/sqlite/schema.ts src/infra/sqlite/migrations.test.ts src/infra/sqlite/actor-repo.ts src/application/ports.ts src/application/usecases/manage-actors.ts src/adapters/rest/auth.ts src/adapters/rest/routes/admin.ts src/testing/test-app.ts src/testing/fixtures.ts openapi/openapi.yaml src/client/schema.d.ts
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(identity): roles + oidc_subject + sessions + allow-list tables (D-ss/D-tt)"
+git add src/main/bootstrap.ts src/main/bootstrap.test.ts src/infra/sqlite/actor-repo.test.ts src/adapters/mcp/bridge.test.ts src/domain/task.ts src/infra/sqlite/migrations.ts src/infra/sqlite/schema.ts src/infra/sqlite/migrations.test.ts src/infra/sqlite/actor-repo.ts src/application/ports.ts src/application/usecases/manage-actors.ts src/adapters/rest/auth.ts src/adapters/rest/routes/admin.ts src/testing/test-app.ts src/testing/fixtures.ts openapi/openapi.yaml src/client/schema.d.ts
+# + every typecheck-ripple file the Step-4 sweep enumerated (review R7/B3)
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(identity): roles, oidc_subject, sessions, allow-list tables"
 ```
 
 ## Task 3: Session codec + session store (pure seams)
@@ -629,7 +663,13 @@ const ADMIN_OPS: ReadonlyArray<{ m: string; url: string; body?: unknown }> = [
 // 6  valid signature, row revoked                          => 401 same
 // 7  valid signature, row expires_at past (cookie exp future) => 401 same — TABLE is truth (D-qq)
 // 8  valid cookie, GET /mcp (and POST)                     => 403 'mcp requires a bearer token (D-ww)'
-// 9  bearer + a simultaneously VALID cookie                => bearer wins byte-path (authVia 'bearer', CSRF NOT required — POST /tasks bearer no-CSRF => 201)
+// 9  cookie+bearer BOTH valid                              => SESSION identity wins (the
+//    arm resolves BEFORE the bearer read — R1/D-rr precedence): POST /tasks
+//    cookie+bearer NO X-CSRF-Token => 403 D-rr; +right X-CSRF-Token => 201 with
+//    authVia 'session'. bearer ALONE (no cookie header)                    => 201
+//    no-CSRF byte-path (bearer arm byte-untouched, authVia 'bearer'). Both-credentials
+//    /mcp request                                          => the 403 session rejection
+//    (D-ww — cookie resolves first; pinned alongside arm 8).
 // 10 cookie without config.sessionKey (makeTestApp default) => ignored, falls through (401 as 5)
 ```
 
@@ -641,6 +681,8 @@ const ADMIN_OPS: ReadonlyArray<{ m: string; url: string; body?: unknown }> = [
 // A garbage/expired/absent-key cookie FALLS THROUGH to the bearer arm: a
 // caller without a bearer gets the byte-identical missing-bearer 401 —
 // fail-closed, zero new machine strings.
+// Precedence (R1/D-rr): a VALID cookie resolves FIRST — cookie+bearer ⇒ session;
+// an explicit bearer does not preempt an ambient cookie.
 const sessRaw = parseCookies(request.headers.cookie)['__Host-ns_sess']
 if (sessRaw && deps.config.sessionKey) {
   const decoded = decodeSessionCookie(
@@ -714,7 +756,7 @@ if (request.authVia === 'session') {
 
 ```bash
 git add src/adapters/rest/auth.ts src/adapters/rest/auth.test.ts src/adapters/rest/roles-matrix.test.ts src/adapters/rest/session-auth.test.ts src/adapters/rest/idempotency.ts src/adapters/rest/routes/admin.ts src/adapters/rest/routes/webhooks.ts src/adapters/mcp/mount.ts
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(auth): cookie-session arm + CSRF + admin-role gate + mcp bearer-only (D-rr/D-ss/D-ww)"
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(auth): cookie sessions, CSRF, admin gate, mcp bearer-only"
 ```
 
 ## Task 5: OIDC RP core + the in-process stub IdP (zero sockets)
@@ -751,6 +793,10 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(auth): cookie-session arm
 //   arm), email, email_verified (default true), preferred_username, at_hash
 //   (half SHA-256 of access_token, omitted when users[].noAtHash); response
 //   {access_token: b64u(randomBytes(24)), token_type 'Bearer', expires_in 300, id_token}
+//   NOTE (preflight P2/fix2): fastify@5.12.3 has NO built-in urlencoded parser — buildStubIdp
+//   MUST register one or every token POST answers 415 FST_ERR_CTP_INVALID_MEDIA_TYPE:
+//   app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' },
+//     (_req, body, done) => done(null, Object.fromEntries(new URLSearchParams(String(body)))))
 export const makeInjectFetch =
   (issuer: string, idp: FastifyInstance, log: string[] = []): typeof globalThis.fetch =>
   async (input, init) => {
@@ -761,7 +807,12 @@ export const makeInjectFetch =
       method: (init?.method ?? 'GET') as InjectOptions['method'],
       url: url.slice(issuer.length) || '/',
       headers: (init?.headers ?? {}) as Record<string, string>,
-      payload: typeof init?.body === 'string' ? init.body : undefined,
+      payload:
+        typeof init?.body === 'string'
+          ? init.body
+          : init?.body instanceof URLSearchParams
+            ? init.body.toString() // fix3: exchangeCode posts `body: form` (URLSearchParams) — plan form dropped it
+            : undefined,
     })
     // TS6/@types-node-24 response adaptors (Plan D client-smoke precedent):
     // rawPayload→Uint8Array (Buffer≠BodyInit) + OutgoingHttpHeaders→string map (arrays ', '-joined)
@@ -783,7 +834,7 @@ it('buildAuthorize: exact query set (client_id, EXACT redirect_uri http://board.
 it('exchangeCode: form-encodes body incl. client_secret; returns {access_token, id_token}', ...)
 it('exchangeCode: non-2xx from the IdP ⇒ plain Error(/token exchange failed/), NEVER a DomainError (500 internal_error via the generic handler — D-tt/D-pp)', ...)
 it('verifyIdToken: green path claims ride out; nonce match is constant-time compared', ...)
-it('verifyIdToken negatives — each throws: bad nonce; tampered payload; alg none hand-compact (jose refuses outside RS256); second unknown kid signed id_token; expired (env-pinned clock: user stub signs exp-10s); aud mismatch (stub re-signed for other client); at_hash missing ⇒ throw; at_hash wrong ⇒ throw; iss mismatch ⇒ throw', ...)
+it('verifyIdToken negatives — each throws: bad nonce; tampered payload; alg none hand-compact (jose refuses outside RS256); second unknown kid signed id_token; expired (env-pinned clock: user stub signs exp-120s — MUST exceed the 60s clockTolerance or jose accepts it); aud mismatch (stub re-signed for other client); at_hash missing ⇒ throw; at_hash wrong ⇒ throw; iss mismatch ⇒ throw', ...)
 it('injectFetch refuses ANY non-issuer URL (the /refusing non-issuer fetch/ pin is tonight zero-network guarantee)', ...)
 ```
 
@@ -794,7 +845,7 @@ it('injectFetch refuses ANY non-issuer URL (the /refusing non-issuer fetch/ pin 
 // (tests: inject-backed, zero sockets). jose owns JWT verification (MIT, 0-dep,
 // RFC 8725bis-conformant); at_hash + nonce are OURS (jose verifies neither).
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { createRemoteJWKSet, type JWKSCacheOptions } from 'jose/jwks/remote'
+import { createRemoteJWKSet, customFetch } from 'jose/jwks/remote'
 import { jwtVerify } from 'jose/jwt/verify'
 import type { AppDeps } from '#root/main/deps'
 
@@ -851,10 +902,10 @@ const remoteJwks = (deps: AppDeps, jwksUri: string) => {
   let set = jwksCache.get(jwksUri)
   if (!set) {
     set = createRemoteJWKSet(new URL(jwksUri), {
-      ...({ [Symbol.for('nodejs.util.inspect.custom')]: undefined } as JWKSCacheOptions),
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- the seam IS deps.fetch (zero sockets in tests)
-      fetch: ((...a: Parameters<typeof globalThis.fetch>) =>
-        deps.fetch(...a)) as typeof globalThis.fetch,
+      // PROBED (jose@6.2.12, P1/fix1): the fetch seam is the exported customFetch
+      // symbol — a plain `fetch` option key does not exist and is silently IGNORED
+      // (jose would fall through to globalThis.fetch and open real sockets in tests).
+      [customFetch]: (url, options) => deps.fetch(url, options),
     })
     jwksCache.set(jwksUri, set)
   }
@@ -862,7 +913,7 @@ const remoteJwks = (deps: AppDeps, jwksUri: string) => {
 }
 ```
 
-**Planner preflight note (machine-check in the preflight, not on the implementer):** the `JWKSCacheOptions` spread line above was written before probe; the PREFLIGHT probe (this plan's own gate) verifies the real `createRemoteJWKSet(url, { fetch })` options shape and the block ships in its PROBED form — any divergence lands as the Task 5 amendment per the byte-sync protocol. The RP surface then continues:
+The RP surface then continues — `remoteJwks` ships in its PROBED form above (the preflight consumed this machine-check note; ledger P1/fix1):
 
 ```ts
 export interface OidcFlow {
@@ -987,13 +1038,13 @@ export const verifyIdToken = async (
 }
 ```
 
-(`buildAuthorize`'s `exp` ships as the real `now+600s` computed via `deps.clock` — the block's naive line is superseded at first run; measure-first, amend per byte-sync. The cache-shape awkwardness above ships in its simplified probe-verified form likewise — the preflight resolves both before dispatch, so the implementer sees clean blocks.)
+(`buildAuthorize`'s `exp` ships as the real `now+600s` computed via `deps.clock` — the block's naive line is superseded at first run; measure-first, amend per byte-sync. The `discover` cache above ran GREEN AS-WRITTEN in the preflight harness (P2: per-process discovery fetch, inflight path exercised) — ship it unchanged.)
 
 - [ ] **Step 5:** `pnpm test src/adapters/shared src/testing && pnpm test && pnpm lint && pnpm typecheck` (jose typecheck under TS6/nodenext is a WATCH item: the drift-style subpath resolution is probe-verified in the preflight; if TS6 rejects a subpath export, `jose` root import is the sanctioned fallback, recorded as an amendment). **Step 6: Commit:**
 
 ```bash
 git add src/adapters/shared/oidc-rp.ts src/adapters/shared/oidc-rp.test.ts src/adapters/shared/session-codec.ts src/adapters/shared/session-codec.test.ts src/testing/stub-idp.ts src/main/deps.ts src/testing/test-app.ts
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(oidc): RP core (jose) + in-process stub IdP + zero-socket fetch seam (D-pp)"
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(oidc): RP core (jose) + stub IdP + zero-socket fetch seam"
 ```
 
 ## Task 6: Allow-list surface — store, use-cases, three admin ops, policy flag, contract
@@ -1001,9 +1052,9 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(oidc): RP core (jose) + i
 **Files:**
 
 - Create: `src/infra/sqlite/allowlist-repo.ts` + `.test.ts`, `src/application/usecases/manage-allowlist.ts` + `.test.ts`
-- Modify: `src/application/ports.ts` (`AllowlistRow`/`AllowlistRepo`; `Repos` gains `allowlist`), the `SqliteUnitOfWork` tx-repo set (follow the `actors` member — one line + one import), `src/main/deps.ts` (`allowlistRoot`), `src/adapters/rest/routes/admin.ts` (3 ops), `src/application/usecases/manage-policy.ts` (`POLICY_ALLOWLIST` line), `openapi/openapi.yaml` (3 ops + `AllowlistEntry` schema) → `pnpm gen:client` (D-zz), `src/adapters/rest/roles-matrix.test.ts` (`ADMIN_OPS` 10 → 13), `src/application/usecases/manage-policy.test.ts` (flag arms)
+- Modify: `src/application/ports.ts` (`AllowlistRow`/`AllowlistRepo`; `Repos` gains `allowlist`), the `SqliteUnitOfWork` tx-repo set (follow the `actors` member — one line + one import), `src/main/deps.ts` (`allowlistRoot` + `useCases` gains `addAllowlist`/`removeAllowlist`/`listAllowlist` — key spellings aligned with the Task 7 `useCases.provisionHumanFromOidc` convention), `src/adapters/rest/routes/admin.ts` (3 ops + the Step-4 policy-enum widening), `src/application/usecases/manage-policy.ts` (`POLICY_ALLOWLIST` line), `openapi/openapi.yaml` (3 ops + `AllowlistEntry` schema) → `pnpm gen:client` (D-zz), `src/adapters/rest/roles-matrix.test.ts` (`ADMIN_OPS` 10 → 13), `src/application/usecases/manage-policy.test.ts` (flag arms)
 
-- [ ] **Step 1: Failing tests.** Usecase pins (the shape below IS the test list): email rule (`'not-an-email'` ⇒ `invalid_request` 'invalid email (D-tt)'; stored LOWERCASED: `'Alice@Example.COM'` → `alice@example.com`); duplicate add ⇒ `{created: false}` and NO second audit (the audit append count or `tail` length proves it); remove-missing ⇒ `not_found` with detail `` `allow-list entry 'ghost@x.example' not found` `` (ghost-404 doctrine verbatim); audits `allowlist_added`/`allowlist_removed` (actor = the admin ctx, after = `{email}`); route matrix: member ⇒ 403 on all three new ops (extend `ADMIN_OPS` verbatim-shape entries — the T4 loop then pins thirteen ops ×the one admin string); `PUT /admin/policy/oidc_provisioning` value `'allowlist'` ⇒ 200, `'on'` ⇒ 400 `invalid_request` (POLICY_ALLOWLIST `['off', 'allowlist']`).
+- [ ] **Step 1: Failing tests.** Usecase pins (the shape below IS the test list): email rule (`'not-an-email'` ⇒ `invalid_request` 'invalid email (D-tt)'; stored LOWERCASED: `'Alice@Example.COM'` → `alice@example.com`); duplicate add ⇒ `{created: false}` and NO second audit (the audit append count or `tail` length proves it); remove-missing ⇒ `not_found` with detail `` `allow-list entry 'ghost@x.example' not found` `` (ghost-404 doctrine verbatim); audits `allowlist_added`/`allowlist_removed` (actor = the admin ctx, after = `{email}`); route matrix: member ⇒ 403 on all three new ops (extend `ADMIN_OPS` verbatim-shape entries — the T4 loop then pins thirteen ops ×the one admin string); `PUT /admin/policy/oidc_provisioning` value `'allowlist'` ⇒ 200, `'on'` ⇒ 400 `invalid_request` (POLICY_ALLOWLIST `['off', 'allowlist']`); NEW arm (review R2/B10): `PUT /admin/policy/review_gate` value `'allowlist'` ⇒ STILL 400 — the transport enum widens, POLICY_ALLOWLIST stays the per-key semantic gate (no silent semantic widening).
 
 - [ ] **Step 2: Run** → RED. **Step 3: Implement.** Ports:
 
@@ -1039,13 +1090,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 Routes (admin.ts, same 3-arg style + `preHandler: [requireHuman, requireAdmin]`): `GET /admin/allowlist` → `list.run({...actorCtx(request)})` 200 array; `POST /admin/allowlist` body `{email: {type:'string', minLength: 3, maxLength: 254}}` → `reply.code(res.created ? 201 : 200).send(row)`; `DELETE /admin/allowlist/:email` → 204. (Email path param arrives URL-decoded by fastify; the lowercase rule applies before lookup — pinned in the route test via `Alice@Example.COM`.)
 
-- [ ] **Step 4: Contract (D-zz).** yaml: `AllowlistEntry` component `{email, added_by, created_at}`; three ops under tag `admin` with `operationId`s `listAllowlist`/`addAllowlist`/`removeAllowlist`, `201`/`200`/`204` + `default: Problem`; `removeAllowlist` path param `{name: email, in: path, required: true, schema: {type: string}}`. `pnpm gen:client` + artifact ships in THIS commit.
+- [ ] **Step 4: Contract (D-zz).** yaml: `AllowlistEntry` component `{email, added_by, created_at}`; three ops under tag `admin` with `operationId`s `listAllowlist`/`addAllowlist`/`removeAllowlist`, `201`/`200`/`204` + `default: Problem`; `removeAllowlist` path param `{name: email, in: path, required: true, schema: {type: string}}`. The `PUT /admin/policy/{key}` body schema `enum: ['on','off']` (routes/admin.ts:107) and the SAME enum in `openapi/openapi.yaml` (`setPolicy` requestBody, ~:466) widen to `['on','off','allowlist']` IN THIS TASK (review R2/B10) — the enum gates the wire, POLICY_ALLOWLIST gates the semantics (review_gate + 'allowlist' stays 400, pinned as a test arm above). `pnpm gen:client` + artifact ships in THIS commit.
 
 - [ ] **Step 5: Gates + commit:**
 
 ```bash
 git add src/infra/sqlite/allowlist-repo.ts src/infra/sqlite/allowlist-repo.test.ts src/application/usecases/manage-allowlist.ts src/application/usecases/manage-allowlist.test.ts src/application/ports.ts src/main/deps.ts src/adapters/rest/routes/admin.ts src/application/usecases/manage-policy.ts src/application/usecases/manage-policy.test.ts src/adapters/rest/roles-matrix.test.ts openapi/openapi.yaml src/client/schema.d.ts
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(admin): oidc first-login allow-list + provisioning policy flag (D-tt)"
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(admin): oidc first-login allow-list + policy flag"
 ```
 
 ## Task 7: Auth routes, the first-login decision tree, login audits, contract
@@ -1053,7 +1104,7 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(admin): oidc first-login 
 **Files:**
 
 - Create: `src/adapters/rest/routes/auth.ts` + `.test.ts`, `src/adapters/rest/scenarios-auth.test.ts`, `src/application/usecases/provision-human.ts` + `.test.ts`
-- Modify: `src/adapters/rest/auth.ts` (`AUTH_PRE_SESSION` GET-only arm — D-vv exact-set (b)), `src/application/ports.ts` (`ActorRepo.findByOidcSubject`), `src/infra/sqlite/actor-repo.ts` (+its test), `src/main/deps.ts` (use-case wiring), `src/adapters/rest/app.ts` (`registerAuthRoutes` — registered BEFORE the hook-reliant route blocks is irrelevant (hooks are app-level); place with the route block, after `registerAdminRoutes`), `openapi/openapi.yaml` (3 `auth` ops, `security: []` on login/callback) → `pnpm gen:client`
+- Modify: `src/adapters/rest/auth.ts` (`AUTH_PRE_SESSION` GET-only arm — D-vv exact-set (b)), `src/application/ports.ts` (`ActorRepo.findByOidcSubject`), `src/infra/sqlite/actor-repo.ts` (+its test), `src/main/deps.ts` (use-case wiring), `src/adapters/rest/app.ts` (`registerAuthRoutes` — registered BEFORE the hook-reliant route blocks is irrelevant (hooks are app-level); place with the route block, after `registerAdminRoutes`), `openapi/openapi.yaml` (4 `auth` ops incl. `/auth/me`; `security: []` on login/callback/logout) → `pnpm gen:client`
 
 - [ ] **Step 1: Provisioning use-case tests** (`provision-human.ts` — the D-tt handle algorithm, pinned):
 
@@ -1076,7 +1127,10 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(admin): oidc first-login 
 
 ```ts
 // /auth/login (GET exempt arm — D-vv(b)):
-// L1 no config (default makeTestApp)                    => 500 problem internal_error 'oidc not configured'
+// L1 no config (default makeTestApp)                    => 500 problem internal_error 'oidc not
+//    configured' — REQUIRES routes/auth.ts to call sendProblem(reply, 500, 'internal_error',
+//    'oidc not configured') EXPLICITLY: the generic Error path answers detail 'internal error'
+//    (problem.ts:59-65), so the pinned detail demands the explicit call (review note (c))
 // L2 configured, no returnTo                            => 302 Location = stub authorize URL w/ exact query set; Set-Cookie __Host-ns_flow (HttpOnly attrs pinned)
 // L3 returnTo=/tasks/NS-1 (not /ui/-prefixed)           => returnTo collapses to /ui/ inside the flow cookie
 // L4 POST /auth/login                                   => 401 byte-identical missing-bearer (exempt arm is GET-only)
@@ -1110,24 +1164,24 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(admin): oidc first-login 
 // D-vv(b) AUTH_PRE_SESSION: the two pre-session OIDC legs run with NO identity;
 // GET-only, exact members (normalized path above). Every other method keeps the
 // bearer requirement — POST /auth/login answers the byte-identical 401.
-if (request.method === 'GET' && AUTH_PRE_SESSION.includes(path)) return
+if (request.method === 'GET' && (AUTH_PRE_SESSION as readonly string[]).includes(path)) return
 ```
 
 `export const AUTH_PRE_SESSION = ['/auth/login', '/auth/callback'] as const` sits beside `PUBLIC_PATHS` (the exact-set pin: membership equality test in auth.test.ts, D-ll spirit — a fourth member fails it).
 
-`routes/auth.ts` — `registerAuthRoutes(server, deps)`; the callback decision tree (D-tt) in order: parse query (`code`, `state`, `error`, `iss`) → `error` leg → C5; decode flow cookie (`decodeSignedJson`, `deps.config.sessionKey`) else C2/3/4-class; `iss`-when-present `eq` check; `exchangeCode` → `verifyIdToken` (both throw → generic 500 via error handler); `deps.actorsRoot.findByOidcSubject(claims.sub)` → hit ⇒ mint-session; miss ⇒ `(await deps.actorsRoot.getPolicy('oidc_provisioning')) ?? 'off'` fail-closed: `'off'` ⇒ deny; `'allowlist'` ⇒ `email_verified===true && email` lowercased ∈ `allowlistRoot.findByEmail` ⇒ `useCases.provisionHuman.run({...})` ⇒ mint-session; else deny. `mintSession` is ONE local function: `sid/csrf = randomBytes(32).b64url`, `sessionsRoot.create` (`expires_at` = `now + sessionTtlS` via `Clock`), `auditRoot.append` `login_success`, `reply.code(302).header('location', flow.returnTo).header('set-cookie', sessionCookieSet({sid, exp: expiresAt}, ttl, csrf, key))` (+ the cleared flow cookie as a second Set-Cookie array element — fastify `header('set-cookie', [..])`). `deny(...)`: same accept-shape (C7/C8) + `login_denied` audit (reason 'not allow-listed'). Every audit append here is a root-connection single statement (no tx — the delivery-loop doctrine; login is not a domain mutation).
+`routes/auth.ts` — `registerAuthRoutes(server, deps)`; the callback decision tree (D-tt) in order: parse query (`code`, `state`, `error`, `iss`) → `error` leg → C5; decode flow cookie (`decodeSignedJson`, `deps.config.sessionKey`) else C2/3/4-class; `iss`-when-present `eq` check; `exchangeCode` → `verifyIdToken` (both throw → generic 500 via error handler); `deps.actorsRoot.findByOidcSubject(claims.sub)` → hit ⇒ mint-session; miss ⇒ `(await deps.actorsRoot.getPolicy('oidc_provisioning')) ?? 'off'` fail-closed: `'off'` ⇒ deny; `'allowlist'` ⇒ `email_verified===true && email` lowercased ∈ `allowlistRoot.findByEmail` ⇒ `useCases.provisionHumanFromOidc.run({...})` ⇒ mint-session; else deny. `mintSession` is ONE local function: `sid/csrf = randomBytes(32).b64url`, `sessionsRoot.create` (`expires_at` = `now + sessionTtlS` via `Clock`), `auditRoot.append` `login_success`, `reply.code(302).header('location', flow.returnTo).header('set-cookie', sessionCookieSet({sid, exp: expiresAt}, ttl, csrf, key))` (+ the cleared flow cookie as a second Set-Cookie array element — fastify `header('set-cookie', [..])`). `deny(...)`: same accept-shape (C7/C8) + `login_denied` audit (reason 'not allow-listed'). Every audit append here is a root-connection single statement (no tx — the delivery-loop doctrine; login is not a domain mutation).
 
 `findByOidcSubject` in actor-repo: `selectAll('actors').where('oidc_subject', '=', sub).executeTakeFirst()` → `ActorRow | null` (full row, no trim — login path is not the token-lookup hot path).
 
 - [ ] **Step 5: Scenario test** (`scenarios-auth.test.ts`, the §11 story shape): bootstrap-admin bearer adds `alice@example.test` to the allow-list → flips `oidc_provisioning` → drives L2/authorize/C9 via raw `inject` calls with a hand-rolled cookie jar (parse `set-cookie`, replay `cookie`) → member session GETs `/tasks` 200 → POSTs a task WITH the CSRF header 201 → POSTs `/admin/actors` 403 → logout 204 → GET `/tasks` 401. (This file is tonight's §14-1 human-loop skeleton; the Playwright twin rides the real UI in Task 11.)
 
-- [ ] **Step 6: Contract (D-zz).** yaml `auth` tag: `GET /auth/login` (`security: []`, params `returnTo` query, `302` + `default: Problem`), `GET /auth/callback` (`security: []`, params `code/state/iss/error`, `302`/`403` arms documented as `default: Problem`), `POST /auth/logout` (`204` + `default: Problem`; description states the cookie-session + CSRF posture — the yaml is documentation of a cookie surface while the declared scheme stays bearer, stated in the op description honestly), `GET /auth/me` (global bearer security; `200` schema `{id, kind (enum human|agent), handle, display_name, role: {type: ['string','null'], enum: ['admin','member',null]}}` + `default: Problem` — inline schema, no new component). `pnpm gen:client` + artifact in THIS commit; drift `toEqual(documented)` green proves served⇄yaml.
+- [ ] **Step 6: Contract (D-zz).** yaml `auth` tag: `GET /auth/login` (`security: []`, params `returnTo` query, `302` + `default: Problem`), `GET /auth/callback` (`security: []`, params `code/state/iss/error`, `302`/`403` arms documented as `default: Problem`), `POST /auth/logout` (`204` + `default: Problem`; `security: []` — deliberate (review note (j)): the op is cookie+CSRF and bearerAuth would misdescribe it; the drift test pins path×method only and cannot see the security field, so the honest posture lives in the op description, not a machine pin), `GET /auth/me` (global bearer security; `200` schema `{id, kind (enum human|agent), handle, display_name, role: {type: ['string','null'], enum: ['admin','member',null]}}` + `default: Problem` — inline schema, no new component). `pnpm gen:client` + artifact in THIS commit; drift `toEqual(documented)` green proves served⇄yaml.
 
 - [ ] **Step 7: Gates + commit:**
 
 ```bash
 git add src/adapters/rest/routes/auth.ts src/adapters/rest/routes/auth.test.ts src/adapters/rest/scenarios-auth.test.ts src/application/usecases/provision-human.ts src/application/usecases/provision-human.test.ts src/adapters/rest/auth.ts src/adapters/rest/app.ts src/application/ports.ts src/infra/sqlite/actor-repo.ts src/infra/sqlite/actor-repo.test.ts src/main/deps.ts openapi/openapi.yaml src/client/schema.d.ts
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(auth): login/callback/logout + first-login tree + login audits (D-tt)"
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(auth): login/callback/logout + first-login tree + audits"
 ```
 
 ## Task 8: UI toolchain scaffold — Kit-2 static SPA at `adapters/sveltekit/` (outside `src/`)
@@ -1278,7 +1332,7 @@ pnpm format:check   # prettier-plugin-svelte covers .svelte under repo rules
 
 ```bash
 git add pnpm-workspace.yaml package.json pnpm-lock.yaml .prettierrc scripts/ui-offline-check.mjs adapters/sveltekit
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): sveltekit static scaffold at /ui outside src (kit2, offline-safe build)"
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): sveltekit static scaffold at /ui outside src"
 ```
 
 ## Task 9: The five §8 views — structure is the requirement
@@ -1287,8 +1341,12 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): sveltekit static sca
 
 - Create: `src/lib/types.ts`, `src/lib/api.ts`, `src/lib/events.ts`, `src/lib/poll.svelte.svelte` NO — `src/lib/poll.svelte.ts`
 - Modify: `src/routes/+layout.svelte` (create, nav), `src/routes/+page.svelte` (board), `src/routes/tasks/[id]/+page.svelte`, `src/routes/inbox/+page.svelte`, `src/routes/admin/+page.svelte`, `src/routes/login/+page.svelte`
+- Modify (Step 0 read-side, review R3/B12): `src/application/ports.ts` (`TaskWithCounts` +`labels`), `src/infra/sqlite/task-repo.ts` (batched `labelsFor` — no N+1), `src/adapters/rest/dto.ts` (`TaskDto`/`toTaskDto`), `openapi/openapi.yaml` (`Task` schema), `src/client/schema.d.ts` (regen), the §11.2 body-pin scenario-test files the suite names
 
-**Contract-transcription duty (binding for this task):** every endpoint/field the UI calls is read from the SHIPPED route files (`routes/tasks.ts`, `threads.ts`, `inbox.ts`, `attachments.ts`, `links.ts`, `dependencies.ts`, `labels.ts`, `audit.ts`, `events.ts`, `admin.ts`, `webhooks.ts`, `auth.ts`) and from `dto.ts` — transcription, not invention. Where a response field is absent, the view shows less; the view NEVER assumes a field no route emits.
+**Contract-transcription duty (binding for this task):** every endpoint/field the UI calls is read from the SHIPPED route files (`routes/tasks.ts`, `threads.ts`, `inbox.ts`, `attachments.ts`, `links.ts`, `dependencies.ts`, `labels.ts`, `audit.ts`, `events.ts`, `admin.ts`, `webhooks.ts`, `auth.ts`) and from `dto.ts` — transcription, not invention. Where a response field is absent, the view shows less; the view NEVER assumes a field no route emits. Post-R3 the board DTO DOES carry `labels` — Step 0 makes that true FIRST; every other field stays pure transcription.
+
+- [ ] **Step 0: The labels DTO expansion (review R3/B12 — the board's label chip needs labels ON the DTO).**
+      Read-side only, shipped BEFORE the views: `ports.ts` `TaskWithCounts` gains `labels: string[]`; `task-repo.ts` resolves them in ONE batched query per response (`labelsFor(taskIds): Map<taskId, string[]>` via `task_labels` JOIN `labels` — wired into `listAllWithCounts` AND `findWithCounts`; NO N+1 per task); `dto.ts` `TaskDto`/`toTaskDto` gains `labels: string[]` (empty array for unlabeled tasks); `openapi/openapi.yaml` `Task` schema gains `labels: { type: array, items: { type: string } }`; `pnpm gen:client` + the regenerated `src/client/schema.d.ts` ship in THIS commit (D-zz duty). The §11.2 body-pins in the REST scenario tests gain the `labels` key — run `pnpm test` after the change and fix EXACTLY the pins that break (the MCP parity harness compares live⇄live and rides automatically; if any parity ROW hardcodes a body, fix the row). The board label chip then filters `t.labels.includes(fLabel)` client-side — no per-card GET.
 
 - [ ] **Step 1: The client seam** `src/lib/api.ts` (D-rr companion mirroring lives HERE — every mutation carries the header when the companion cookie exists):
 
@@ -1354,13 +1412,18 @@ export const json = (method: string, body: unknown): RequestInit => ({
 
 ```ts
 // events.ts — live board via the cursor feed (spec §8: polling; SSE §12 later).
-import { api } from './api'
+// SHAPE (review R4/B9 — verified routes/events.ts:54): GET /events answers a BARE
+// ARRAY (rows.map(toEvent); cursor = audit_log.id — toEvent is the exported single
+// source; transcribe its FULL field list into FeedEvent, not just cursor). The
+// former `import { api }` here was unused (the loop takes `load` as a parameter) —
+// dropped: no dead imports.
 
 export const POLL_BASE_MS = 2000
 export const POLL_MAX_MS = 10000
 
-interface FeedPage {
-  events: Array<{ cursor: number }>
+// transcribed from routes/events.ts toEvent — cursor shown, rest rides the mapper
+interface FeedEvent {
+  cursor: number
 }
 
 /** Pure next-delay decision — Task 9's e2e-adjacent honesty hook: cursor NEVER
@@ -1372,8 +1435,8 @@ export interface PollState {
 
 export const initialPollState = (): PollState => ({ cursor: 0, delayMs: POLL_BASE_MS })
 
-export const afterSuccess = (s: PollState, page: FeedPage): PollState => ({
-  cursor: page.events.reduce((m, e) => Math.max(m, e.cursor), s.cursor), // monotonic, never re-reads back
+export const afterSuccess = (s: PollState, page: FeedEvent[]): PollState => ({
+  cursor: page.reduce((m, e) => Math.max(m, e.cursor), s.cursor), // monotonic, never re-reads back
   delayMs: POLL_BASE_MS,
 })
 
@@ -1385,8 +1448,8 @@ export const afterFailure = (s: PollState): PollState => ({
 /** Drives the loop; onBatch runs only when fresh events arrived. `alive` gates
  * across SPA navigations. */
 export async function pollFeed(
-  load: (cursor: number) => Promise<FeedPage>,
-  onBatch: (events: FeedPage['events']) => void,
+  load: (cursor: number) => Promise<FeedEvent[]>,
+  onBatch: (events: FeedEvent[]) => void,
   alive: () => boolean,
   schedule: (fn: () => void, ms: number) => unknown = setTimeout
 ): Promise<void> {
@@ -1395,7 +1458,7 @@ export async function pollFeed(
     try {
       const page = await load(state.cursor)
       const next = afterSuccess(state, page)
-      if (page.events.length > 0) onBatch(page.events)
+      if (page.length > 0) onBatch(page)
       state = next
     } catch {
       state = afterFailure(state) // feed failure NEVER kills the loop; the tick just refetches
@@ -1411,7 +1474,7 @@ export async function pollFeed(
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { api, json } from '$lib/api'
-  import { pollFeed } from '$lib/events'
+  import { pollFeed, type FeedEvent } from '$lib/events'
   import type { TaskDto } from '$lib/types'
 
   const COLUMNS = ['backlog', 'todo', 'in_progress', 'in_review', 'done', 'canceled'] as const
@@ -1432,18 +1495,24 @@ export async function pollFeed(
     else kids(rootId).forEach((k) => walk(k.id))
     return out
   }
-  // filters (chips; ready-only is the client-side ready() sketch: leaf ∧ todo ∧
-  // unclaimed ∧ unblocked — dependency-awareness is the SERVER's claim gate's job,
-  // stated honestly in the UI note)
+  // filters (chips; ready-only reads the SERVER's ready() facts OFF THE DTO —
+  // unmet_blockers/claim_token_id ride it (review note (g)); full dependency
+  // resolution stays the SERVER's claim gate's job, stated honestly in the UI note)
   let fAssignee = $state('')
   let fLabel = $state('')
   let fBlocked = $state(false)
   let fReadyOnly = $state(false)
   const visible = (t: TaskDto): boolean =>
     (!fAssignee || t.assignee_id === fAssignee) &&
-    (!fLabel || (t.labels ?? []).includes(fLabel)) &&
+    (!fLabel || t.labels.includes(fLabel)) &&
     (!fBlocked || t.blocked_flag === true) &&
-    (!fReadyOnly || (t.status === 'todo' && !t.assignee_id && !t.blocked_flag && leavesOf(t.id).length === (t.children_count ? 0 : 1)))
+    (!fReadyOnly ||
+      (t.status === 'todo' &&
+        !t.assignee_id &&
+        !t.blocked_flag &&
+        t.unmet_blockers === 0 &&
+        t.claim_token_id === null &&
+        !tasks.some((c) => c.parent_id === t.id)))
   const cell = (rootId: string, status: string): TaskDto[] =>
     leavesOf(rootId).filter((t) => t.status === status && visible(t))
   const rollup = (rootId: string): string => {
@@ -1467,7 +1536,7 @@ export async function pollFeed(
     void (async () => {
       await refresh()
       await pollFeed(
-        (cursor) => api<FeedPage>(`/events?cursor=${cursor}`),
+        (cursor) => api<FeedEvent[]>(`/events?cursor=${cursor}`),
         () => void refresh(),
         () => !stopped,
         (fn, ms) => (timer = setTimeout(fn, ms))
@@ -1510,9 +1579,9 @@ export async function pollFeed(
 {/each}
 ```
 
-(the `…` inside the two `<select>` option lists is the transcription duty: options are built from the loaded data — `Array.from(new Set(tasks.flatMap(t => t.labels ?? [])))` and an assignee select from `tasks` — the implementer expands from the DTO; structural shapes are pinned above). **Task 9 self-correction binding at ship:** the ready-only sketch above reaches `leavesOf` before its `children_count` guard reads cleanly — shipped form uses the plain-leaf predicate `t.status==='todo' && !t.assignee_id && !t.blocked_flag && !tasks.some((c) => c.parent_id === t.id)` (a `todos`-set lookup; cheaper and obvious) — the e2e board assertion pins a todo-leaf renders under `todo`, which holds under both; the shipped predicate is the amended one, per byte-sync.)
+(the `…` inside the two `<select>` option lists is the transcription duty: options are built from the loaded data — `Array.from(new Set(tasks.flatMap(t => t.labels)))` and an assignee select from `tasks` — the implementer expands from the DTO; structural shapes are pinned above). (The ready-only predicate above ALREADY ships in its preflight/review-amended form — plain-leaf test plus the DTO's `unmet_blockers === 0` + `claim_token_id === null` (review note (g)); no ship-time self-correction is reserved for it. The e2e board pin — a todo-leaf renders under `todo` — holds under the shipped predicate.)
 
-- [ ] **Step 4: Task detail** `src/routes/tasks/[id]/+page.svelte` — header (title, status pills PATCH `/tasks/{id}/status` w/ reason input when claimed — reason rule transcribed from the route; assignee/labels via PATCH `/tasks/{id}`; blocked toggle) + the SIX §8-2 tabs as `<details>`-style tab strip: **conversation** (threads + messages, note/question kinds, question state badges + answer action), **children** (child list + links; split form omitted — §8 lists the tree view, splits are an agent/API surface, stated), **dependencies** (blocker/blocked lists + add/remove), **attachments+links** (upload via `POST /tasks/{id}/attachments` octet-stream `?filename=` transcribed from the route; links add/remove), **activity** (`GET /audit` query transcribed from `routes/audit.ts`, task-scoped), **context** (`GET /tasks/{id}/context` rendered verbatim). Comment box = note-thread creation (POST `/tasks/{id}/threads` kind note / messages). Each call rides `api()`. Structure pinned, layout plain.
+- [ ] **Step 4: Task detail** `src/routes/tasks/[id]/+page.svelte` — header (title, status pills PATCH `/tasks/{id}/status` w/ reason input when claimed — reason rule transcribed from the route; assignee/labels via PATCH `/tasks/{id}`; blocked toggle) + the SIX §8-2 tabs as `<details>`-style tab strip: **conversation** (threads + messages, note/question kinds, question state badges + answer action), **children** (NESTED render — reuse the board's walk/group pattern to print the subtree as a TREE per §8-2; + links; split form omitted — splits are an agent/API surface, stated), **dependencies** (blocker/blocked lists + add/remove), **attachments+links** (upload via `POST /tasks/{id}/attachments` octet-stream `?filename=` transcribed from the route; links add/remove), **activity** (`GET /audit` query transcribed from `routes/audit.ts`, task-scoped), **context** (`GET /tasks/{id}/context` rendered verbatim). Comment box = note-thread creation (POST `/tasks/{id}/threads` kind note / messages). Each call rides `api()`. Structure pinned, layout plain.
 
 - [ ] **Step 5: Inbox + Admin + Login views.** `inbox/+page.svelte`: `GET /inbox` list, unread marker, `markInboxRead`-route transcription button, jump-to-task links (§8-3). `admin/+page.svelte` (§8-4, admin-role-gated: `/auth/me` role !== 'admin' ⇒ "admins only" panel, no data fetch — the SERVER is the gate; this is the UI courtesy): actor list + create-agent form + token create/revoke (raw token shown ONCE with an acknowledge button), label create/attach, policy flag toggles (`GET/PUT /admin/policy/:key` — review_gate + oidc_provisioning), webhook list/register/rotate/delete (secret shown once), allow-list CRUD (Task 6 ops), audit search (GET /audit query). `login/+page.svelte` (§8-5: no registration — OIDC button ONLY): reads `?error=` (`pending` → "not allow-listed yet — ask an admin", `idp` → generic failure) + `?returnTo=`, button → `/auth/login?returnTo=<path>`; the sign-out affordance lives in the layout nav (Task 8 shell).
 
@@ -1520,17 +1589,18 @@ export async function pollFeed(
 
 ```bash
 pnpm ui:build && pnpm ui:offline-check          # hosts: (none); build green
-pnpm test && pnpm lint && pnpm typecheck && pnpm build   # backend gates byte-unchanged (UI invisible to all four)
-git add adapters/sveltekit
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): five spec-8 views - board swimlanes, detail tabs, inbox, admin, login"
+pnpm test && pnpm lint && pnpm typecheck && pnpm build   # backend gates GREEN — Step 0 is a read-side contract addition (labels): the §11.2 body-pins ride, record the counts; lint/typecheck/build still never see adapters/sveltekit
+git add adapters/sveltekit src/application/ports.ts src/infra/sqlite/task-repo.ts src/adapters/rest/dto.ts openapi/openapi.yaml src/client/schema.d.ts
+# + every §11.2 body-pin scenario-test file the suite names (mechanical labels additions only)
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): five spec-8 views: board, detail, inbox, admin, login"
 ```
 
-## Task 10: Static mount + the two exact-set pins (hook UI arm, drift `STATIC_ROUTES`)
+## Task 10: Static mount + the two exact-set pins (hook UI arm, drift sentinel + hasRoute)
 
 **Files:**
 
 - Create: `src/adapters/rest/ui.ts` + `.test.ts`
-- Modify: `src/adapters/rest/app.ts` (`mountUi(server, deps)` AFTER `mountMcp`, its own ruling-comment), `src/adapters/rest/auth.ts` (`isUiPath` arm — D-vv exact-set #1), `src/adapters/rest/openapi-contract.test.ts` (`STATIC_ROUTES` exemption — D-vv exact-set #2)
+- Modify: `src/adapters/rest/app.ts` (`mountUi(server, deps)` AFTER `mountMcp`, its own ruling-comment), `src/adapters/rest/auth.ts` (`isUiPath` arm — D-vv exact-set #1), `src/adapters/rest/openapi-contract.test.ts` (wildcard-sentinel + `hasRoute` pins — D-vv exact-set #2; the Step-1 fence carries the SAME-EDIT routeKeys grammar change)
 
 - [ ] **Step 1: Failing `ui.test.ts`:** build-tree present (Task 8's `ui:build` output exists in the working tree — the test builds its OWN tiny tree ONLY if absent is FORBIDDEN; honest: the test `beforeAll` skips with a loud declared skip if `adapters/sveltekit/build/index.html` is absent — recorded, never fake-green):
 
@@ -1540,7 +1610,12 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): five spec-8 views - 
 // U2 GET /ui/login, GET /ui/tasks/NS-1 (SPA deep-links, files absent) => 200 html shell (scope notFound fallback)
 // U3 GET /ui/_app/entries/<first hashed asset via fs.readdir> => 200 + cache-control immutable + max-age=2592000
 // U4 HEAD /ui/                      => 200, no body — HEAD rides GET exemption
-// U5 GET /ui/../openapi.yaml (normalize-arm: the slash-collapse precedent) => still UI (200 shell) — fail-CLOSED toward UI, never toward the API
+// U5 dot-segment reality (re-pinned, preflight P7/fix13): inject (and EVERY browser UA)
+//    normalizes dot-segments BEFORE the hook sees the URL — GET /ui/../openapi.yaml
+//    arrives as /openapi.yaml (PUBLIC ⇒ 200 spec, never the UI, never the API-under-test).
+//    The honest pin: unit-test the hook's normalizer regex directly (slash-collapse/trailing
+//    arms unchanged — fail-closed membership only) + rely on U7; no dot-segment inject can
+//    exercise a UI-path fail-close because the path never reaches the hook un-normalized.
 // U6 POST /ui/                      => 401 problem unauthenticated — exemption is GET/HEAD ONLY
 // U7 GET /uix                       => 401 (single-member set: '/ui/' prefix only; /uix is NOT under it)
 // U8 the D-vv skip-arm: mountUi against a missing build dir (unit: call it on a fresh Fastify w/ cwd pointing elsewhere) => no route registered + logged notice + /ui/* 404s problem+json (root notFound intact)
@@ -1549,20 +1624,39 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): five spec-8 views - 
 `openapi-contract.test.ts` gains beside the `MCP_ROUTES` block (same D-ll spirit, second exact set):
 
 ```ts
-// D-vv: /ui/* is the static SPA mount — the yaml cannot describe a built
-// asset tree. EXACT set: a second static route or a non-/ui member fails the
-// pin, and the yaml never mentions /ui. The UI surface is pinned by ui.test.ts
-// (+ the offline guard + e2e smoke) instead.
-const STATIC_ROUTES = ['GET /ui/*']
-const staticPresent = served.filter((key) => key.startsWith('GET /ui/')).sort()
-expect(staticPresent).toEqual(uiBuildPresent() ? STATIC_ROUTES : [])
+// D-vv — the yaml cannot describe a built asset tree. (AMENDED pre-dispatch,
+// preflight P7/fix12, machine-verified on find-my-way 9.9.0/fastify 5.12.3:) the
+// static mount prints as a BARE wildcard leaf `* (GET, HEAD)` — NO path segment in
+// ANY printRoutes mode — so routeKeys learns the leaf as a SENTINEL and the /ui/*
+// SPELLING is pinned exactly via hasRoute. A second wildcard registration duplicates
+// the sentinel (fails the pin); the hasRoute pair pins the spelling and the absence
+// of any POST sibling.
+// SAME-EDIT grammar in routeKeys: the leaf alternation becomes (\/\S*|\*) and after
+// `stack.length = match[1].length / 4`:
+//   if (match[2] === '*') {
+//     for (const method of match[3].split(', ')) {
+//       if (method === 'HEAD') continue
+//       keys.add(`${method} *`)
+//     }
+//     continue
+//   }
+// The 'fails loudly on tree shapes outside the grammar' test RE-PINS IN THE SAME
+// EDIT: the old wildcard-as-junk fixture is now GRAMMAR (returns
+// GET *,GET /tasks,POST /tasks); the loud-fail class keeps a genuinely out-of-shape
+// line (a junk leaf must still throw). The MCP assertions stay byte-identical;
+// only the single-exemption remainder line is replaced (by design).
+const STATIC_KEYS = ['GET *'] // sentinel — the /ui/* spelling is pinned by hasRoute
+const staticPresent = served.filter((key) => key.endsWith(' *')).sort()
+expect(staticPresent).toEqual(uiBuildPresent() ? STATIC_KEYS : [])
+expect(hasUiGet).toBe(uiBuildPresent())
+expect(hasUiPost).toBe(false)
 expect(documented.some((key) => key.includes('/ui'))).toBe(false)
 expect(served.filter((key) => !mcpPresent.includes(key) && !staticPresent.includes(key))).toEqual(
   documented
 )
 ```
 
-(`uiBuildPresent()` — the same helper `ui.ts` exports, so test and mount see the SAME tree-truth; when the build dir is absent the drift test proves the ZERO-member set honestly.)
+(`uiBuildPresent()` — the same helper `ui.ts` exports, so test and mount see the SAME tree-truth; when the build dir is absent the drift test proves the ZERO-member set honestly. Capture `const hasUiGet = t.app.hasRoute({ method: 'GET', url: '/ui/*' })` + `const hasUiPost = t.app.hasRoute({ method: 'POST', url: '/ui/*' })` right after `ready()`/`routeKeys`, BEFORE `t.close()`. The preflight verified both exemptions hold simultaneously on live served keys, with-build and without.)
 
 - [ ] **Step 2: Run** → RED. **Step 3: Implement `ui.ts`:**
 
@@ -1585,51 +1679,54 @@ export const mountUi = (app: FastifyInstance, deps: AppDeps): void => {
   if (!uiBuildPresent()) {
     // dev/test without a build: the mount skips, /ui/* 404s as problem+json, boot
     // NEVER crashes — the Playwright smoke builds first (D-xx).
-    deps.deliveryLoop // no — deps used for the logger only:
     app.log.warn(
       'UI build absent (adapters/sveltekit/build) — /ui mount skipped; run pnpm ui:build'
     )
     return
   }
-  void app.register(async (scope) => {
-    await scope.register(fastifyStatic, {
-      root: BUILD_DIR,
-      prefix: '/ui',
-      wildcard: true,
-      index: ['index.html'],
-      // hashed assets (vite emits content-hashed names) are immutable forever;
-      // the shell (and the fallback) is always no-cache — setHeaders below.
-      immutable: true,
-      maxAge: '30d',
-      preCompressed: true, // pairs adapter-static precompress:true
-      setHeaders(reply, path) {
-        if (path.endsWith('.html')) reply.header('cache-control', 'no-cache')
-      },
-    })
-    scope.setNotFoundHandler((request, reply) => {
-      // SPA fallback: scope-local ONLY — deep-links answer the shell; the root
-      // handler (problem+json) owns everything outside /ui.
-      if (request.method === 'GET' || request.method === 'HEAD') {
-        return reply.code(200).header('cache-control', 'no-cache').sendFile('index.html') // html arm: no-cache via setHeaders is route-path-based; the explicit header wins for the fallback
-      }
-      // non-GET deep-links fall to the root problem+json 404 — the root notFound
-      // does NOT fire for in-scope misses; re-shape the problem HERE:
-      return reply
-        .code(404)
-        .type('application/problem+json')
-        .send({
+  // (fix11, preflight P7) the scope registers WITH { prefix: '/ui' } — the prefix-less
+  // shape collided with the repo root's own setNotFoundHandler at boot: 'Not found handler
+  // already set for Fastify instance with prefix: /'. Static now mounts at '/' INSIDE the
+  // /ui scope; every runtime arm (shell/deep-link/asset cache/br/POST/404s) re-verified green.
+  void app.register(
+    async (scope) => {
+      await scope.register(fastifyStatic, {
+        root: BUILD_DIR,
+        prefix: '/',
+        wildcard: true,
+        index: ['index.html'],
+        // hashed assets (vite emits content-hashed names) are immutable forever;
+        // the shell (and the fallback) is always no-cache — setHeaders below.
+        immutable: true,
+        maxAge: '30d',
+        preCompressed: true, // pairs adapter-static precompress:true
+        setHeaders(reply, path) {
+          if (path.endsWith('.html')) reply.header('cache-control', 'no-cache')
+        },
+      })
+      scope.setNotFoundHandler((request, reply) => {
+        // SPA fallback: scope-local ONLY — deep-links answer the shell; the root
+        // handler (problem+json) owns everything outside /ui.
+        if (request.method === 'GET' || request.method === 'HEAD') {
+          return reply.code(200).header('cache-control', 'no-cache').sendFile('index.html') // html arm: no-cache via setHeaders is route-path-based; the explicit header wins for the fallback
+        }
+        // non-GET deep-links fall to the root problem+json 404 — the root notFound
+        // does NOT fire for in-scope misses; re-shape the problem HERE:
+        return reply.code(404).type('application/problem+json').send({
           type: 'https://nightshift.local/errors/not_found',
           title: 'not found',
           status: 404,
           code: 'not_found',
           detail: 'route not found',
         })
-    })
-  })
+      })
+    },
+    { prefix: '/ui' }
+  )
 }
 ```
 
-(SHIPPED-FORM duties, pre-flagged so no surprise amendments: the `deps` line above is dead — `mountUi` takes `(app, deps)` only for the log line via `app.log`; drop the unused param or use `deps` — the plan ships the 2-arg signature for `buildApp` symmetry, `app.log` only; the html `sendFile` maxAge option `{ cacheDownMaxAge? }` — verify `sendFile('index.html', { maxAge: 0, immutable: false })` at implement (README documents per-send options; the `setHeaders` html arm already covers it — measure, don't guess); the non-GET in-scope 404 problem body must match `problem.ts`'s shape byte-for-byte — import the ENVELOPE from problem.ts if `problem()` is not exported (it is private — the test pins byte-equality against the root one; if byte-equality needs the builder, exporting it is a recorded one-liner in THIS task).)
+(SHIPPED-FORM duties: the `deps` dead-line is RESOLVED pre-dispatch (preflight P7/fix11) — the stray `deps.deliveryLoop` line above is deleted; `mountUi(app: FastifyInstance, deps: AppDeps)` keeps the 2-arg signature for `buildApp` symmetry and `deps` exists ONLY for the skip-path — the warning rides `app.log` (if the repo's eslint flags the unused param, an eslint-disable-next-line on the signature is the sanctioned one-liner — measure, don't guess). The html `sendFile` maxAge option — verify `sendFile('index.html', { maxAge: 0, immutable: false })` at implement (README documents per-send options; the `setHeaders` html arm already covers it — the preflight confirmed the fallback answers `no-cache`). The non-GET in-scope 404 problem body must match `problem.ts`'s shape byte-for-byte — import the ENVELOPE from problem.ts if `problem()` is not exported (it is private — the test pins byte-equality against the root one; if byte-equality needs the builder, exporting it is a recorded one-liner in THIS task).
 
 `app.ts`: `mountUi(server, deps)` immediately after `mountMcp(server, deps)` with a one-line ruling comment (`D-vv — static SPA mount, last mount; exact-set pins in auth.ts + the drift test`). `auth.ts` arm (D-vv #1), between PUBLIC_PATHS and the session arm:
 
@@ -1662,14 +1759,14 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): static /ui mount + e
 
 ```bash
 pnpm exec playwright install chromium --only-shell 2>&1 | tee /tmp/ns-e-playwright-install.log
-pnpm exec playwright launch --browser chromium --headless about:blank 2>&1 | tee /tmp/ns-e-playwright-launch.log; echo "launch exit: $?"
+pnpm exec playwright screenshot --browser chromium about:blank /tmp/ns-e-pw-probe.png 2>&1 | tee /tmp/ns-e-playwright-launch.log; echo "launch exit: $?"
 ```
 
-Exit 0 ⇒ **RUN path**. Non-zero missing-shared-library errors ⇒ **NO-SYSTEM-SURGERY path** (Night-shift: no pacman, no sudo, ever): the suite still SHIPS, Task 11 stops at Step 4's recorded skip, D-xx posture lands in the final record with both logs quoted, and QUEUED (HUMAN) gains "operator: `pnpm exec playwright install chromium` + the Arch shared libs". **The recorded choice is made by the probe, never by hope; the log files are the evidence either way.**
+Exit 0 ⇒ **RUN path** (review R5/B11: the 1.63 CLI has NO `launch` command — `playwright screenshot` IS a real headless launch, so the screenshot IS the launch probe; the tee log keeps its `launch` name as the evidence file). Non-zero missing-shared-library errors ⇒ **NO-SYSTEM-SURGERY path** (Night-shift: no pacman, no sudo, ever): the suite still SHIPS, Task 11 stops at Step 4's recorded skip, D-xx posture lands in the final record with both logs quoted, and QUEUED (HUMAN) gains "operator: `pnpm exec playwright install chromium` + the Arch shared libs". **The recorded choice is made by the probe, never by hope; the log files are the evidence either way.**
 
 - [ ] **Step 2: Config + servers** `playwright.config.ts`: `testDir: 'e2e'`, `fullyParallel: false`, `globalSetup: './e2e/global-setup'`, `webServer: [ {command: 'NODE_OPTIONS=--conditions=development pnpm exec tsx src/testing/stub-idp-main.ts', url: 'http://127.0.0.1:3310/ping', reuseExistingServer: false}, {command: 'NODE_OPTIONS=--conditions=development pnpm exec tsx src/index.ts', url: 'http://127.0.0.1:3311/ping', env: {NS_PORT:'3311', NS_DB_PATH: <fresh tmp db path>, NS_DATA_DIR: <fresh tmp>, NS_OIDC_ISSUER:'http://127.0.0.1:3310', NS_OIDC_CLIENT_ID:'nightshift-e2e', NS_OIDC_CLIENT_SECRET:'e2e-secret-not-a-real-one-0001', NS_PUBLIC_URL:'http://127.0.0.1:3311', NS_SESSION_KEY:'e2e-session-key-0000000000000000000000000', NS_BOOTSTRAP_TOKEN:<64-hex literal>, NS_WEBHOOK_INTERVAL_MS:'0'}, timeout: 120_000} ]`. `stub-idp-main.ts` listens on `:3310` (`0.0.0.0`? — `127.0.0.1` only, stated) with the SAME `buildStubIdp` code, users `alice`/`bob`.
 
-- [ ] **Step 3: `global-setup.ts`** — bootstrap-admin API only (NO UI, NO real network — 127.0.0.1 only): POST `/admin/allowlist` `alice@example.com` via bearer bootstrap; PUT `/admin/policy/oidc_provisioning` `allowlist`; write `e2e/.tokens.json` (gitignored) — the run is DETERMINISTIC because both servers boot fresh (tmp DBs; the D-j purge + empty tables).
+- [ ] **Step 3: `global-setup.ts`** — bootstrap-admin API only (NO UI, NO real network — 127.0.0.1 only): POST `/admin/allowlist` `alice@example.com` via bearer bootstrap; PUT `/admin/policy/oidc_provisioning` `allowlist`; write the bootstrap token + actor id to an `os.tmpdir()`-routed file OUTSIDE the repo (review note (e): no `.tokens.json` in the tree, no gitignore churn — `.gitignore` gains only `playwright-report/` + `test-results/`) — the run is DETERMINISTIC because both servers boot fresh (tmp DBs; the D-j purge + empty tables).
 
 - [ ] **Step 4: `smoke.e2e.ts` — the §11.5 chain, exactly one test, honest names:**
 
@@ -1690,7 +1787,7 @@ Exit 0 ⇒ **RUN path**. Non-zero missing-shared-library errors ⇒ **NO-SYSTEM-
 
 ```bash
 git add playwright.config.ts e2e src/testing/stub-idp-main.ts package.json pnpm-lock.yaml .gitignore
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "test(e2e): playwright 11.5 smoke against stub idp + runner posture (D-xx)"
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "test(e2e): playwright 11.5 smoke against stub idp (D-xx)"
 ```
 
 ## Task 12: Final whole-plan gate + record + PR (Night-shift endgame)
