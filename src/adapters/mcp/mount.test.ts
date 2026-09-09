@@ -98,9 +98,9 @@ describe('mcp mount (D-hh, D-ii)', () => {
     }
   })
 
-  it('tools/list is exactly the current task-7-grown surface snapshot', async () => {
-    // (snapshot + name grown by Task 7 — +12 REFERENCE_TOOLS; Task 6 shipped 19 names,
-    // Task 5 shipped 13; see Task 7 Amendment)
+  it('tools/list is exactly the current task-8-grown surface snapshot', async () => {
+    // (snapshot + name grown by Task 8 — +4 COMPOSITE_TOOLS; Task 7 shipped 31 names,
+    // Task 6 shipped 19; see Task 7 Amendment; the final 35-pin contract gate is Task 10's)
     const t = await makeTestApp()
     try {
       const baseUrl = await t.app.listen({ port: 0, host: '127.0.0.1' })
@@ -111,7 +111,9 @@ describe('mcp mount (D-hh, D-ii)', () => {
         'add_link',
         'add_message',
         'answer_question',
+        'ask_question',
         'attach_label',
+        'claim_next',
         'claim_task',
         'create_label',
         'create_task',
@@ -130,10 +132,12 @@ describe('mcp mount (D-hh, D-ii)', () => {
         'list_tasks',
         'list_threads',
         'mark_inbox_read',
+        'post_update',
         'release_task',
         'remove_block',
         'remove_link',
         'search_audit',
+        'split_task',
         'update_question',
         'update_task',
         'update_task_status',
