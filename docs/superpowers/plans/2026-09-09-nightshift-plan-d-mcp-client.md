@@ -2389,10 +2389,12 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): spec §7.1 composit
 
 ```ts
 // src/client/drift.test.ts — regeneration ⇄ committed artifact, byte-for-byte (D-kk)
+// — sync = shipped form (repo-prettier --config for the out-of-repo temp file; see Task 9 Amendment)
 import { execFile } from 'node:child_process'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 
@@ -2403,7 +2405,16 @@ describe('nightshift-client drift pin (D-kk)', () => {
     const dir = await mkdtemp(join(tmpdir(), 'ns-client-drift-'))
     const tmp = join(dir, 'schema.d.ts')
     await run('pnpm', ['exec', 'openapi-typescript', 'openapi/openapi.yaml', '-o', tmp])
-    await run('pnpm', ['exec', 'prettier', '--write', tmp])
+    // the temp file lives OUTSIDE the repo, so prettier's own config walk finds nothing —
+    // point it at the repo config explicitly or the two sides format under different rules
+    await run('pnpm', [
+      'exec',
+      'prettier',
+      '--write',
+      '--config',
+      fileURLToPath(new URL('../../.prettierrc', import.meta.url)),
+      tmp,
+    ])
     const fresh = await readFile(tmp)
     const committed = await readFile(new URL('./schema.d.ts', import.meta.url))
     expect(fresh.equals(committed)).toBe(true)
@@ -2413,8 +2424,9 @@ describe('nightshift-client drift pin (D-kk)', () => {
 
 ```ts
 // src/client/client.test.ts — the client is LOAD-BEARING (D-kk): smoke through the real app
+// — sync = shipped form (#root import, todo seed, wire-real FLAT-details pin, no-fetch arm; see Task 9 Amendment)
 import { describe, expect, it } from 'vitest'
-import { createNightshiftClient } from './index'
+import { createNightshiftClient } from '#root/client/index'
 import { makeTestApp } from '#root/testing/test-app'
 
 // inject-backed fetch: zero sockets, the same hook chain (auth middleware rides a real
@@ -2429,7 +2441,14 @@ const injectFetch: typeof globalThis.fetch = async (input, init) => {
     headers: Object.fromEntries(request.headers),
     ...(request.body === null ? {} : { body: Buffer.from(await request.arrayBuffer()) }),
   })
-  return new Response(res.rawPayload, { status: res.statusCode, headers: res.headers })
+  return new Response(new Uint8Array(res.rawPayload), {
+    status: res.statusCode,
+    headers: Object.fromEntries(
+      Object.entries(res.headers).flatMap(([k, v]) =>
+        v === undefined ? [] : [[k, Array.isArray(v) ? v.join(', ') : String(v)]]
+      )
+    ),
+  })
 }
 let CURRENT: Awaited<ReturnType<typeof makeTestApp>>
 
@@ -2442,7 +2461,9 @@ describe('nightshift-client smoke (D-kk)', () => {
         token: CURRENT.adminToken,
         fetch: injectFetch,
       })
-      const created = await client.POST('/tasks', { body: { title: 'via client' } })
+      const created = await client.POST('/tasks', {
+        body: { title: 'via client', status: 'todo' }, // claim gate excludes the backlog default
+      })
       expect(created.error).toBeUndefined()
       expect(created.data?.title).toBe('via client')
       const id = created.data!.id
@@ -2451,10 +2472,18 @@ describe('nightshift-client smoke (D-kk)', () => {
       const loser = await client.POST('/tasks/{id}/claim', { params: { path: { id } } })
       expect(loser.data).toBeUndefined()
       expect((loser.error as { code?: string }).code).toBe('already_claimed') // problem+json typed (D-kk probe-proven)
-      expect((loser.error as { claimed?: boolean }).claimed).toBe(false) // FLAT details ride through typed
+      // FLAT details ride through typed EXACTLY as the REST twin serializes them: the
+      // already_claimed problem carries holder_handle/holder_display_name (openapi.yaml:957)
+      expect(loser.error).toMatchObject({ status: 409, holder_handle: expect.any(String) })
     } finally {
       await CURRENT.close()
     }
+  })
+
+  it('constructs without a fetch override — the D-kk default path, never hand-rolled (no network touched)', () => {
+    // construction alone walks the fetch===undefined arm; no request is ever fired
+    const client = createNightshiftClient({ baseUrl: 'http://nightshift.test', token: 't' })
+    expect(typeof client.GET).toBe('function')
   })
 })
 ```
@@ -2477,8 +2506,9 @@ pnpm gen:client
 
 ```ts
 // src/client/index.ts — nightshift-client (spec §7.1): generated paths + auth + problem-typed results
-import createClient, { type Middleware } from 'openapi-fetch'
-import type { paths } from './schema'
+// — sync = shipped form (#root specifiers incl. the explicit .d.ts; see Task 9 Amendment)
+import createClient, { type Client, type Middleware } from 'openapi-fetch'
+import type { paths } from '#root/client/schema.d.ts'
 
 export interface NightshiftClientOptions {
   baseUrl: string
@@ -2489,7 +2519,7 @@ export interface NightshiftClientOptions {
 // This module IS the spec's `nightshift-client`; extracting a publishable npm
 // package is a later human call (D-kk). The drift test keeps `paths` pinned to the
 // contract; consumers get typed data/error unions and nothing hand-rolled.
-export const createNightshiftClient = (opts: NightshiftClientOptions) => {
+export const createNightshiftClient = (opts: NightshiftClientOptions): Client<paths> => {
   const client = createClient<paths>({
     baseUrl: opts.baseUrl,
     ...(opts.fetch === undefined ? {} : { fetch: opts.fetch }),
@@ -2504,7 +2534,7 @@ export const createNightshiftClient = (opts: NightshiftClientOptions) => {
   return client
 }
 
-export type { paths } from './schema'
+export type { paths } from '#root/client/schema.d.ts'
 ```
 
 - [ ] **Step 5: Green + gates + build** (`tsc` compiles the committed `.d.ts`; `pnpm build` unaffected).
@@ -2512,9 +2542,11 @@ export type { paths } from './schema'
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/client package.json
+git add src/client/schema.d.ts src/client/index.ts src/client/drift.test.ts src/client/client.test.ts package.json pnpm-lock.yaml docs/superpowers/plans/2026-09-09-nightshift-plan-d-mcp-client.md
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(client): generated schema + typed wrapper + drift pin (D-kk)"
 ```
+
+> **Amendment (Task 9, byte-sync — shipped divergences; the three blocks above are sync = shipped form: plan-side `// src/…` labels stand in for the shipped header lines, bodies byte-verbatim from the first `import`):** (1) **`#root` specifiers, and why the schema import is spelled `.d.ts`:** `'./index'`/`'./schema'` are unshippable (TS2835 ruling) — the wrapper ships `createNightshiftClient` imported from `#root/client/index` (client.test.ts) and the schema reached as `'#root/client/schema.d.ts'` (index.ts, both the `import type` and the re-export). The bare `#root/client/schema` CANNOT reach the artifact under `moduleResolution: nodenext`, `--traceResolution`-proven: the `paths` substitution `./src/client/schema` loads as file-or-folder with **no implicit-extension lookup** (Node ESM semantics), and the package-`imports` fallback (`#root/* → ./dist/*.js`, the `development` condition never matches tsc) resolves via TS's outDir→rootDir source-mapping, which maps a `.js` output back to its `.ts` **source** — while `schema.d.ts`, a declaration input, emits no output to map (trace: `File name '…/dist/client/schema.js' has a '.js' extension - stripping it.` → `Failed`; sibling modules succeed via `File '…/src/domain/task.ts' exists`). The explicit `.d.ts` specifier hits the paths exact-file lookup and resolves; both references are type-only and erasure is verified in the emit (`dist/client/index.js` carries no schema reference, `dist/client/schema.*` never exists) — the specifier never reaches Node. No tsconfig/package.json resolution change was needed. (2) **drift.test formats the temp file with the REPO prettier:** the planned `pnpm exec prettier --write tmp` formatted the `/tmp` artifact under prettier DEFAULTS (double quotes, semicolons — byte 135 line 7: `"/ping": {` vs `'/ping': {`) because prettier resolves config from the input file's own directory and `mkdtemp(tmpdir())` sits outside the repo — exactly D-kk's WATCH item, one side silently formatting under different rules. Shipped: `--config <repo>/.prettierrc` derived from `import.meta.url` (cwd-proof); the `gen:client` side keeps its in-repo lookup — both sides on the repo's prettier, drift green. (3) **Smoke seeds a claimable status:** the planned bare `POST /tasks {title}` lands on the **backlog** default and the claim gate excludes it — the first claim died `invalid_request: task in status 'backlog' is not claimable`; shipped body carries `status: 'todo'` (the Task 8 Amendment (3) seed correction, one typed field, NOT a server default). (4) **The FLAT-details pin pins the real wire:** `claimed` does not exist in the taxonomy — `already_claimed` carries `{holder_handle, holder_display_name}` (`claim-task.ts:55-62`; `openapi.yaml:957` states exactly that) — the planned `(error as {claimed?}).claimed === false` asserted an undefined field. Shipped: `toMatchObject({status: 409, holder_handle: expect.any(String)})` — a real flat detail riding the typed problem+json error; the `code === 'already_claimed'` cast arm ships unchanged and green, so the D-kk typed-provenance claim stands (the Step 1 duty-note's `claimed/holder_*`: only `holder_*` is on the wire). (5) **injectFetch response conversion needs two TS6/@types-node-24 adaptors:** `new Response(res.rawPayload, {status, headers: res.headers})` is TS2345 twice (Buffer<ArrayBufferLike> ≠ BodyInit; OutgoingHttpHeaders ≠ HeadersInit) — shipped as `new Uint8Array(res.rawPayload)` + a stringified header map (`number`→`String`, arrays `', '`-joined — Headers' own multi-value semantics). The `CURRENT`-global smoke shape never tripped lint at all (eslint ignores `src/**/*.test.ts`) — no restructure, shipped as planned. (6) **index.ts ships two annotations the block lacked:** `: Client<paths>` return type + `type Client` import (lint `explicit-function-return-type` applies to variable-assigned arrows — every shipped top-level arrow in the repo carries its return type), and the file header is the label's description WITHOUT the `// src/…` prefix (ruling: no plan labels in shipped files; `composites.ts` precedent). A second smoke arm ships that the never-lower bar demanded: construction WITHOUT a `fetch` override (walks the `fetch===undefined` arm, fires no network) — with only the planned arm, `client` sat at Branch 50 and the global Branch dipped 96.95→96.80; the arm restores every axis at-or-above the Task 8 record. (7) **Install facts, recorded not acted on:** `openapi-typescript@7.13.0` peers `typescript@^5.x` against the repo's 6.0.3 — pnpm prints `✕ unmet peer`; the generator, the artifact under `declaration: true`, and the drift pin all verified against TS 6 (both versions pinned by this plan; no peer change). `pnpm why zod` → **Found 1 version** (4.5.4, dedup intact); `openapi-fetch@0.17.0`'s only dependency is `openapi-typescript-helpers@0.1.0` (`{}` — zero deps), exactly the D-kk footprint. Step 3 took the plan's sanctioned alternative: `gen:client` inserted by direct edit as the last scripts key (byte-equivalent to the node one-liner); the `pnpm add`-dirtied lockfile ships per the Task 1 ruling; the Step 6 `git add` above now carries the real explicit set. (8) **Step 2 RED, honestly measured (both files):** `client.test.ts` → `Error: Cannot find module '#root/client/index'` (file-level RED — the module is new); `drift.test.ts` → `Error: Command failed: pnpm exec openapi-typescript openapi/openapi.yaml -o /tmp/ns-client-drift-*/schema.d.ts` (generator not yet installed, artifact absent). Intermediate REDs en route, each a real falsifier: `expected {code: 'invalid_request', …} to be undefined` (3), `fresh.equals(committed) → false` (2), `expected undefined to be false` (4). (9) **Gates:** `pnpm test` **452→455 passed / 70→72 files** (the +3: smoke, no-fetch arm, drift pin); `pnpm lint` 0 issues; `pnpm typecheck` clean with the committed artifact in the program; `pnpm build` clean + (1)'s erasure verified. Regen is byte-deterministic — `pnpm gen:client` twice leaves `schema.d.ts` sha256 `3e01083c…4d136bdb` unchanged — and the green drift pin IS the byte-compare of regen+repo-prettier against the committed file. Coverage re-run for the never-lower bar: Stmts 99.22 / Branch 96.96 / Funcs 99.74 / Lines 99.53, every axis at-or-above the Task 8 record (99.22/96.95/99.73/99.53), `client` 100×4 (absent from the reduced table like its siblings), documented-uncovered set unchanged; final-gate recording stays Task 11's.
 
 ## Task 10: §11.4 parity harness — every tool, success AND error, ⇄ REST
 
