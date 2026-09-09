@@ -71,6 +71,8 @@ export interface AppDeps {
   // D-gg: read-only FTS5 search — root connection only, NOT in the tx Repos seam
   searchRoot: SqliteSearchRepo
   files: FileStore
+  /** D-pp: ALL OIDC-initiated HTTP goes here — tests route every call through fastify inject (zero sockets). */
+  fetch: typeof globalThis.fetch
   deliveryLoop: WebhookDeliveryLoop
   useCases: {
     createTask: CreateTask
@@ -106,7 +108,11 @@ export interface AppDeps {
   }
 }
 
-export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
+export const makeDepsFromDb = (
+  db: Kysely<DB>,
+  config: Config,
+  fetchFn: typeof globalThis.fetch = globalThis.fetch
+): AppDeps => {
   const clock = new SystemClock()
   const ids = new RandomIdGen()
   const uow = new SqliteUnitOfWork(db)
@@ -131,6 +137,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     webhooksRoot: new SqliteWebhookRepo(db),
     searchRoot: new SqliteSearchRepo(db),
     files, // shared instance: uploads and content serving hit the same store
+    fetch: fetchFn, // D-pp inject-seam; production lands on globalThis.fetch
     // D-bb loop: constructed here, STARTED only by the composition root (index.ts) —
     // makeTestApp never starts it (intervalMs 0 default there) so the suite stays inert.
     // Its repo instances are its own (root connections) — the loop touches no UoW

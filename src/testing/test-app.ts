@@ -17,7 +17,10 @@ export interface TestApp {
   close(): Promise<void>
 }
 
-export const makeTestApp = async (overrides: NodeJS.ProcessEnv = {}): Promise<TestApp> => {
+export const makeTestApp = async (
+  overrides: NodeJS.ProcessEnv = {},
+  fetchFn?: typeof globalThis.fetch
+): Promise<TestApp> => {
   // rate limit OFF by default (D-v: the suite must never trip it; Task 14 overrides to '2');
   // webhook loop OFF by default (the suite must never POST); file store lands in a temp dir, never the repo
   const db = makeDb(':memory:')
@@ -30,7 +33,8 @@ export const makeTestApp = async (overrides: NodeJS.ProcessEnv = {}): Promise<Te
       NS_WEBHOOK_INTERVAL_MS: '0',
       NS_DATA_DIR: join(mkdtempSync(join(tmpdir(), 'ns-test-')), 'data'),
       ...overrides,
-    })
+    }),
+    fetchFn
   )
   const adminToken = randomBytes(32).toString('base64url')
   const now = new Date().toISOString()
