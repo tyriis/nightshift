@@ -689,16 +689,28 @@ describe('mcp mount (D-hh, D-ii)', () => {
     }
   })
 
-  it('tools/list is exactly the Task-4 seed snapshot', async () => {
+  it('tools/list is exactly the current task-5-grown surface snapshot', async () => {
+    // (snapshot + name grown by Task 5 — the 12-tool TASK_TOOLS + seeded get_inbox;
+    // Task 4 shipped this as 'Task-4 seed snapshot' with 3 names; see Task 5 Amendment (10))
     const t = await makeTestApp()
     try {
       const baseUrl = await t.app.listen({ port: 0, host: '127.0.0.1' })
       const mcp = await openHttpMcp(baseUrl, t.adminToken, '2026-07-28')
       const listed = await mcp.list()
       expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
+        'add_block',
+        'claim_task',
+        'create_task',
         'get_inbox',
         'get_task',
+        'get_task_context',
+        'heartbeat_task',
+        'list_ready_tasks',
         'list_tasks',
+        'release_task',
+        'remove_block',
+        'update_task',
+        'update_task_status',
       ])
       await mcp.close()
     } finally {
@@ -1024,9 +1036,10 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): /mcp mount behind t
 - [ ] **Step 1: Failing tests**
 
 ```ts
-// src/adapters/mcp/tools/tasks.test.ts
+// src/adapters/mcp/tools/tasks.test.ts — sync = shipped form (#root import, claim/ready
+// seeds and the claimed-key correction; see Amendment)
 import { describe, expect, it } from 'vitest'
-import { TASK_TOOLS } from './tasks'
+import { TASK_TOOLS } from '#root/adapters/mcp/tools/tasks'
 import { actorContextFor, openInMemoryPair } from '#root/testing/mcp-client'
 import { makeTestApp } from '#root/testing/test-app'
 
@@ -1050,12 +1063,16 @@ const withMcp = async (
   }
 }
 
-const jsonOf = (r: { content: unknown }) => JSON.parse((r.content[0] as { text: string }).text)
+const jsonOf = (r: { content: unknown }) => JSON.parse((r.content as { text: string }[])[0].text) // cast lands on `content`, not on `unknown`
 
 describe('task-domain tools (D-mm)', () => {
   it('create → get → list round-trip with the re-fetched TaskDto shape', () =>
     withMcp(async (mcp) => {
-      const created = await mcp.call('create_task', { title: 'alpha', labels: ['ops'] })
+      const created = await mcp.call('create_task', {
+        title: 'alpha',
+        labels: ['ops'],
+        status: 'todo',
+      })
       const task = (created.structuredContent as { result: { id: string } }).result
       expect(task).toMatchObject({
         title: 'alpha',
@@ -1085,7 +1102,7 @@ describe('task-domain tools (D-mm)', () => {
 
   it('claim twice → second lands the FLAT already_claimed envelope (holder details ride)', () =>
     withMcp(async (mcp) => {
-      const task = await mcp.call('create_task', { title: 'claimed?' })
+      const task = await mcp.call('create_task', { title: 'claimed?', status: 'todo' })
       const id = (task.structuredContent as { result: { id: string } }).result.id
       const first = await mcp.call('claim_task', { task_id: id })
       expect(first.structuredContent).toMatchObject({
@@ -1093,19 +1110,21 @@ describe('task-domain tools (D-mm)', () => {
       })
       const second = await mcp.call('claim_task', { task_id: id })
       expect(second.isError).toBe(true)
+      // claim-task.ts details are EXACTLY {holder_handle, holder_display_name} — the
+      // flat envelope is the byte-parity twin of REST's problem body minus the prose.
       expect(second.structuredContent).toEqual({
         code: 'already_claimed',
         status: 409,
-        holder_handle: 'a_nils',
+        holder_handle: 'nils',
         holder_display_name: 'Nils',
-        claimed: false,
       })
     }))
 
   it('bogus lease → 412 stale_lease with FLAT claimed: true (heartbeat and status)', () =>
     withMcp(async (mcp) => {
-      const task = await mcp.call('create_task', { title: 'lease' })
+      const task = await mcp.call('create_task', { title: 'lease', status: 'todo' })
       const id = (task.structuredContent as { result: { id: string } }).result.id
+      await mcp.call('claim_task', { task_id: id }) // claimed:true arms need the live claim
       const hb = await mcp.call('heartbeat_task', { task_id: id, lease_token: 'bogus:0' })
       expect(hb.structuredContent).toEqual({ code: 'stale_lease', status: 412, claimed: true })
       const st = await mcp.call('update_task_status', {
@@ -1119,8 +1138,8 @@ describe('task-domain tools (D-mm)', () => {
 
   it('status happy path re-fetches TaskDto; blocks round-trip as {result:null} (204 analog)', () =>
     withMcp(async (mcp) => {
-      const a = await mcp.call('create_task', { title: 'a' })
-      const b = await mcp.call('create_task', { title: 'b' })
+      const a = await mcp.call('create_task', { title: 'a', status: 'todo' })
+      const b = await mcp.call('create_task', { title: 'b', status: 'todo' })
       const [ida, idb] = [a, b].map(
         (r) => (r.structuredContent as { result: { id: string } }).result.id
       )
@@ -1148,7 +1167,7 @@ describe('task-domain tools (D-mm)', () => {
 
   it('release returns the re-fetched TaskDto (claim fields cleared)', () =>
     withMcp(async (mcp) => {
-      const task = await mcp.call('create_task', { title: 'release me' })
+      const task = await mcp.call('create_task', { title: 'release me', status: 'todo' })
       const id = (task.structuredContent as { result: { id: string } }).result.id
       await mcp.call('claim_task', { task_id: id })
       const rel = await mcp.call('release_task', { task_id: id })
@@ -1166,17 +1185,25 @@ Expected-first-run notes: `holder_handle: 'a_nils', holder_display_name: 'Nils'`
 - [ ] **Step 3: Implement the 10 tools** (append to `tasks.ts`; every body transcribes its REST twin incl. re-fetch sites)
 
 ```ts
+// src/adapters/mcp/tools/tasks.ts — Task 5 additions — sync = shipped form
+// (bounds transcription + status/enum field pin; see Amendment)
+// TASK_STATUSES joins the file's existing import group; the tool bodies below ship byte-as-written.
 import { TASK_STATUSES } from '#root/domain/task'
+
+// Transcription duty (D-mm): input bounds mirror routes/tasks.ts fastify schemas —
+// title min1/max300, labels items minLength 1, status enum, reason minLength 1,
+// limit integer 1..100; zod STRIPS unknown keys (removeAdditional status quo).
 
 export const createTask = defineTool({
   name: 'create_task',
   description: 'Create a task (mirrors POST /tasks; re-fetched TaskDto).',
   input: z.object({
-    title: z.string(),
+    title: z.string().min(1).max(300),
     description: z.string().optional(),
     acceptance_criteria: z.string().optional(),
     parent_id: z.string().optional(),
-    labels: z.array(z.string()).optional(),
+    status: z.enum(TASK_STATUSES).optional(),
+    labels: z.array(z.string().min(1)).optional(),
   }),
   run: async (deps, ctx, body) => {
     const task = await deps.useCases.createTask.run({ ...body, ...ctx })
@@ -1189,13 +1216,15 @@ export const updateTask = defineTool({
   description: 'Patch task fields (mirrors PATCH /tasks/{id}; uc return discarded per REST).',
   input: z.object({
     task_id: z.string(),
-    patch: z.object({
-      title: z.string().optional(),
-      description: z.string().optional(),
-      acceptance_criteria: z.string().optional(),
-      assignee_id: z.string().nullable().optional(),
-      blocked_flag: z.boolean().optional(),
-    }),
+    patch: z
+      .object({
+        title: z.string().min(1).max(300).optional(),
+        description: z.string().optional(),
+        acceptance_criteria: z.string().optional(),
+        assignee_id: z.string().nullable().optional(),
+        blocked_flag: z.boolean().optional(),
+      })
+      .refine((p) => Object.keys(p).length > 0, 'patch requires at least one property'), // minProperties: 1
   }),
   run: async (deps, ctx, { task_id, patch }) => {
     await deps.useCases.updateTask.run({ taskId: task_id, patch, ...ctx })
@@ -1257,7 +1286,7 @@ export const listReadyTasks = defineTool({
   description: 'Ready work — leaf, todo, unblocked, unclaimed (mirrors GET /tasks/next).',
   input: z.object({
     label: z.string().optional(),
-    limit: z.number().int().min(1).max(100).optional(),
+    limit: z.number().int().min(1).max(100).optional(), // default 10 via the use-case clamp (D-mm)
   }),
   run: async (deps, _ctx, { label, limit }) =>
     (await deps.useCases.getNext.run({ label, limit })).map(toTaskDto),
@@ -1302,6 +1331,8 @@ Field-name pin duty: use-case input keys (`taskId`, `blocker_id`, `lease_token`,
 git add src/adapters/mcp/tools/tasks.ts src/adapters/mcp/tools/tasks.test.ts
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): task-domain 1:1 tools (byte-parity, D-mm)"
 ```
+
+> **Amendment (Task 5, byte-sync — shipped divergences, blocks above re-labeled sync = shipped form):** (1) `tasks.test.ts` imports ship as `#root/adapters/mcp/tools/tasks` — the planned `'./tasks'` is TS2835 under `moduleResolution: nodenext` (Task 2/3/4 precedent, pre-confirmed handoff). `jsonOf`'s cast ships on `content`, not on `content[0]`: the planned `(r.content[0] as { text: string })` indexes `unknown` and typecheck-rejects (TS2571); identical intent, identical assertion. (2) Step 2 RED, honestly measured: **6 failed / 0 passed** — every case dies at the first `mcp.call` with `ProtocolError: Tool create_task not found`. The step's parenthetical "(isError true)" misremembers SDK v2: unknown tools are a JSON-RPC **rejection**, pinned by Task 3's own `bridge.test.ts:110` (`rejects.toThrow(/nope/)`) — the "Tool not found" evidence the step predicted is exact, its shape is rejection. (3) `holder_handle` ships `'nils'`, not `'a_nils'` (pre-confirmed, reviewer-ruled after Task 4): `claim-task.ts:59` puts the holder's HANDLE in details and `findByHandle` is exact-match — the seeded human's handle is `nils` (`a_nils` is its id); `holder_display_name: 'Nils'` byte-verbatim. The Step-1 note's "adjust ONLY if makeTestApp seeds differ (then amend)" is discharged by `makeTestApp` (`test-app.ts:40-43`: id `a_nils`, handle `nils`, display `Nils`). (4) `claimed: false` does NOT ship in the double-claim envelope: `claim-task.ts:58-61` builds the `already_claimed` details as EXACTLY `{holder_handle, holder_display_name}`, and REST's problem body spreads those same details — for the tool to emit `claimed:false` it would have to synthesize a key neither its use-case nor its REST twin produces, a D-mm behavior fork that would also break Task 10's own `expectErr`, which compares the envelope to `flat(restBody)` with `toEqual` byte-exactly. The shipped 4-key envelope IS the byte-parity twin. (`bridge.test.ts`'s `claimed:false` row is a synthetic probe whose DomainError carries that detail itself — not claim-task behavior.) (5) Test 4 arms its 412s with a claim: the shipped `heartbeat.ts:32` computes `claimed: task.claim_token_id !== null` (unclaimed heartbeat → `claimed:false`) and `update-status.ts` yields `claimed:true` only on CLAIMED tasks (`:44`; presented-lease-on-unclaimed is `claimed:false`, `:53`) — the planned body never claims, so its own `claimed: true` pin was unproducible. The shipped seed adds `status:'todo'` + a `claim_task` before both calls, mirroring REST's still-claimed pin (`routes/tasks.test.ts:160`). (6) Seed `status: 'todo'` on creates in tests 1/3/4/5/6: `create-task.ts:23` defaults to **backlog**, `isTaskReady` requires `todo` (`domain/ready.ts:12`), and the claim gate accepts only `todo|in_progress` (`claim-task.ts:37`) — the planned bare `{title}` creates made the claim/release/ready assertions unproducible (claim → `invalid_request` 400). The fix passes `status:'todo'` explicitly exactly like REST's §7.4 filing (`routes/tasks.test.ts:51` sends `status:'todo'`); it is a test-seed correction, NOT a tool default — a `create_task` zod default would fork behavior against REST (`POST /tasks {}` lands backlog) and would break Task 10's `create_task` ok-row (status is not in its VOLATILE set). Test 2's creates need no status (no claim/ready/DTO-status assertion) and ship byte-verbatim. (7) Transcription duty executed against `routes/tasks.ts` at HEAD: `title` ships `z.string().min(1).max(300)` (create + `patch.title`; M-2 — the route schema owns title length, `:34`/`:96`), `labels` items ship `z.string().min(1)` (`:39`), `create_task` GAINS `status: z.enum(TASK_STATUSES).optional()` (the REST body schema has `statusEnum` at `:38` and `CreateTaskInput` takes `status` — the block's field set missed the key), and `patch` ships `.refine((p) => Object.keys(p).length > 0)` transcribing `minProperties: 1` (`:93`) — an SDK input-validation rejection, the declared D-jj 400-analog class. `reason.min(1)` and `limit.int().min(1).max(100)` were already in the block, byte-verbatim; `get_task_context`/claim/release/blocks have no bounds to mirror. (8) `TASK_TOOLS` ships the block's exact 12 identifiers in order; prettier wraps the array at printWidth (format-only). The `and grow:` sentence stays inline as written. (9) Field-name pin duty: every uc key (`taskId`, `patch`, `to`, `reason`, `lease_token`, `blocker_id`) compiled byte-verbatim against the shipped `src/application/usecases/*` ports — nothing fixed to the port. Re-fetch doctrine sites verified 1:1: create/update/status/release/heartbeat re-fetch `findWithCounts(...)!`; claim returns `{lease_token, generation}` verbatim; context passes un-DTO'd; blocks return void → `{result:null}` (204 analog, `routes/dependencies.ts`). (10) Cross-task touch: `mount.test.ts`'s snapshot pin ("tools/list is exactly the Task-4 seed snapshot") enumerates the whole registered surface and grew with `TASK_TOOLS` — the pin shipped renamed to `tools/list is exactly the current task-5-grown surface snapshot` with the 13 sorted names (`get_inbox` + the 12 task tools); it keeps its exact-set canary job (any unplanned tool or rename still fails it) and Task 10 replaces it with the final 35-tool snapshot (D-ll). The Task 4 section's block was re-labeled to match, pointer comment inline. **Gates:** `pnpm test` **431→437 passed / 66→67 files** (the +6 are this file; the one pre-existing edit is the mount snapshot pin); `pnpm lint` 0 issues; `pnpm typecheck` clean; prettier-normalized before commit (hook `--write` lands no further diff).
 
 ## Task 6: Discussion + inbox tools
 

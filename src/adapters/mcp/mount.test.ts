@@ -98,16 +98,26 @@ describe('mcp mount (D-hh, D-ii)', () => {
     }
   })
 
-  it('tools/list is exactly the Task-4 seed snapshot', async () => {
+  it('tools/list is exactly the current task-5-grown surface snapshot', async () => {
     const t = await makeTestApp()
     try {
       const baseUrl = await t.app.listen({ port: 0, host: '127.0.0.1' })
       const mcp = await openHttpMcp(baseUrl, t.adminToken, '2026-07-28')
       const listed = await mcp.list()
       expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
+        'add_block',
+        'claim_task',
+        'create_task',
         'get_inbox',
         'get_task',
+        'get_task_context',
+        'heartbeat_task',
+        'list_ready_tasks',
         'list_tasks',
+        'release_task',
+        'remove_block',
+        'update_task',
+        'update_task_status',
       ])
       await mcp.close()
     } finally {
