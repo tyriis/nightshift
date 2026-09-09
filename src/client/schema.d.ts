@@ -684,6 +684,8 @@ export interface components {
       kind?: 'human' | 'agent'
       /** @enum {string|null} */
       role?: 'admin' | 'member' | null
+      /** @description internal OIDC subject binding; admin-visible */
+      oidc_subject?: string | null
       handle?: string
       display_name?: string
       description?: string

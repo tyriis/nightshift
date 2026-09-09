@@ -927,6 +927,10 @@ components:
         kind: { type: string, enum: [human, agent] }
         # D-ss: admin|member for humans; null for agents (and pre-E legacy rows)
         role: { type: ["string", "null"], enum: ["admin", "member", null] }
+        # BL1 (Task 2 review): the admin identity surface serializes what the rows
+        # carry — documented per §5 nothing-hidden, not trimmed
+        oidc_subject:
+          { type: ["string", "null"], description: internal OIDC subject binding; admin-visible }
         handle: { type: string }
         display_name: { type: string }
         description: { type: string }
