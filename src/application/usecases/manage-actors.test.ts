@@ -44,6 +44,30 @@ describe('actor & token management', () => {
     await db.destroy()
   })
 
+  it('D-ss roles: humans default member, admin is explicit, agents always null', async () => {
+    const { db, uow } = await buildUow()
+    const create = new CreateActor(uow, fixedClock(), seqIds())
+    const member = await create.run({ ...human, kind: 'human', handle: 'm', display_name: 'M' })
+    expect(member.role).toBe('member') // default — admins stay an explicit decision
+    const admin = await create.run({
+      ...human,
+      kind: 'human',
+      handle: 'adm',
+      display_name: 'Adm',
+      role: 'admin',
+    })
+    expect(admin.role).toBe('admin')
+    const agent = await create.run({
+      ...human,
+      kind: 'agent',
+      handle: 'ag',
+      display_name: 'Ag',
+      role: 'admin', // dropped for agents by the use-case, never an error (D-ss)
+    })
+    expect(agent.role).toBeNull()
+    await db.destroy()
+  })
+
   it('token issue against an unknown actor is not_found', async () => {
     const { db, uow } = await buildUow()
     await expect(

@@ -682,6 +682,8 @@ export interface components {
       id?: string
       /** @enum {string} */
       kind?: 'human' | 'agent'
+      /** @enum {string|null} */
+      role?: 'admin' | 'member' | null
       handle?: string
       display_name?: string
       description?: string
@@ -1401,6 +1403,8 @@ export interface operations {
           handle: string
           display_name: string
           description?: string
+          /** @enum {string} */
+          role?: 'admin' | 'member'
         }
       }
     }

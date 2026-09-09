@@ -17,6 +17,8 @@ export const ensureBootstrapAdmin = async (deps: AppDeps): Promise<void> => {
       display_name: 'Bootstrap Admin',
       description: 'created from NS_BOOTSTRAP_TOKEN',
       created_at: now,
+      // bootstrap IS the admin — D-ss fresh-row rule; role-NULL would 403 the first boot
+      role: 'admin',
     })
   }
   // env-as-truth: NS_BOOTSTRAP_TOKEN defines the active bootstrap token on EVERY boot,

@@ -60,7 +60,13 @@ const setup = async () => {
   )
   return { db, uow }
 }
-const actor = { id: 'a_h', kind: 'human' as const, handle: 'h', display_name: 'H' }
+const actor = {
+  id: 'a_h',
+  kind: 'human' as const,
+  handle: 'h',
+  display_name: 'H',
+  role: 'admin' as const,
+}
 
 describe('CreateWebhook (D-bb/D-ff)', () => {
   it('registers an agent callback: secret minted once, checkpoint at the watermark, audit pinned', async () => {

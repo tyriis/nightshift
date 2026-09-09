@@ -14,11 +14,23 @@ import type { ActorContext, IdGen, Repos, UnitOfWork } from '#root/application/p
 import type { TaskRecord } from '#root/domain/task'
 
 const agentA: ActorContext = {
-  actor: { id: 'a_agent_a', kind: 'agent', handle: 'hermes-a', display_name: 'Hermes A' },
+  actor: {
+    id: 'a_agent_a',
+    kind: 'agent',
+    handle: 'hermes-a',
+    display_name: 'Hermes A',
+    role: null,
+  },
   tokenId: 'tok_a',
 }
 const agentB: ActorContext = {
-  actor: { id: 'a_agent_b', kind: 'agent', handle: 'hermes-b', display_name: 'Hermes B' },
+  actor: {
+    id: 'a_agent_b',
+    kind: 'agent',
+    handle: 'hermes-b',
+    display_name: 'Hermes B',
+    role: null,
+  },
   tokenId: 'tok_b',
 }
 

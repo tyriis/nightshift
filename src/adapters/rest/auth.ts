@@ -62,6 +62,7 @@ export const registerAuth = (app: FastifyInstance, deps: AppDeps): void => {
       kind: hit.actor.kind,
       handle: hit.actor.handle,
       display_name: hit.actor.display_name,
+      role: hit.actor.role,
     }
     request.tokenId = hit.token.id
     await deps.actorsRoot.touchToken(hit.token.id, deps.clock.now().toISOString())

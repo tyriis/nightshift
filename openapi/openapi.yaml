@@ -401,6 +401,8 @@ paths:
                 handle: { type: string, minLength: 1, maxLength: 60 }
                 display_name: { type: string, minLength: 1, maxLength: 120 }
                 description: { type: string }
+                # D-ss: humans only, optional; default member (agents: dropped by the use-case)
+                role: { type: string, enum: [admin, member] }
   /admin/actors/{id}/tokens:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
@@ -923,6 +925,8 @@ components:
       properties:
         id: { type: string }
         kind: { type: string, enum: [human, agent] }
+        # D-ss: admin|member for humans; null for agents (and pre-E legacy rows)
+        role: { type: ["string", "null"], enum: ["admin", "member", null] }
         handle: { type: string }
         display_name: { type: string }
         description: { type: string }

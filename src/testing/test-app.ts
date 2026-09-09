@@ -43,6 +43,7 @@ export const makeTestApp = async (overrides: NodeJS.ProcessEnv = {}): Promise<Te
       display_name: 'Nils',
       description: '',
       created_at: now,
+      role: 'admin', // D-ss: the test admin is admin — the board owner seed
     })
     .execute()
   await db

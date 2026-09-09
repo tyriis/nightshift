@@ -10,7 +10,7 @@ import { seedActor } from '#root/testing/fixtures'
 import type { ActorContext } from '#root/application/ports'
 
 const ana: ActorContext = {
-  actor: { id: 'a_ana', kind: 'human', handle: 'ana', display_name: 'Ana' },
+  actor: { id: 'a_ana', kind: 'human', handle: 'ana', display_name: 'Ana', role: 'admin' },
   tokenId: null,
 }
 

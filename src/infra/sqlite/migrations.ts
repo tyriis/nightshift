@@ -258,6 +258,52 @@ const migrations: Record<string, Migration> = {
       await sql`insert into task_fts(task_fts) values ('rebuild')`.execute(db)
     },
   },
+
+  '2026-09-13_human_identity': {
+    up: async (db: Kysely<DB>) => {
+      // D-ss (AMENDED pre-dispatch, preflight P4/fix5 — amendment ledger): ADD
+      // COLUMN, NOT a _v2 rebuild. The 2026-09-12_inbox_claim_conflict exemplar
+      // drops a CHILD table; actors is a PARENT — eight pre-E tables carry
+      // references actors(id) — and with makeDb's foreign_keys=ON a parent DROP
+      // throws FOREIGN KEY constraint failed inside the migration transaction on
+      // any deployed DB with child rows (defer_foreign_keys still fails at COMMIT
+      // even with the parent restored by name; foreign_keys=OFF is a no-op
+      // mid-transaction — both probe-recorded; actors-only test fixtures cannot
+      // see it). ADD COLUMN + a UNIQUE INDEX enforce the identical semantics: the
+      // CHECK rejects non-vocabulary roles; the index rejects duplicate subjects
+      // and permits many NULLs. Roles + subject ride the actors row itself (the
+      // auth hot path already loads it; a side table would fork actor truth).
+      await sql`alter table actors add column role text check (role in ('admin','member'))`.execute(
+        db
+      )
+      await sql`alter table actors add column oidc_subject text`.execute(db)
+      await sql`create unique index actors_oidc_subject_u on actors (oidc_subject)`.execute(db)
+      // Backfill: every PRE-E human created the board or was admin-created with a
+      // login token => 'admin'; MEMBERS arrive only via the D-tt provisioning path.
+      await sql`update actors set role = 'admin' where kind = 'human'`.execute(db)
+
+      // D-qq: server-side sessions are the revocation truth; the cookie is a
+      // signed pointer, not the state. Lazy expiry on read — no sweeper loop.
+      await sql`create table sessions (
+        id text primary key,
+        actor_id text not null references actors(id),
+        csrf text not null,
+        created_at text not null,
+        expires_at text not null,
+        revoked_at text
+      )`.execute(db)
+
+      // D-tt: admin-managed first-login allow-list (email = lowercased identity email)
+      await sql`create table oidc_allowlist (
+        email text primary key,
+        added_by text not null references actors(id),
+        created_at text not null
+      )`.execute(db)
+
+      // fail-closed default (update-status.ts:72-79 lineage): off = deny all first-logins
+      await sql`insert into policy (key, value) values ('oidc_provisioning', 'off')`.execute(db)
+    },
+  },
 }
 
 class InCodeMigrationProvider implements MigrationProvider {
@@ -265,6 +311,10 @@ class InCodeMigrationProvider implements MigrationProvider {
     return Promise.resolve(migrations)
   }
 }
+
+// Pinned export (Task 2): the migration test stops the Migrator at the PRE-E head to
+// exercise the human-identity backfill — same record the provider serves.
+export const MIGRATIONS = migrations
 
 export const migrateToLatest = async (db: Kysely<DB>): Promise<void> => {
   const { error } = await new Migrator({

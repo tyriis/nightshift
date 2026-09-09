@@ -3,7 +3,7 @@ import { migrateToLatest } from '#root/infra/sqlite/migrations'
 import type { Kysely } from 'kysely'
 import type { DB, ThreadsTable } from '#root/infra/sqlite/schema'
 import type { ThreadKind } from '#root/domain/discussion'
-import type { ActorKind, TaskDraft, TaskStatus } from '#root/domain/task'
+import type { ActorKind, HumanRole, TaskDraft, TaskStatus } from '#root/domain/task'
 
 export const freshDb = async (): Promise<Kysely<DB>> => {
   const db = makeDb(':memory:')
@@ -15,7 +15,10 @@ export const seedActor = async (
   db: Kysely<DB>,
   id: string,
   kind: ActorKind = 'agent',
-  handle?: string
+  handle?: string,
+  // D-ss: humans seed as admin (seed boards act as owners); pass null explicitly for
+  // a role-less human (provisioning/requireAdmin arms), agents are always NULL.
+  role: HumanRole | null = kind === 'human' ? 'admin' : null
 ): Promise<void> => {
   await db
     .insertInto('actors')
@@ -26,6 +29,7 @@ export const seedActor = async (
       display_name: `Seed ${id}`,
       description: '',
       created_at: '2026-01-01T00:00:00.000Z',
+      role,
     })
     .execute()
 }

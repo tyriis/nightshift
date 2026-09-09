@@ -29,7 +29,7 @@ export const buildUow = async () => {
 }
 
 export const human: ActorContext = {
-  actor: { id: 'a_human', kind: 'human', handle: 'nils', display_name: 'Nils' },
+  actor: { id: 'a_human', kind: 'human', handle: 'nils', display_name: 'Nils', role: 'admin' },
   tokenId: null,
 }
 

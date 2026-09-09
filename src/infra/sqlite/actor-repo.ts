@@ -12,6 +12,7 @@ export class SqliteActorRepo implements ActorRepo {
     display_name: string
     description: string
     created_at: string
+    role: ActorRow['role']
   }): Promise<ActorRow> {
     return this.db.insertInto('actors').values(input).returningAll().executeTakeFirstOrThrow()
   }
@@ -72,6 +73,7 @@ export class SqliteActorRepo implements ActorRepo {
         'actors.kind as a_kind',
         'actors.handle as a_handle',
         'actors.display_name as a_display',
+        'actors.role as a_role',
       ])
       .where('tokens.token_hash', '=', hash)
       .where('tokens.revoked_at', 'is', null)
@@ -92,6 +94,7 @@ export class SqliteActorRepo implements ActorRepo {
       display_name: r.a_display,
       description: '',
       created_at: '',
+      role: r.a_role,
     }
     return { token, actor }
   }

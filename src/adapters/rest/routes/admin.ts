@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import { actorCtx, requireHuman } from '#root/adapters/rest/auth'
-import { ACTOR_KINDS, type ActorKind } from '#root/domain/task'
+import { ACTOR_KINDS, type ActorKind, type HumanRole } from '#root/domain/task'
 
 // human-only guard: requireHuman is async (auth.ts) — a sync-throwing preHandler would
 // deadlock fastify's hook iterator (R4); fixed at the source, so routes wire it directly.
@@ -28,6 +28,13 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
             handle: { type: 'string', minLength: 1, maxLength: 60 },
             display_name: { type: 'string', minLength: 1, maxLength: 120 },
             description: { type: 'string' },
+            // D-ss: role is humans-only at the edge; the use-case drops it for agents
+            // (never an error), default member lives in CreateActor.
+            role: {
+              type: 'string',
+              enum: ['admin', 'member'],
+              description: 'humans only; default member',
+            },
           },
         },
       },
@@ -38,6 +45,7 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
         handle: string
         display_name: string
         description?: string
+        role?: HumanRole
       }
       // trusted auth context spread LAST, after the schema-validated body
       // (Task 14 review defense; the plan block spread it first)

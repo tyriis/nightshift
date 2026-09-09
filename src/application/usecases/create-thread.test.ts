@@ -90,7 +90,7 @@ describe('CreateThread (spec §6.5)', () => {
   it('an agent may self-assign a question without an inbox spam entry', async () => {
     const { db, uc, taskId } = await setup()
     const agent: ActorContext = {
-      actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'H' },
+      actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'H', role: null },
       tokenId: null,
     }
     const r = await uc.run({
@@ -123,7 +123,7 @@ describe('CreateThread (spec §6.5)', () => {
       uc.run({ ...human, taskId: parent.id, kind: 'note', body: 'x' })
     ).rejects.toMatchObject({ code: 'threads_on_parent' })
     const agent: ActorContext = {
-      actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'H' },
+      actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'H', role: null },
       tokenId: null,
     }
     await expect(

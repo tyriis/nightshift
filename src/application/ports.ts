@@ -1,5 +1,5 @@
 import type { InboxItemKind, LinkKind, QuestionState, ThreadKind } from '#root/domain/discussion'
-import type { ActorKind, TaskDraft, TaskRecord, TaskStatus } from '#root/domain/task'
+import type { ActorKind, HumanRole, TaskDraft, TaskRecord, TaskStatus } from '#root/domain/task'
 
 export interface Clock {
   now(): Date
@@ -14,6 +14,9 @@ export interface ActorRef {
   kind: ActorKind
   handle: string
   display_name: string
+  // D-ss: human role rides the ref into every gate (requireAdmin, Task 4);
+  // agents and pre-E legacy rows are NULL — null is never admin.
+  role: HumanRole | null
 }
 
 // ---- audit
@@ -139,6 +142,7 @@ export interface ActorRow {
   display_name: string
   description: string
   created_at: string
+  role: HumanRole | null
 }
 
 export interface TokenRow {
@@ -163,6 +167,8 @@ export interface ActorRepo {
     display_name: string
     description: string
     created_at: string
+    /** D-ss: explicit at every creation site — agents pass null, humans admin|member */
+    role: HumanRole | null
   }): Promise<ActorRow>
   findByHandle(handle: string): Promise<ActorRow | null>
   findById(id: string): Promise<ActorRow | null>
