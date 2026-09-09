@@ -17,6 +17,7 @@
 - Branch: `feature/plan-d-mcp-client` off `main` @ `2d6c7d8` (PR #5 merge commit — Plan C IS merged, verified 2026-09-09). **No pushes** — merges and PRs are @tyriis's (binding).
 - Ticket: tyriis/nightshift#6 (session-handover; scope = issue body "Plan D scope" + inherited rulings).
 - Baseline gate (recorded by the planner 2026-09-09 at `2d6c7d8`, from Plan C's final gate): **416 tests / 62 files; Stmts 99.75 / Branch 98.06 / Funcs 100 / Lines 99.9**; lint / typecheck / build clean. Documented-uncovered set unchanged (`task-repo.ts:151-164`, `thread-repo.ts:96/132`, `rate-limit.ts:35`, `auth.ts:47`, `migrations.ts:274` error arm).
+  - Baseline gate confirmed green at execution start by Task 1 (2026-09-09 at `800d192`): `pnpm test` → 416 passed / 62 files; coverage axes identical (Stmts 99.75 / Branch 98.06 / Funcs 100 / Lines 99.9), documented-uncovered set unchanged; lint (0 issues) / typecheck / build clean.
 - Research artifacts (planner-provided, sandbox-probed, not repo files): MCP v2 SDK API pin + wire matrix (`mcp-sdk.md` notes, embedded verbatim where needed below), codegen comparison, REST response-semantics appendix. The SDK facts embedded in this plan were EXECUTED against `@modelcontextprotocol/{server,client}@2.0.0` on Node; if any shipped divergence surfaces, the byte-sync protocol closes it.
 
 ### Inherited binding rulings (Plans A+B+C — obey; violation = task failure)
