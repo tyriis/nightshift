@@ -98,7 +98,7 @@ describe('mcp mount (D-hh, D-ii)', () => {
     }
   })
 
-  it('tools/list is exactly the current task-5-grown surface snapshot', async () => {
+  it('tools/list is exactly the current task-6-grown surface snapshot', async () => {
     const t = await makeTestApp()
     try {
       const baseUrl = await t.app.listen({ port: 0, host: '127.0.0.1' })
@@ -106,16 +106,22 @@ describe('mcp mount (D-hh, D-ii)', () => {
       const listed = await mcp.list()
       expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
         'add_block',
+        'add_message',
+        'answer_question',
         'claim_task',
         'create_task',
+        'create_thread',
         'get_inbox',
         'get_task',
         'get_task_context',
         'heartbeat_task',
         'list_ready_tasks',
         'list_tasks',
+        'list_threads',
+        'mark_inbox_read',
         'release_task',
         'remove_block',
+        'update_question',
         'update_task',
         'update_task_status',
       ])

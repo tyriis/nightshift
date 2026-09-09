@@ -689,9 +689,9 @@ describe('mcp mount (D-hh, D-ii)', () => {
     }
   })
 
-  it('tools/list is exactly the current task-5-grown surface snapshot', async () => {
-    // (snapshot + name grown by Task 5 — the 12-tool TASK_TOOLS + seeded get_inbox;
-    // Task 4 shipped this as 'Task-4 seed snapshot' with 3 names; see Task 5 Amendment (10))
+  it('tools/list is exactly the current task-6-grown surface snapshot', async () => {
+    // (snapshot + name grown by Task 6 — the 12-tool TASK_TOOLS + the 7-tool DISCUSSION_TOOLS;
+    // Task 5 shipped this with 13 names; see Task 6 Amendment (9))
     const t = await makeTestApp()
     try {
       const baseUrl = await t.app.listen({ port: 0, host: '127.0.0.1' })
@@ -699,16 +699,22 @@ describe('mcp mount (D-hh, D-ii)', () => {
       const listed = await mcp.list()
       expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
         'add_block',
+        'add_message',
+        'answer_question',
         'claim_task',
         'create_task',
+        'create_thread',
         'get_inbox',
         'get_task',
         'get_task_context',
         'heartbeat_task',
         'list_ready_tasks',
         'list_tasks',
+        'list_threads',
+        'mark_inbox_read',
         'release_task',
         'remove_block',
+        'update_question',
         'update_task',
         'update_task_status',
       ])
@@ -1344,10 +1350,11 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): task-domain 1:1 too
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
-// src/adapters/mcp/tools/discussion.test.ts
+// src/adapters/mcp/tools/discussion.test.ts — sync = shipped form
+// (#root imports, 'nils' handle, REST-seeded inbox via the mount.test.ts precedent; see Amendment)
 import { describe, expect, it } from 'vitest'
-import { DISCUSSION_TOOLS } from './discussion'
-import { TASK_TOOLS } from './tasks'
+import { DISCUSSION_TOOLS } from '#root/adapters/mcp/tools/discussion'
+import { TASK_TOOLS } from '#root/adapters/mcp/tools/tasks'
 import { actorContextFor, openInMemoryPair } from '#root/testing/mcp-client'
 import { makeTestApp } from '#root/testing/test-app'
 
@@ -1393,14 +1400,14 @@ describe('discussion + inbox tools (D-mm)', () => {
     }))
 
   it('question lifecycle: assign → answer {message, thread} order → resolve; invalid transition pins question_transition', () =>
-    withMcp(async (mcp) => {
+    withMcp(async (mcp, t) => {
       const task = result<{ id: string }>(await mcp.call('create_task', { title: 'gate' }))
       const q = result<{ thread: { id: string; state: string }; message: { id: string } }>(
         await mcp.call('create_thread', {
           task_id: task.id,
           kind: 'question',
           body: 'which port?',
-          assignee_handle: 'a_nils',
+          assignee_handle: 'nils',
         })
       )
       expect(q.thread.state).toBe('open')
@@ -1415,27 +1422,57 @@ describe('discussion + inbox tools (D-mm)', () => {
         await mcp.call('update_question', { thread_id: q.thread.id, state: 'resolved' })
       )
       expect(resolved.state).toBe('resolved')
+      // reassign arm (update-question.ts:36): the tool's handle→id resolver must be
+      // PROVEN on the PATCH path too, not just create — the D-n arm is independent,
+      // so a resolved thread can be reassigned without moving state.
+      const lurker = await t.app.inject({
+        method: 'POST',
+        url: '/admin/actors',
+        headers: { authorization: `Bearer ${t.adminToken}` },
+        payload: { kind: 'agent', handle: 'a_lurker', display_name: 'Lurker' },
+      })
+      expect(lurker.statusCode).toBe(201)
+      const reassigned = result<{ assignee_id: string }>(
+        await mcp.call('update_question', { thread_id: q.thread.id, assignee_handle: 'a_lurker' })
+      )
+      expect(reassigned.assignee_id).toBe(lurker.json().id)
     }))
 
   it('add_message appends, mark_inbox_read is {result:null} + unread_only view flips, unknown assignee matches the REST twin', () =>
     withMcp(async (mcp, t) => {
       const task = result<{ id: string }>(await mcp.call('create_task', { title: 'inbox' }))
-      const q = result<{ thread: { id: string } }>(
-        await mcp.call('create_thread', {
-          task_id: task.id,
-          kind: 'question',
-          body: 'ping?',
-          assignee_handle: 'a_nils',
-        })
-      )
+      // D-r self-notify trap (create-thread.ts:111): a question nils ASKS nils books
+      // NO inbox row, so the inbox-arming seed is POSTed by a throwaway AGENT
+      // (mount.test.ts precedent) — the nils harness pair then READS that inbox.
+      const seeder = await t.app.inject({
+        method: 'POST',
+        url: '/admin/actors',
+        headers: { authorization: `Bearer ${t.adminToken}` },
+        payload: { kind: 'agent', handle: 'a_seed', display_name: 'Seed' },
+      })
+      expect(seeder.statusCode).toBe(201)
+      const seederTok = await t.app.inject({
+        method: 'POST',
+        url: `/admin/actors/${seeder.json().id}/tokens`,
+        headers: { authorization: `Bearer ${t.adminToken}` },
+        payload: { label: 'seed' },
+      })
+      expect(seederTok.statusCode).toBe(201)
+      const seeded = await t.app.inject({
+        method: 'POST',
+        url: `/tasks/${task.id}/threads`,
+        headers: { authorization: `Bearer ${seederTok.json().raw_token}` },
+        payload: { kind: 'question', body: 'ping?', assignee_handle: 'nils' },
+      })
+      expect(seeded.statusCode).toBe(201)
       const msg = result<{ seq: number }>(
-        await mcp.call('add_message', { thread_id: q.thread.id, body: 'also' })
+        await mcp.call('add_message', { thread_id: seeded.json().thread.id, body: 'also' })
       )
       expect(msg.seq).toBe(2) // D-y per-thread seq
       const inbox = result<{ id: string; read: boolean }[]>(
         await mcp.call('get_inbox', { unread_only: true })
       )
-      expect(inbox).toHaveLength(1)
+      expect(inbox).toHaveLength(1) // the REST seed is non-vacuous (D-r notify landed)
       expect(
         (await mcp.call('mark_inbox_read', { item_id: inbox[0]!.id })).structuredContent
       ).toEqual({ result: null })
@@ -1468,8 +1505,16 @@ describe('discussion + inbox tools (D-mm)', () => {
 - [ ] **Step 3: Implement (append to `discussion.ts`, mirroring `routes/threads.ts` + `routes/inbox.ts` call sites exactly)**
 
 ```ts
-import { DomainError } from '#root/domain/errors'
+// appended after the Task 4 seed getInbox — sync = shipped form
+// (domain enum constants, body max 20000, update_question minProperties:1 refine; see Task 6 Amendment)
+// The file's import group grows to:
 import { resolveActorHandle } from '#root/adapters/shared/resolve-handle'
+import { QUESTION_STATES, THREAD_KINDS } from '#root/domain/discussion'
+import { DomainError } from '#root/domain/errors'
+
+// Transcription duty (D-mm): input bounds mirror routes/threads.ts + routes/inbox.ts
+// fastify schemas — body min1/max20000, assignee_handle min1/max60, kind/state are the
+// domain enum sets (one source, no literal fork); zod STRIPS unknown keys (status quo).
 
 export const listThreads = defineTool({
   name: 'list_threads',
@@ -1487,8 +1532,8 @@ export const createThread = defineTool({
   description: 'Open a note or question thread (mirrors POST /tasks/{id}/threads).',
   input: z.object({
     task_id: z.string(),
-    kind: z.enum(['note', 'question']),
-    body: z.string().min(1),
+    kind: z.enum(THREAD_KINDS),
+    body: z.string().min(1).max(20000),
     assignee_handle: z.string().min(1).max(60).optional(),
     meta_note: z.boolean().optional(),
   }),
@@ -1510,7 +1555,7 @@ export const createThread = defineTool({
 export const addMessage = defineTool({
   name: 'add_message',
   description: 'Append a message to a thread (mirrors POST /tasks/{id}/threads/{tid}/messages).',
-  input: z.object({ thread_id: z.string(), body: z.string().min(1) }),
+  input: z.object({ thread_id: z.string(), body: z.string().min(1).max(20000) }),
   run: async (deps, ctx, { thread_id, body }) =>
     deps.useCases.addMessage.run({ threadId: thread_id, body, ...ctx }),
 })
@@ -1519,7 +1564,7 @@ export const answerQuestion = defineTool({
   name: 'answer_question',
   description:
     'Answer a question thread atomically (mirrors POST /tasks/{id}/threads/{tid}/answer).',
-  input: z.object({ thread_id: z.string(), body: z.string().min(1) }),
+  input: z.object({ thread_id: z.string(), body: z.string().min(1).max(20000) }),
   run: async (deps, ctx, { thread_id, body }) =>
     deps.useCases.answerQuestion.run({ threadId: thread_id, body, ...ctx }),
 })
@@ -1527,11 +1572,17 @@ export const answerQuestion = defineTool({
 export const updateQuestion = defineTool({
   name: 'update_question',
   description: 'Transition / reassign a question (mirrors PATCH /tasks/{id}/threads/{tid}).',
-  input: z.object({
-    thread_id: z.string(),
-    state: z.enum(['open', 'answered', 'resolved', 'wont_fix']).optional(),
-    assignee_handle: z.string().min(1).max(60).optional(),
-  }),
+  input: z
+    .object({
+      thread_id: z.string(),
+      state: z.enum(QUESTION_STATES).optional(),
+      assignee_handle: z.string().min(1).max(60).optional(),
+    })
+    // REST body minProperties: 1 (routes/threads.ts:109) — an empty patch is a
+    // rejection there, never a silent no-op here (Task 5 refine precedent)
+    .refine((a) => a.state !== undefined || a.assignee_handle !== undefined, {
+      message: 'requires state or assignee_handle',
+    }),
   run: async (deps, ctx, { thread_id, state, assignee_handle }) => {
     const assigneeId =
       assignee_handle === undefined ? undefined : await resolveActorHandle(deps, assignee_handle)
@@ -1569,9 +1620,11 @@ Key pin duty: `kind`/`state` literal sets and use-case input keys (`assignee_id`
 - [ ] **Step 4: Green + gates**, then commit:
 
 ```bash
-git add src/adapters/mcp/tools/discussion.ts src/adapters/mcp/tools/discussion.test.ts
+git add src/adapters/mcp/tools/discussion.ts src/adapters/mcp/tools/discussion.test.ts src/adapters/mcp/mount.test.ts docs/superpowers/plans/2026-09-09-nightshift-plan-d-mcp-client.md
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(mcp): discussion + inbox tools (1:1, D-mm)"
 ```
+
+> **Amendment (Task 6, byte-sync — shipped divergences, blocks above re-labeled sync = shipped form):** (1) `discussion.test.ts` imports ship as `#root/adapters/mcp/tools/discussion` / `…/tasks` — the planned `'./discussion'`/`'./tasks'` are TS2835 under `moduleResolution: nodenext` (Task 2/3/4/5 precedent). (2) **D-r self-notify fix (the vacuous-inbox trap, `create-thread.ts:111`) — choice: REST-seed via a throwaway agent, the `mount.test.ts` precedent.** The planned test 3 created the inbox-arming question via the tool AS nils and assigned it to nils — a question nils asks nils books NO inbox row, so its `toHaveLength(1)` was unproducible. The shipped seed creates agent `a_seed` + token via the admin REST API and POSTs the question as THAT actor assigning to `'nils'`; the nils harness pair then reads the notification. Non-vacuous both ways: the seed's own 201 pin plus `expect(inbox).toHaveLength(1)`. (3) Real-handle pins ship `'nils'`, not `'a_nils'` (test 2's create and test 3's seed payload): `resolveActorHandle`→`findByHandle` is exact-match on HANDLE and the seeded human's handle is `nils` (`a_nils` is its id) — Ruling 1, Task 5 Amendment (3) precedent. The ghost twin (`'a_ghost'`, both-sides 404 out of the SHARED resolver, MCP ⇄ REST same code+status) ships byte-verbatim — the ghost is the point. (4) Test 2 gains a final **reassign step**: `update_question` with `assignee_handle: 'a_lurker'` (a REST-seeded agent) asserting `assignee_id` moved. The block never fed `assignee_handle` to `update_question`, which left the tool's PATCH-path resolver arm uncovered; the never-lower coverage bar says prove it, not document it. The D-n reassign arm is independent of state (`update-question.ts:30-34`), so the post-resolve reassign moves no state; `discussion.ts` ships 100% on all four coverage axes. (5) Transcription duty executed against `routes/threads.ts`+`routes/inbox.ts` at HEAD: the three message bodies ship `z.string().min(1).max(20000)` (the routes' `maxLength: 20000` at `:35`/`:68`/`:92` — the block carried only the floor), and `kind`/`state` ship as `z.enum(THREAD_KINDS)`/`z.enum(QUESTION_STATES)` — the domain constants (one source; the route's own enum source, Task 5's `z.enum(TASK_STATUSES)` precedent), identical members to the block's literal sets. `assignee_handle` min1/max60 and the seeded `get_inbox` bounds byte-verbatim. (6) `update_question`'s input gains `.refine((a) => a.state !== undefined || a.assignee_handle !== undefined, …)` transcribing the REST body's `minProperties: 1` (`:109`) — an empty patch is a rejection at REST, never a silent no-op at the tool (Task 5 Amendment (7)'s `patch`-refine precedent; SDK input-validation rejection = declared D-jj 400-analog class). (7) Step 2 RED, honestly measured: **3 failed / 0 passed** — each case dies at its first new-tool call with `ProtocolError: Tool list_threads|create_thread|add_message not found`: the JSON-RPC **rejection** shape pinned by Task 3's `bridge.test.ts` and Task 5 Amendment (2), not an isError; the step's "tool-not-found" evidence is exact, its "isError" wording misremembers SDK v2 (and the new tools are six, not five — all six absent; `create_task`/`get_inbox` succeeded pre-implementation and carry no evidence). (8) Key pin duty, zero corrections: every uc call site and key (`taskId`, `kind`, `body`, `assignee_id`, `metaNote`, `threadId`, `itemId`) compiled byte-verbatim against the shipped use-cases; `create_thread` returns `{thread, message}` (`create-thread.ts:121`) and `answer_question` returns `{message, thread}` (`answer-question.ts:77`) — key orders differ at the uc sources and pass un-DTO'd through the tools byte-identically; seq=2 append (D-y), `mark_inbox_read` void → `{result:null}` (204 analog), and the `question_transition` 409 on answered→open all passed as planned. (9) Cross-task touch: the `mount.test.ts` exact-set canary grew 13→19 names and shipped renamed `tools/list is exactly the current task-6-grown surface snapshot` (Task 5 Amendment (10) precedent; the final 35-pin arrives in Task 10, exact-set semantics preserved); the Task 4 section's block was re-labeled to match, pointer comment inline, and the Step 4 `git add` line above now carries the real explicit file set (mount.test.ts + this doc). **Gates:** `pnpm test` **437→440 passed / 67→68 files** (the +3 are this file's cases; the one pre-existing edit is the mount snapshot pin); `pnpm lint` 0 issues; `pnpm typecheck` clean; coverage re-measured: no new uncovered line anywhere, `discussion.ts` 100×4 (the global axes moved up from the mid-task state: Stmts 99.1→99.18 / Branch 96.47→96.83 / Lines 99.42→99.5); final-gate recording stays Task 11's.
 
 ## Task 7: Reference tools — links, labels, attachments, events, audit
 
