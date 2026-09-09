@@ -90,6 +90,15 @@ describe('mcp envelope bridge (D-jj)', () => {
       status: 413,
     })
   })
+
+  it('non-string code degrades the Error message to internal_error (constructor contract, mirrors problem.ts ??)', () => {
+    // Production callers pass string-literal codes; this pins the documented
+    // degradation branch itself (bridge.ts:34-36).
+    expect(new McpEnvelopeError({ code: 413, status: 413 }).message).toBe('internal_error')
+    expect(new McpEnvelopeError({ code: 'payload_too_large', status: 413 }).message).toBe(
+      'payload_too_large'
+    )
+  })
 })
 
 describe('buildMcpServer over the in-memory pair', () => {
