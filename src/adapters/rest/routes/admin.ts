@@ -1,13 +1,15 @@
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
-import { actorCtx, requireHuman } from '#root/adapters/rest/auth'
+import { actorCtx, requireHuman, requireAdmin } from '#root/adapters/rest/auth'
 import { ACTOR_KINDS, type ActorKind, type HumanRole } from '#root/domain/task'
 
 // human-only guard: requireHuman is async (auth.ts) — a sync-throwing preHandler would
 // deadlock fastify's hook iterator (R4); fixed at the source, so routes wire it directly.
 
 export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void => {
-  app.get('/admin/actors', { preHandler: [requireHuman] }, async () => deps.actorsRoot.list())
+  app.get('/admin/actors', { preHandler: [requireHuman, requireAdmin] }, async () =>
+    deps.actorsRoot.list()
+  )
 
   // plan block embedded the async handler in the options object (non-compiling) and sent
   // createActor.run's promise un-awaited — fastify 5 has no thenable branch in
@@ -17,7 +19,7 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
   app.post(
     '/admin/actors',
     {
-      preHandler: [requireHuman],
+      preHandler: [requireHuman, requireAdmin],
       schema: {
         body: {
           type: 'object',
@@ -58,7 +60,7 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
   app.post(
     '/admin/actors/:id/tokens',
     {
-      preHandler: [requireHuman],
+      preHandler: [requireHuman, requireAdmin],
       schema: {
         body: {
           type: 'object',
@@ -88,13 +90,17 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
     }
   )
 
-  app.post('/admin/tokens/:id/revoke', { preHandler: [requireHuman] }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    await deps.useCases.revokeToken.run({ ...actorCtx(request), token_id: id })
-    return reply.code(204).send()
-  })
+  app.post(
+    '/admin/tokens/:id/revoke',
+    { preHandler: [requireHuman, requireAdmin] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      await deps.useCases.revokeToken.run({ ...actorCtx(request), token_id: id })
+      return reply.code(204).send()
+    }
+  )
 
-  app.get('/admin/policy/:key', { preHandler: [requireHuman] }, async (request) => {
+  app.get('/admin/policy/:key', { preHandler: [requireHuman, requireAdmin] }, async (request) => {
     // read; no audit attribution needed
     const { key } = request.params as { key: string }
     return { key, value: await deps.useCases.getPolicy.run({ key }) }
@@ -106,7 +112,7 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
   app.put(
     '/admin/policy/:key',
     {
-      preHandler: [requireHuman],
+      preHandler: [requireHuman, requireAdmin],
       schema: {
         body: {
           type: 'object',
