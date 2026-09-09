@@ -191,6 +191,33 @@ export interface ActorRepo {
   setPolicy(key: string, value: string): Promise<void>
 }
 
+// ---- sessions (D-qq)
+
+export interface SessionRow {
+  id: string
+  actor_id: string
+  csrf: string
+  created_at: string
+  expires_at: string
+  revoked_at: string | null
+}
+export interface SessionLookup {
+  session: SessionRow
+  actor: ActorRow
+}
+/** D-qq: server-side truth for cookie sessions; lazy expiry on read, no sweeper. */
+export interface SessionRepo {
+  create(input: {
+    id: string
+    actor_id: string
+    csrf: string
+    created_at: string
+    expires_at: string
+  }): Promise<void>
+  findValid(id: string, now: string): Promise<SessionLookup | null>
+  revoke(id: string, at: string): Promise<void>
+}
+
 // ---- idempotency (spec §7.3)
 
 export type IdempotencyOutcome =

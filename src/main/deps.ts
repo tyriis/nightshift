@@ -15,6 +15,7 @@ import { SqliteInboxRepo } from '#root/infra/sqlite/inbox-repo'
 import { SqliteLabelRepo } from '#root/infra/sqlite/label-repo'
 import { SqliteLinkRepo } from '#root/infra/sqlite/link-repo'
 import { SqliteSearchRepo } from '#root/infra/sqlite/search-repo'
+import { SqliteSessionRepo } from '#root/infra/sqlite/session-repo'
 import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
 import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
 import { SqliteUnitOfWork } from '#root/infra/sqlite/uow'
@@ -55,6 +56,8 @@ export interface AppDeps {
   uow: SqliteUnitOfWork
   // root-connection repos for auth/queries/idempotency (outside use-case txs)
   actorsRoot: SqliteActorRepo
+  // D-qq: auth-path repo, NOT in the tx Repos seam — same dual-wiring rationale as actorsRoot
+  sessionsRoot: SqliteSessionRepo
   idemRoot: SqliteIdempotencyRepo
   tasksRoot: SqliteTaskRepo
   depsRoot: SqliteDependencyRepo
@@ -115,6 +118,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     ids,
     uow,
     actorsRoot: new SqliteActorRepo(db),
+    sessionsRoot: new SqliteSessionRepo(db),
     idemRoot: new SqliteIdempotencyRepo(db),
     tasksRoot: new SqliteTaskRepo(db),
     depsRoot: new SqliteDependencyRepo(db),
