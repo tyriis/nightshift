@@ -210,3 +210,123 @@ describe('cli claim (D-aaa)', () => {
     )
   })
 })
+
+// appended to src/cli/cli.test.ts — the report arms incl. the honest partial-state pin
+// B1/S1 fix: the server serves ThreadWithMessages = { thread: {...}, messages: [...] }
+// (ports.ts:288-291) — `kind` lives UNDER thread, `messages` is top-level.
+const threads = async (
+  id: string
+): Promise<{ thread: { kind: string }; messages: { body: string }[] }[]> => {
+  const res = await CURRENT.app.inject({
+    method: 'GET',
+    url: `/tasks/${id}/threads`,
+    headers: { authorization: `Bearer ${CURRENT.adminToken}` },
+  })
+  return JSON.parse(res.payload) as { thread: { kind: string }; messages: { body: string }[] }[]
+}
+const claimAs = async (id: string, token: string): Promise<string> => {
+  const r = await run(['claim', id], { NS_TOKEN: token })
+  expect(r.code).toBe(0)
+  return (JSON.parse(r.out[0]) as { lease_token: string }).lease_token
+}
+
+describe('cli report (D-aaa)', () => {
+  it('--message posts a NOTE thread and prints {task_id, message_id}', async () => {
+    const t = await createTask('reportable')
+    const r = await run(['report', t.id, '--message', 'progress: wired the door'])
+    expect(r.code).toBe(0)
+    const parsed = JSON.parse(r.out[0]) as Record<string, unknown>
+    expect(parsed.task_id).toBe(t.id)
+    expect(typeof parsed.message_id).toBe('string')
+    const list = await threads(t.id)
+    expect(list[0]).toMatchObject({
+      thread: { kind: 'note' },
+      messages: [{ body: 'progress: wired the door' }],
+    })
+  })
+  it('--status moves status under the env lease and prints the server Task DTO', async () => {
+    const agent = await agentToken('a_reporter')
+    const t = await createTask('movable')
+    const lease = await claimAs(t.id, agent)
+    const r = await run(['report', t.id, '--status', 'in_progress', '--reason', 'starting work'], {
+      NS_TOKEN: agent,
+      NS_LEASE_TOKEN: lease,
+    })
+    expect(r.code).toBe(0)
+    expect(JSON.parse(r.out[0])).toMatchObject({ id: t.id, status: 'in_progress' })
+  })
+  it('an unclaimed task moves WITHOUT a lease (claim → release → move) — the lease-less arm (P9)', async () => {
+    const agent = await agentToken('a_releaser')
+    const t = await createTask('releasable')
+    await claimAs(t.id, agent)
+    const rel = await CURRENT.app.inject({
+      method: 'POST',
+      url: `/tasks/${t.id}/release`,
+      headers: { authorization: `Bearer ${agent}` },
+    })
+    expect(rel.statusCode).toBe(200)
+    const r = await run(['report', t.id, '--status', 'in_progress', '--reason', 'fresh start'], {
+      NS_TOKEN: agent,
+    })
+    expect(r.code).toBe(0)
+    expect(JSON.parse(r.out[0]).status).toBe('in_progress')
+  })
+  it('HONEST PARTIAL (D-aaa): the note lands, a wrong lease still exits 3 stale_lease', async () => {
+    const agent = await agentToken('a_partial')
+    const t = await createTask('partial')
+    await claimAs(t.id, agent)
+    const r = await run(
+      [
+        'report',
+        t.id,
+        '--message',
+        'this note WILL land',
+        '--status',
+        'in_progress',
+        '--reason',
+        'x',
+      ],
+      { NS_TOKEN: agent, NS_LEASE_TOKEN: 'wrong-lease' }
+    )
+    expect(r.code).toBe(3)
+    expect(r.err[0]).toBe('nightshift: stale_lease')
+    const list = await threads(t.id) // the note is there — no cross-request transaction, honestly
+    expect(list[0].messages[0].body).toBe('this note WILL land')
+  })
+  it('a note that 404s exits 3 and prints nothing — the note-leg failFrom arm (never-lower P10)', async () => {
+    // the note POST is the FIRST report request; its failure returns on the note leg —
+    // before the status move and before the message-only tail (the `return nf` arm the
+    // block's tests never reached; Plan D T6/T7 "prove it, not document it" precedent).
+    const r = await run(['report', 't_ghost', '--message', 'to a ghost'])
+    expect(r.code).toBe(3)
+    expect(r.err[0]).toBe('nightshift: not_found')
+    expect(r.out).toEqual([]) // nothing printed — returned on the note leg, no message_id tail
+  })
+  it('an agent may not close: --status done answers exit 3 agent_close_forbidden', async () => {
+    const agent = await agentToken('a_closer')
+    const t = await createTask('closable')
+    const lease = await claimAs(t.id, agent)
+    const r = await run(['report', t.id, '--status', 'done', '--reason', 'shipped'], {
+      NS_TOKEN: agent,
+      NS_LEASE_TOKEN: lease,
+    })
+    expect(r.code).toBe(3)
+    expect(r.err[0]).toBe('nightshift: agent_close_forbidden')
+  })
+  it('local gates: needs message-or-status, status needs reason, status is the DOMAIN enum', async () => {
+    expect((await run(['report', 't_x'])).err[0]).toBe(
+      "nightshift: usage_error 'report' needs --message and/or --status"
+    )
+    expect((await run(['report', 't_x', '--status', 'in_progress'])).err[0]).toBe(
+      'nightshift: usage_error --status requires --reason (the server invariant)'
+    )
+    const bad = await run(['report', 't_x', '--status', 'shipped', '--reason', 'x'])
+    expect(bad.code).toBe(2)
+    expect(bad.err[0]).toMatch(
+      /^nightshift: config_error --status must be one of backlog\|todo\|in_progress\|in_review\|done\|canceled/
+    )
+    expect((await run(['report', 't_x', '--message'])).err[0]).toBe(
+      'nightshift: usage_error flag --message needs a value'
+    )
+  })
+})

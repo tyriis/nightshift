@@ -778,9 +778,28 @@ return 0
 - [ ] **Step 4: Gates + commit**:
 
 ```bash
-git add src/cli/run.ts src/cli/cli.test.ts
+git add src/cli/run.ts src/cli/cli.test.ts docs/superpowers/plans/2026-09-10-nightshift-plan-f-docker-deploy-cli.md
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(cli): report — note thread + lease-gated status (D-aaa)"
 ```
+
+> **Amendment (Task 3, byte-sync — shipped divergences; the Step-1 test block and the Step-3 blocks above are sync = shipped form):**
+>
+> 1. **Prettier reflow — the claim `io.stdout` line.** Task 3 wraps the claim arm in `if (cmd === 'claim') { … }`, so the two-space-deeper indent pushes the single-line `io.stdout(JSON.stringify({ task_id: id, lease_token: d.lease_token, generation: d.generation }))` past printWidth 100. Shipped (JSON content byte-identical, Task-2 single line re-wrapped by prettier only):
+>    ```ts
+>    io.stdout(
+>      JSON.stringify({ task_id: id, lease_token: d.lease_token, generation: d.generation })
+>    )
+>    ```
+> 2. **Prettier reflow — the report lease-spread line.** The block's `...(env.data.NS_LEASE_TOKEN === undefined ? {} : { lease_token: env.data.NS_LEASE_TOKEN }),` at its dedented presentation indent exceeds 100 once nested inside the real `body: { … }` at the shipped depth. Shipped (tokens byte-identical):
+>    ```ts
+>    ...(env.data.NS_LEASE_TOKEN === undefined
+>      ? {}
+>      : { lease_token: env.data.NS_LEASE_TOKEN }),
+>    ```
+> 3. **Coverage-duty addition (never-lower P10; "prove it, not document it" — Plan D Task 6 Amendment (4) / Task 7 Amendment (5) precedent).** The verbatim Step-1 test block never makes the NOTE POST itself fail (the HONEST-PARTIAL pin lands the note then fails the status), so the message-leg `if (nf !== null) return nf` (`run.ts` line 194) sat uncovered and the global Statements axis dipped to **99.47 < the 99.49 floor**. One `it` was added inside `describe('cli report (D-aaa)')` — a ghost-task `--message` POST answers the taxonomy `not_found` 404, `failFrom` returns 3 on the note leg, and nothing prints (no `message_id` tail): `expect(r.code).toBe(3)` / `nightshift: not_found` / `expect(r.out).toEqual([])`. run.ts then ships 100×4 (FNF/FNH 7/7, LF/LH 100/100, BRF/BRH 74/74, zero `,0`); the never-lower axes hold. The block's other arms are unchanged — "message both sides, status both sides, lease both sides, note trust-cast path, partial-state path" all map to named tests: message-present (`--message posts a NOTE thread`, HONEST-PARTIAL), message-absent (`--status moves …`, P9 lease-less, `agent_close_forbidden`), note-leg `return nf` (the added ghost arm), note trust-cast + message-only tail (`--message posts a NOTE thread` → `{task_id, message_id}`), status-present/absent, `return mf` (HONEST-PARTIAL `stale_lease`, `agent_close_forbidden`), lease-defined vs lease-less (P9 claim→release→move).
+> 4. **The Step-3.4 gate block ships at its own heading's position.** The block's Step-3.4 heading states "after the unknown-flag loop (**before the env parse**)"; the shipped `run.ts` places the report-needs gate, the `let status` declaration, the requires-`--reason` usage gate and the `StatusSchema` `config_error --status must be one of …` contiguously there. No test distinguishes it from an after-env-parse placement (all report value/usage pins carry a valid `NS_TOKEN`), so this is position lineage, not a behavior divergence. The n13 fix holds verbatim: `reason: parsed.flags.reason` carries NO cast (eslint `no-unnecessary-type-assertion` — Task-2 amendment precedent). `const id = parsed.positionals[0]` moved above the command blocks per the Step-3 note ("same arity gate serves claim and report"); the arity line is `cmd === 'claim' || cmd === 'report'`; the comment gained the parenthetical `(serves claim and report)` — comment-only, the code line byte-verbatim.
+>
+> **Gates:** `pnpm test` 670→671 passed / 87 files; `pnpm lint` clean; `pnpm typecheck` clean; prettier-clean; coverage A/B (stashed HEAD baseline 99.51 / 98.47 / 99.78 / 99.7 vs shipped 99.52 / 98.52 / 99.78 / 99.7) — every axis at-or-above both the Plan E record and the pre-Task-3 HEAD; `run.ts` 100×4. `TASK_STATUSES`/`TaskStatus` are IMPORTED from `#root/domain/task` — the domain tree is byte-untouched.
 
 ## Task 4: The bin shim + package wiring (D-bbb) — spawned, not assumed
 

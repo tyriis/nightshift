@@ -7,6 +7,7 @@
 // (the server's taxonomy code verbatim; the flat D-jj problem JSON rides on line 2).
 import { z } from 'zod'
 import { createNightshiftClient } from '#root/client/index'
+import { TASK_STATUSES, type TaskStatus } from '#root/domain/task'
 
 export interface CliIo {
   argv: readonly string[]
@@ -21,6 +22,7 @@ export interface CliIo {
 const EnvSchema = z.object({
   NS_URL: z.url(),
   NS_TOKEN: z.string().min(1),
+  NS_LEASE_TOKEN: z.string().min(1).optional(), // the claim-issued capability — env like every credential, NEVER argv (D-ff/D-aaa)
   NS_TIMEOUT_MS: z.coerce.number().int().min(100).default(15_000), // per-call AbortSignal
 })
 
@@ -29,9 +31,11 @@ const EnvSchema = z.object({
 const COMMANDS: Record<string, readonly string[]> = {
   next: ['label', 'limit'],
   claim: [],
+  report: ['message', 'status', 'reason'],
 }
 
 const LimitSchema = z.coerce.number().int().min(1).max(100) // mirrors the yaml /tasks/next pin
+const StatusSchema = z.enum(TASK_STATUSES) // the SINGLE truth — zero enum duplication (D-aaa)
 
 const USAGE = [
   'usage: nightshift next [--label L] [--limit N] | claim <task-id> | report <task-id> [--message M] [--status S --reason R]',
@@ -100,11 +104,26 @@ export const runCli = async (io: CliIo): Promise<number> => {
   for (const key of Object.keys(parsed.flags)) {
     if (!COMMANDS[cmd].includes(key)) return usageError(`unknown flag --${key} for '${cmd}'`)
   }
-  const idWanted = cmd === 'claim'
+  const idWanted = cmd === 'claim' || cmd === 'report'
   if (parsed.positionals.length !== (idWanted ? 1 : 0)) {
     return usageError(
       idWanted ? `'${cmd}' takes exactly one <task-id>` : `'${cmd}' takes no positional arguments`
     )
+  }
+  if (cmd === 'report' && parsed.flags.message === undefined && parsed.flags.status === undefined) {
+    return usageError("'report' needs --message and/or --status")
+  }
+  let status: TaskStatus | undefined
+  if (parsed.flags.status !== undefined) {
+    if (parsed.flags.reason === undefined) {
+      return usageError('--status requires --reason (the server invariant)')
+    }
+    const sv = StatusSchema.safeParse(parsed.flags.status)
+    if (!sv.success) {
+      io.stderr(`nightshift: config_error --status must be one of ${TASK_STATUSES.join('|')}`)
+      return 2
+    }
+    status = sv.data
   }
   const env = EnvSchema.safeParse(io.env)
   if (!env.success) {
@@ -150,13 +169,48 @@ export const runCli = async (io: CliIo): Promise<number> => {
       for (const task of r.data as unknown[]) io.stdout(JSON.stringify(task))
       return 0
     }
-    const id = parsed.positionals[0] // arity gate proved it
-    const claim = await client.POST('/tasks/{id}/claim', { params: { path: { id } } })
-    const f = failFrom(io, claim)
-    if (f !== null) return f
-    // trust-cast (D-aaa): failFrom proved data present
-    const d = claim.data as { lease_token?: string; generation?: number }
-    io.stdout(JSON.stringify({ task_id: id, lease_token: d.lease_token, generation: d.generation }))
+    const id = parsed.positionals[0] // arity gate proved it (serves claim and report)
+    if (cmd === 'claim') {
+      const claim = await client.POST('/tasks/{id}/claim', { params: { path: { id } } })
+      const f = failFrom(io, claim)
+      if (f !== null) return f
+      // trust-cast (D-aaa): failFrom proved data present
+      const d = claim.data as { lease_token?: string; generation?: number }
+      io.stdout(
+        JSON.stringify({ task_id: id, lease_token: d.lease_token, generation: d.generation })
+      )
+      return 0
+    }
+    // report (D-aaa): note thread FIRST, then the lease-gated status move. There is no
+    // cross-request transaction — a landed note + a failed move is honest partial state,
+    // recorded by exit code + taxonomy code. kind 'question' is DELIBERATELY unexposed.
+    let messageId: string | undefined
+    if (parsed.flags.message !== undefined) {
+      const note = await client.POST('/tasks/{id}/threads', {
+        params: { path: { id } },
+        body: { kind: 'note', body: parsed.flags.message },
+      })
+      const nf = failFrom(io, note)
+      if (nf !== null) return nf
+      messageId = (note.data as { message: { id: string } }).message.id // trust-cast: failFrom proved data
+    }
+    if (status !== undefined) {
+      const moved = await client.PATCH('/tasks/{id}/status', {
+        params: { path: { id } },
+        body: {
+          status,
+          reason: parsed.flags.reason, // the gate above proved it present (n13: Record access is string — an `as string` cast is a typed no-op and eslint no-unnecessary-type-assertion REJECTS it; T2 amendment precedent)
+          ...(env.data.NS_LEASE_TOKEN === undefined
+            ? {}
+            : { lease_token: env.data.NS_LEASE_TOKEN }),
+        },
+      })
+      const mf = failFrom(io, moved)
+      if (mf !== null) return mf
+      io.stdout(JSON.stringify(moved.data)) // the server's Task DTO IS the truth (D-aaa)
+      return 0
+    }
+    io.stdout(JSON.stringify({ task_id: id, message_id: messageId }))
     return 0
   } catch (err) {
     io.stderr('nightshift: transport_error')
