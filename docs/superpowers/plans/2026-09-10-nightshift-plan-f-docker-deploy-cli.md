@@ -760,7 +760,7 @@ if (status !== undefined) {
     params: { path: { id } },
     body: {
       status,
-      reason: parsed.flags.reason as string, // gate above proved it
+      reason: parsed.flags.reason, // the gate above proved it present (n13: Record access is string — an `as string` cast is a typed no-op and eslint no-unnecessary-type-assertion REJECTS it; T2 amendment precedent)
       ...(env.data.NS_LEASE_TOKEN === undefined ? {} : { lease_token: env.data.NS_LEASE_TOKEN }),
     },
   })
