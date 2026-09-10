@@ -1048,3 +1048,138 @@ No MCP tool changes (frozen at 35), no UI staleness surfacing, no per-claim resp
 - **Task 5 COMPLETE — `79bbf95`.** Honest RED (4-fail `unknown command` face, verbatim Expected/Received) → GREEN cli+shim **28/28 — P8's exact prediction**, full `pnpm test` 695/89, lint/typecheck clean, 3-file diff (+80/−14) raw-git-verified, commit body carries the measured byte-sync spans. SPEC-REVIEW: PASS — README byte-sync verified by BYTE-DIFF (usage block ⇄ final run.ts lines 42-44 identical; all four `run.ts:N` citations confirmed against the real file: 42-44 / 22-27 / 132 / 204; old-vs-new line claims verified against `79bbf95^`). QUALITY: PASS — dispatch arm reads like the command family (two-letter `hb`/`hf` pattern), the two config_error faces are disjoint-by-gate-order and each self-diagnosing, no test arm vacuous (reject-must-send proof walked). Deviations dispositioned: #1 prettier try-block indent — sanctioned-normalization, content verbatim; #2 table-cell spacing — markdown hygiene, word-sequence intact; **#3 run.ts:173 arity comment under-counts — spec-lane ruling: KEEP, future wording `(serves claim, heartbeat and report)` rides ONLY a future sanctioned run.ts touch, never a standalone comment commit**; #4 explicit-path add — binding-rule precedence, correct. Advisories: A1 (empty-string NS_LEASE_TOKEN names the generic face — treeify line carries the truth) · A3 (report-is-the-implicit-final-else footgun — documented here; a COMMANDS key without a dispatch arm masquerades as report, caught today by behavior arms) — both **recorded, no run.ts re-entry** (Tasks 6-8 touch no run.ts). Zero logic drift.
 - **Task 6 COMPLETE — `9a4c982`.** No-red task per plan (the drift/contract/mount pins ARE the verification): one yaml description line (verbatim old→new), regen in the SAME commit (D-zz), delta exactly P7's measured 1-JSDoc line, pin trio 9/9 green, 695/89, lint/typecheck clean, 2-file diff (+2/−2) raw-git-verified. SPEC-REVIEW: PASS — branch-wide audit confirms this is the ONLY openapi edit on the branch (no double-flip), spec/ byte-untouched (F-precedent duty honored: §3/§7.2 staleness recorded in D-kkk, never spec-edited). QUALITY: PASS — description matches the file's house register (the SSE op is the citation-format sibling); pre-G stale-truth sweep CLEAN (this was the only invalidated sentence; SSE `deferred (§6.8/§12)` remains TRUE — G shipped the sweeper, not SSE). Both lanes independently flagged the DORMANT-AMBIGUITY advisory ("silent leases expire…" could read always-on): **disposed — yaml byte-untouched (byte-frozen surface; misreading direction is safe-side per quality lane; the dormancy truth is owned by the Task 7 `## Keepalive` section, which already states "Dormant by default" and now carries the tick-lag text per Task-2 ledger); future yaml passes may add "(dormant unless configured)" per quality-lane A1, never a G re-entry.** Zero drift.
 - **Task 7 COMPLETE — `41f8dc8` (amended; shipped as `5a07680`) + `2415528` (citation truth).** Two NS\_\* rows verbatim (the timeout row carries the amended all-or-nothing-pair wording); Keepalive section ships verbatim INCLUDING the sanctioned tick-quantized paragraph; DEPLOY-SMOKE §3 heartbeat item verbatim after `claim`; all `config.ts` citations re-derived by measurement (5-34→5-40, 39-56→45-61, 65→97); §1 KNOWN FINDING blockquote + the 22-PASS paragraph **byte-untouched** (zero hunks near them — flip stays licensed only to live 23/0); Task-5 byte-sync zone zero-diff (server-env table re-pad = whitespace only, all 16 rows word-verified). SPEC-REVIEW: **FAIL attempt 1 — B1: subject 77 > the ≤72 duty.** Minimal repair per the review lane: content-identical amend → `41f8dc8`, subject 70 chars, raw-git re-verified, B1 cleared (branch was never pushed — no rewrite exposure). QUALITY: PASS — operator flow enable→what→observe→test, citation register, lifecycle placement, and the §3 item's "With enforcement enabled…" predicate (stays verbatim post-flip). **Adjudication — the pre-existing `index.ts:27` drift** (F-era stale-by-one; post-Task-4 it points at `leaseSweeper.start()`): spec-lane ruling (a) sanctioned a STANDALONE citation-truth commit before Task 8 so the flip commit stays exactly evidence-licensed text → `2415528` (`index.ts:27→26`, measured `deliveryLoop.start()` at :26, zero other tokens); the quality lane's fold-into-Task-8 alternative overridden on the minimal-flip ground. **PLAN DEFECT (recorded):** the embedded operator text says "advisory **off** ed74a60" — should read "on/against"; it shipped verbatim under the verbatim duty, load-bearing content unaffected; wording fix rides a future README pass, never smuggled.
+
+## FINAL-GATE RECORD (2026-09-10)
+
+Gate executed on `feature/plan-g-brotli-keepalive` through the flip commit `6547c81`. NO push, NO PR, NO merge (orchestrator-owned; merges are @tyriis personally).
+
+**Step 0 — script truth (the no-change claim, VERIFIED).** `sed -n 73,77p scripts/deploy-smoke.mjs` verbatim:
+
+```js
+check(
+  '/ui shell is no-cache',
+  (shell.res.headers.get('cache-control') ?? '').includes('no-cache'),
+  shell.res.headers.get('cache-control') ?? 'none'
+)
+```
+
+The arm already asserts `includes('no-cache')` and sends NO explicit `accept-encoding` (undici auto-negotiates br) ⇒ ZERO script change was ever needed. `git diff origin/main..HEAD -- scripts/` → **EMPTY**. Contract-surface audit (`src/adapters/mcp/ openapi/ src/client/ docs/superpowers/specs/ ci/ .github/ vitest.config.ts pnpm-lock.yaml`) → exactly ONE commit: `9a4c982` (D-kkk — the heartbeat description line + regen, 2 files +2/−2); `mount.test.ts`, `vitest.config.ts`, `ci.yaml`, `pnpm-lock.yaml`, `docs/superpowers/specs/` byte-untouched.
+
+**Step 1 — the full local gate. ALL GREEN.** `pnpm test:coverage && pnpm lint && pnpm typecheck && pnpm build && pnpm ui:build && pnpm ui:offline-check && pnpm test:e2e` — every leg exit 0.
+
+- Honest counts: **Test Files 89 passed (89) / Tests 695 passed (695)** (F baseline 674/88 → +21 tests, +1 file = `lease-sweeper.test.ts`; matches P9's 691/89 at Task 4 + the 4 Task-5 CLI arms).
+- Coverage summary verbatim:
+
+```
+Statements   : 99.53% ( 1932/1941 )
+Branches     : 98.57% ( 899/912 )
+Functions    : 99.78% ( 474/475 )
+Lines        : 99.71% ( 1759/1764 )
+```
+
+Floor **99.52 / 98.52 / 99.78 / 99.70**: 99.53 ≥ 99.52 ✓ · 98.57 ≥ 98.52 ✓ · 99.78 = 99.78 (Funcs HELD) ✓ · 99.71 ≥ 99.70 ✓ — every axis ≥ Plan F's record. `src/domain/**` **100×4** verified from `coverage/lcov.info` (claim.ts, discussion.ts, errors.ts, mentions.ts, ready.ts, task.ts — all 100.00 on all four axes; domain total 100.00/100/100/100.00). `vitest.config.ts` byte-untouched (absent from the branch diff).
+
+- `lint` (eslint src) exit 0 · `typecheck` (`tsc --noEmit`) clean · `build` exit 0 · `ui:build` exit 0 (adapter-static, `Wrote site to "build"`).
+- `ui:offline-check` exit 0: `ui build offline-safe; hosts seen: http://www.w3.org https://svelte.dev`.
+- `test:e2e` PROBE-FIRST (D-xx posture: RUN) → `✓  1 e2e/smoke.e2e.ts:8:1 › §11.5 login -> board -> task -> comment -> status (752ms)` / `1 passed (3.9s)`, exit 0 — honest posture: the run crossed REAL sockets (Playwright → WebServer on `127.0.0.1:3311`), no fake server.
+
+**Zero-drift audit.** `git diff origin/main..HEAD --stat` → 19 files; EVERY file maps to the File-structure table or the plan/ledger commits:
+
+| diff file                                           | sanction                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `src/adapters/rest/ui.ts` / `ui.test.ts`            | D-fff table row (predicate + additive U9/U9b/U10)                               |
+| `src/main/config.ts` / `config.test.ts`             | D-ggg table row (dormant pair + fail-closed matrix)                             |
+| `src/application/ports.ts`                          | D-hhh table row (StaleClaimRow + 2 TaskRepo members)                            |
+| `src/infra/sqlite/task-repo.ts` / `.test.ts`        | D-hhh table row (claim stamp + sweep CAS)                                       |
+| `src/infra/keepalive/lease-sweeper.ts` / `.test.ts` | D-iii table row (the loop, NEW)                                                 |
+| `src/main/deps.ts`, `src/index.ts`                  | D-iii table row (construct-not-started + start/stop)                            |
+| `src/application/usecases/heartbeat.ts`             | D-iii table row (doc-comment, line 11 only)                                     |
+| `src/cli/run.ts` + `cli.test.ts`                    | D-jjj table row (heartbeat command + arms)                                      |
+| `openapi/openapi.yaml`, `src/client/schema.d.ts`    | D-kkk table row (description + regen, same commit `9a4c982`)                    |
+| `deploy/README.md`, `deploy/DEPLOY-SMOKE.md`        | D-lll table row (D-lll commits `41f8dc8`/`2415528` + the Task-8 flip `6547c81`) |
+| this plan doc                                       | the plan + ledger commits (preflight, Tasks 1–7 ledgers, this record)           |
+
+Verdict: **sanctioned deltas ONLY — zero unsanctioned drift.**
+
+**Step 2 — the LIVE leg.**
+
+(a) `docker build --no-cache -t ns-g .` → **exit 0**. Builder form (D-eee lineage, same as F): this box ran docker 29.7.2's LEGACY builder (no buildx) — log line 1 `DEPRECATED: The legacy builder is deprecated and will be removed in a future release.`, **30/30 legacy `Step N/30` steps**, ending `Successfully built aba84cd74d96` / `Successfully tagged ns-g:latest`; `--no-cache` honored. Image id: `sha256:aba84cd74d96f9c235c7561d34f071aa2815290d259d8ec5e693d4794cb7c757`. **D-ddd build gate, log:563 verbatim:** `ui build offline-safe; hosts seen: http://www.w3.org https://svelte.dev`.
+
+(b) Smoke twin (F's Task-5/6 recipe, throwaway volume): `docker volume create ns-g-smoke` + `docker run -d --name ns-g -p 127.0.0.1:3199:3123 -v ns-g-smoke:/data -e NS_PORT=3123 -e NS_BOOTSTRAP_TOKEN="$BOOT_TOKEN" ns-g` (container `c01df882a598`) → **healthy at i=3 (~3 s)**. `$BOOT_TOKEN` = the documented local-smoke literal `planf-local-smoke-token-0123456789abcdef` (env-only, never a real secret). `NS_URL=http://127.0.0.1:3199 NS_TOKEN=… node scripts/deploy-smoke.mjs` — **23 PASS / 0 FAIL, exit 0**; every probe line verbatim:
+
+```
+PASS /ping answers the pong
+PASS served /openapi.yaml byte-matches the repo contract
+PASS /ui/ answers the html shell
+PASS /ui shell is no-cache
+PASS hashed asset /ui/_app/immutable/entry/start.COMOpm8X.… max-age cached
+PASS SPA deep-link answers the shell 200 html
+PASS GET /tasks without a bearer is 401
+PASS POST /mcp without a bearer is 401 (D-ww)
+PASS admin creates the smoke agent
+PASS admin issues the smoke token (shown once)
+PASS the agent on /admin/actors is 403 (admin is human-only)
+PASS agent creates a ready task
+PASS agent claims (lease issued)
+PASS release answers with the task
+PASS re-claim after release works
+PASS lease-gated status → in_progress
+PASS agent posts a thread note
+PASS attachment uploads to the volume (octet-stream)
+PASS attachment content round-trips
+PASS /events answers the ascending cursor feed
+PASS agent releases the claim for the human close
+PASS human(admin) cancels the smoke task (the §14-6 close path)
+PASS smoke token revoked
+deploy-smoke: ALL PASS
+SMOKE_EXIT=0
+```
+
+`/ui shell is no-cache` GREEN on the real image ⇒ **D-fff's live proof — the recorded finding's death certificate**.
+
+(c) Keepalive twin: `docker run -d --name ns-g-ka -p 127.0.0.1:3220:3123 -v ns-g-ka:/data -e NS_PORT=3123 -e NS_BOOTSTRAP_TOKEN="$BOOT_TOKEN" -e NS_KEEPALIVE_INTERVAL_MS=1000 -e NS_KEEPALIVE_TIMEOUT_S=3 ns-g` (container `6b99edb86c05`) → healthy at i=3. Agent + two ready tasks provisioned host-side over the PUBLISHED socket `127.0.0.1:3220`. **DEVIATION (stated, verbatim cause):** the `docker exec` CLI legs ran with `-e NS_URL=http://127.0.0.1:3123` — inside the container's netns the server binds `NS_PORT=3123` and NOTHING listens on the published 3220 (F's Task-5 exec legs carried the same internal shape); the host-side legs crossed the real published :3220 socket.
+
+- Heartbeat leg (claim → IMMEDIATE `heartbeat`): claim `t_947kxs9q0989kw9d` exit 0 → `{"task_id":"t_947kxs9q0989kw9d","lease_token":"t_947kxs9q0989kw9d:1","generation":1}`; `docker exec -e NS_URL=http://127.0.0.1:3123 -e NS_TOKEN=$AGENT -e NS_LEASE_TOKEN=$LEASE ns-g-ka node bin/nightshift.mjs heartbeat t_947kxs9q0989kw9d` → **`HB_EXIT=0`**, stderr empty, DTO verbatim (abridged to the liveness fields): `"status":"in_progress","claim_token_id":"tok_3o4hrx2s9fsyr1es","claim_generation":1,"last_heartbeat_at":"2026-09-10T22:21:48.309Z"` — fresh at **age_ms=35** vs `Date.now()`.
+- Silence leg (expiry): claim `t_4hahubz5xtk903j1` exit 0 → lease `t_4hahubz5xtk903j1:1`; SILENT 4.6 s (> 3 s budget + 1 s tick); `GET /audit` row verbatim:
+
+```
+{"id":9,"actor_id":"a_m0b1ulkfinr30386","token_id":"tok_3o4hrx2s9fsyr1es","action":"lease_expired","entity_type":"task","entity_id":"t_4hahubz5xtk903j1","before":{"status":"in_progress","generation":1},"after":{"status":"todo","generation":2},"reason":"lease expired","created_at":"2026-09-10T22:22:09.286Z"}
+```
+
+action `lease_expired`, reason exactly `lease expired`, before `in_progress`/gen 1 → after `todo`/gen 2, actor = the token's holder, token = the dying claim (D-iii attribution honesty, measured). The task then reads: `status=todo  assignee_id=a_m0b1ulkfinr30386  claim_token_id=null  last_heartbeat_at=null`.
+
+- Dead-lease fence: `docker exec -e … -e NS_LEASE_TOKEN=$DEAD_LEASE ns-g-ka node bin/nightshift.mjs report t_4hahubz5xtk903j1 --status in_progress --reason x` → **`FENCE_EXIT=3`**, stderr line 1 verbatim `nightshift: stale_lease`, stdout empty, detail body `{"claimed":false,"type":"https://nightshift.local/errors/stale_lease","title":"stale lease","status":412,"code":"stale_lease","detail":"lease does not match any active claim"}` — the generation bump fences the zombie via the SHIPPED 412 arms, zero new codes.
+
+(d) Graceful stop: `docker stop -t 12 ns-g` → exit 0; `docker inspect -f '{{.State.ExitCode}}' ns-g` → **`0`** (State=exited). Bonus: the ka twin's `docker stop -t 12` also measured ExitCode `0`. Cleanup VERIFIED: both containers removed, both throwaway volumes (`ns-g-smoke`, `ns-g-ka`) removed; `docker ps -a --filter name=ns-g` and `docker volume ls --filter name=ns-g` → empty.
+
+**Step 3 — the flip** (licensed by the green evidence above): `DEPLOY-SMOKE.md` §1 KNOWN FINDING blockquote → the RESOLVED record; `deploy/README.md` §Deploy-smoke → expect **23 PASS / 0 FAIL** with the 22/1 lineage. Commit `6547c81 docs(deploy): brotli finding RESOLVED — live run 23 PASS (D-fff)` — `git add` named ONLY the two files, `2 files changed, 17 insertions(+), 14 deletions(-)`, LEFTHOOK_CONFIG=$PWD/lefthook.yaml, subject 64 ≤ 72.
+
+**Ledger COMPLETE:** D-fff `fb68015` · D-ggg `ed74a60` · D-hhh `1f7b13f` · D-iii `a09e0d3` · D-jjj `79bbf95` · D-kkk `9a4c982` · D-lll `41f8dc8` (+ citation-truth `2415528`) — every ruling shipped, every task double-gated (spec THEN quality), zero design drift.
+
+**QUEUED (HUMAN) — UNCHANGED, nothing blocked tonight:** cancel-leaves-claim-attached quirk · per-lease `interval`/`timeout` echoed into the claim response · UI staleness surfacing (`last_heartbeat_at` already public) · F's unchanged ledger (real Pocket ID, nonce verify-once, role surgery, session-key rotation, CSP, npm publish). F's queued brotli finding **CLOSED tonight by D-fff** (this record is its disposition). NEW QUEUED: none.
+
+**Commit chain — RAW-GIT-VERIFIED** (`git log --format='%h %s' origin/main..HEAD`, every hash real, 19 commits through the flip; this record commit is the 20th — Step 5 re-verify expects `wc -l` = 20):
+
+```
+6547c81 docs(deploy): brotli finding RESOLVED — live run 23 PASS (D-fff)
+cdacc09 docs(plan): task 7 ledger (FAIL-attempt-1 amended, quality PASS)
+2415528 docs(deploy): index.ts:27->26 citation truth (D-lll)
+41f8dc8 docs(deploy): keepalive surface, heartbeat legs, citations (D-lll)
+1a85bf8 docs(plan): task 6 ledger entry (spec+quality PASS)
+9a4c982 docs(contract): heartbeat ships keepalive; regen same commit (D-kkk)
+f2c1fbd docs(plan): task 5 ledger entry (spec+quality PASS)
+79bbf95 feat(cli): heartbeat command + README byte-sync (D-jjj)
+4a61ba2 docs(plan): task 4 ledger entry (spec+quality PASS)
+a09e0d3 feat(keepalive): lease sweeper loop + dormant wiring (D-iii)
+7083763 docs(plan): task 3 ledger; advisory comments into Task 4 scope
+1f7b13f feat(tasks): sweep CAS primitives, claim-stamped liveness (D-hhh)
+4cc63a4 docs(plan): task 2 ledger; tick-lag duty into Task 7 text
+ed74a60 feat(config): dormant keepalive pair, fail-closed when opened (D-ggg)
+23ea098 docs(plan): task 1 ledger entry (spec+quality PASS)
+fb68015 fix(ui): shell no-cache survives preCompressed br/gz (D-fff)
+6d39ea5 docs(plan): preflight PASS - forced amendments applied
+24bad10 docs(plan): review-lane A1-A4 amendments applied
+90a9ffb docs(plan): plan G - brotli shell fix + keepalive enforcement
+```
+
+Honest residuals (non-gate): the plan-doc QUEUED/wording items ride future passes (Task-7 ledger's "advisory off→on" wording fix included); `format:check` untouched per F lineage (the pre-existing spec md + `.slim/` scratch face only, never in any gate).
