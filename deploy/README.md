@@ -277,13 +277,13 @@ not supported. Take the snapshot before every upgrade.
 ## Deploy-smoke
 
 Run the automated probes after any deploy: `DEPLOY-SMOKE.md` §1
-(`NS_URL=… NS_TOKEN=… node scripts/deploy-smoke.mjs`). The ship-time local run
-recorded **22 PASS / 1 recorded-FAIL**: the one FAIL is the KNOWN, RECORDED
-server gap — under `Accept-Encoding: br` the preCompressed `/ui` shell variants
-bypass `ui.ts`'s `setHeaders` `.html` check and serve `public,
-max-age=2592000, immutable` instead of no-cache (a 30 d stale-shell hazard
-awaiting a server-side fix; the probe must NOT be weakened). Expect that arm to
-FAIL until fixed — see `DEPLOY-SMOKE.md` §1 for the full record.
+(`NS_URL=… NS_TOKEN=… node scripts/deploy-smoke.mjs`). Expect **23 PASS /
+0 FAIL** (exit 0). Plan F's ship-time run recorded 22/1 — the one FAIL was the
+encoding-negotiated `/ui` shell variants served as `public, max-age=2592000,
+immutable` (the bare `.html` check missed them; a 30 d stale-shell hazard, plus an
+unprobed gzip-fallback face). Plan G's `ui.ts` fix closed both faces and the G-wave
+ship-time run measured 23 PASS / 0 FAIL with the probe byte-identical. Full lineage:
+`DEPLOY-SMOKE.md` §1 and Plan F's Task-6 record.
 
 Honest scope (D-eee): the automated legs (steps 0–3, 6) ran against the
 ship-time container; the browser/OIDC legs (steps 4, 5, 7 — real Pocket ID, a

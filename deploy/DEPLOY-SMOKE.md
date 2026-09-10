@@ -38,13 +38,16 @@ asset caching, SPA deep-link, `/tasks` 401, `/mcp` 401, the full agent lifecycle
 live contract (agent+token ⇒ task ⇒ claim/release/re-claim ⇒ lease-gated status ⇒ note ⇒
 attachment round-trip ⇒ ascending event feed ⇒ agent release ⇒ human cancel ⇒ revoke).
 
-> KNOWN FINDING (recorded at ship-time local execution, plan Task 6 record): the
-> `/ui shell is no-cache` arm FAILed against the shipped image. On an encoding-negotiated
-> GET (browsers send `Accept-Encoding: br`) the preCompressed shell variants serve
-> `public, max-age=2592000, immutable` — `ui.ts`'s `setHeaders` `.endsWith('.html')`
-> check misses the `.br`/`.gz` paths, and the inject-based E pin (no negotiation) could
-> not see it. This is a real deploy hazard (the shell gets cached 30d immutable) awaiting
-> a SERVER fix — the probe must NOT be weakened; expect this arm to FAIL until fixed.
+> KNOWN FINDING — RESOLVED (Plan G, `fix(ui)` D-fff): the `/ui shell is
+no-cache` arm FAILed against Plan F's shipped image — on an encoding-negotiated
+> GET (`Accept-Encoding: br`) the preCompressed variants served
+> `public, max-age=2592000, immutable`; `ui.ts`'s `setHeaders` `.endsWith('.html')`
+> check missed the `.br`/`.gz` paths (and the gzip fallback leaked identically — a face
+> the smoke never probed). Plan G re-pinned the predicate (strip the encoding extension
+> before the `.html` check), pinned the class IN-SUITE (`ui.test.ts` U9/U9b), and the
+> G-wave LIVE run measured **23 PASS / 0 FAIL, exit 0** — the probe was NEVER weakened:
+> `scripts/deploy-smoke.mjs` byte-identical since Plan F. Historical evidence: Plan F's
+> Task-6 record and the `d95dab4` gate-line amendment.
 
 ## 2. Container / health / shutdown posture
 
