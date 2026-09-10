@@ -1,30 +1,13 @@
 // the client is LOAD-BEARING (D-kk): smoke through the real app
 import { describe, expect, it } from 'vitest'
 import { createNightshiftClient } from '#root/client/index'
+import { makeInjectFetch } from '#root/testing/inject-fetch'
 import { makeTestApp } from '#root/testing/test-app'
 
+let CURRENT: Awaited<ReturnType<typeof makeTestApp>>
 // inject-backed fetch: zero sockets, the same hook chain (auth middleware rides a real
 // Request, so the client exercises the same 401 path a network consumer would)
-const injectFetch: typeof globalThis.fetch = async (input, init) => {
-  const t = CURRENT
-  const request = new Request(input, init)
-  const url = new URL(request.url)
-  const res = await t.app.inject({
-    method: request.method as 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
-    url: `${url.pathname}${url.search}`,
-    headers: Object.fromEntries(request.headers),
-    ...(request.body === null ? {} : { body: Buffer.from(await request.arrayBuffer()) }),
-  })
-  return new Response(new Uint8Array(res.rawPayload), {
-    status: res.statusCode,
-    headers: Object.fromEntries(
-      Object.entries(res.headers).flatMap(([k, v]) =>
-        v === undefined ? [] : [[k, Array.isArray(v) ? v.join(', ') : String(v)]]
-      )
-    ),
-  })
-}
-let CURRENT: Awaited<ReturnType<typeof makeTestApp>>
+const injectFetch = makeInjectFetch(() => CURRENT.app)
 
 describe('nightshift-client smoke (D-kk)', () => {
   it('creates via typed paths and branches on the problem code — no text parsing (spec §11 preamble)', async () => {
