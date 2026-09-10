@@ -16,14 +16,28 @@
 
 - Branch: `feature/plan-f-docker-deploy-cli` off `main` @ `d8b7f7d` (PR #10 merge commit — **Plan E IS merged, verified 2026-09-10**; ticket #11's branch-after-merge gate SATISFIED). **Push/PR at end-of-night per the Night-shift protocol (ticket #9 lineage); NEVER merge — merges are @tyriis's (binding).**
 - Ticket: tyriis/nightshift#11 (session-handover; scope = the issue body's "Plan F scope" 1–5 + the explicit slice-outs; state remains frozen — SSE, search UI / saved filters / undo, keepalive enforcement, capability scopes, §13 items are NOT touched).
-- Baseline gate (from Plan E's FINAL-GATE RECORD at `40c2bd1`, main = the merge of that chain): **650 tests / 86 files; Stmts 99.49 / Branch 98.38 / Funcs 99.74 / Lines 99.69**; lint / typecheck / build / `ui:build` / `ui:offline-check` clean; `test:e2e` green (stub IdP). Documented-uncovered set (modulo renumbers only): `auth.ts :76`, `mount.ts :51-54` family, `rate-limit.ts :35`, `task-repo.ts :178-191`, `thread-repo.ts :96/132`, `migrations.ts :324` error arm.
+- Baseline gate (from Plan E's FINAL-GATE RECORD at `40c2bd1`, main = the merge of that chain): **650 tests / 86 files; Stmts 99.49 / Branch 98.38 / Funcs 99.78 / Lines 99.69**; lint / typecheck / build / `ui:build` / `ui:offline-check` clean; `test:e2e` green (stub IdP). Documented-uncovered set (modulo renumbers only): `auth.ts :76`, `mount.ts :51-54` family, `rate-limit.ts :35`, `task-repo.ts :178-191`, `thread-repo.ts :96/132`, `migrations.ts :324` error arm.
 - Environment facts (planner-verified 2026-09-10 on this branch): node 24.20.0 / pnpm 10.33.0 via mise; **docker 29.7.2 with a live daemon** (the Task 5 image build CAN run here); no Dockerfile / .dockerignore / `deploy/` exists yet (filesystem-verified); `domain TASK_STATUSES` (`src/domain/task.ts:1-8`) === yaml `TaskStatus` enum (`openapi/openapi.yaml:954-956`) byte-checked; `nightshift-ui` has ZERO runtime deps (`adapters/sveltekit/package.json` — devDependencies only), so `pnpm install --prod` lands exactly the root production tree; `/ping` is public (`auth.ts:22` `PUBLIC_PATHS`); `NS_*` surface = `src/main/config.ts:3-56` (16 vars).
 - Decision letters: Plans A–E exhausted the single-letter and repeated-pair space (`D-a`…`D-l`, `D-m`…`D-z`, `D-aa`…`D-gg`, `D-hh`…`D-oo`, `D-pp`…`D-zz` with **`D-uu` permanently dead** — it dangles uncited in Plan D line 37 and is never reused). **Plan F continues the repeated-pair tradition in triple form: `D-aaa`, `D-bbb`, `D-ccc`, `D-ddd`, `D-eee`.** Grep duty: the triples CONTAIN Plan C's pairs as substrings (`D-aa` ⊂ `D-aaa`) — every ledger citation is whole-token (`\bD-aa\b` matches the C record, never the F one).
 - The CLI handoff chain closes here: D-oo (Plan D defers) → D-yy (Plan E slices to F) → **D-aaa (this plan owns and ships it)**. Restated in the final-gate record + the PR body so the chain shows no break.
 
 ### Pre-dispatch amendment ledger (plan-review + artifact preflight)
 
-EMPTY at plan commit. Per the ticket protocol and Plan E's binding lessons ("treat your own plan as untrusted input"; "policies decay, tools don't"), BEFORE any implementer dispatch: (1) an independent plan-review lane (PASS/FAIL on spec §9/§12/§14 coverage, scope vs ticket #11, rulings; FAIL ⇒ revisions logged here); (2) the **machine artifact-preflight** extracting and compiling EVERY embedded block against the pinned deps. Preflight probes owed (results land here):
+Per the ticket protocol and Plan E's binding lessons ("treat your own plan as untrusted input"; "policies decay, tools don't"), BEFORE any implementer dispatch: (1) an independent plan-review lane (PASS/FAIL on spec §9/§12/§14 coverage, scope vs ticket #11, rulings; FAIL ⇒ revisions logged here); (2) the **machine artifact-preflight** extracting and compiling EVERY embedded block against the pinned deps.
+
+**ROUND 1 — 2026-09-10. Independent review attempt 1: FAIL (B1–B6 + notes); artifact preflight: P1–P10 ALL PASS (zero repo mutation).** All six blockers applied to the blocks as the fixes below; **re-review (attempt 2) is required before implementer dispatch.** The byte-sync protocol still governs shipped-vs-plan divergences.
+
+- [B1] Task 3's `threads` helper re-pinned to the server's `ThreadWithMessages` shape (`ports.ts:288-291`) — `kind` read under `.thread`; the honest-partial arm (`messages[0].body`) unchanged (top-level is correct). Same finding fired independently in preflight (S1).
+- [B2] `deploy-smoke.mjs`: the claim SURVIVES `in_progress` (`update-status.ts` clears it only on in_review/done) — the script now RELEASES before the human cancel (preflight verified the exact claim→move→release→leaseless-cancel=200 arm); preflight S2 fired identically.
+- [B3] Task 6 Step 3 runs the script HOST-side (it byte-compares this checkout's openapi) ⇒ `NS_URL=http://127.0.0.1:3199` (the published mapping); 3123 stays container-internal for the `docker exec` arms.
+- [B4] Task 1 Step 1: `makeInjectFetch(() => CURRENT.app)` — `CURRENT` is the TestApp; the getter must yield the FastifyInstance (TS2345).
+- [B5] Task 1's next-loop `r.data ?? []` (statically uncoverable right-arm, P10 violation) replaced by the documented trust-cast `r.data as unknown[]` — consistent with the claim/report casts.
+- [B6] The never-lower floor corrected to E's real record **99.49 / 98.38 / 99.78 / 99.69** (Funcs was mistyped 99.74 = D's axis value; four places) — a gate that would have green-lit a regression.
+- [n1] commit subjects re-lengthed ≤72 (Tasks 3/7); [n2] `scripts/fts-probe.mjs` added to the File structure; [n3] the runtime-stage ui-manifest COPY kept — harmless by preflight evidence (prod install ships no ui node_modules); [n4] the FTS delete-trigger's honest-RED duty is already carried by Task 6's expectation line; [n5] the dead `?? e.id` events arm dropped.
+- [preflight facts] zod@4.5.4 surface + no-secret-echo CONFIRMED; the Task-1 run.ts block executed standalone (every ladder arm byte-exact, `tsc --noEmit` exit 0 on the assembled blocks — no `as never` anywhere); the P3 spawn mechanism live (exit codes cross the process); `pnpm install --prod --frozen-lockfile` resolves from the four manifests to exactly the eight prod deps; the HEALTHCHECK quoting survives `sh -c` and both arms answer 0/1; `--start-interval=1s` is accepted by the daemon, NOT silently dropped; **better-sqlite3@13 arm: pnpm runs `node-gyp rebuild` while the runtime prefers the tarball-bundled `prebuilds/linux-x64.node` — the toolchain layer is required either way**; openapi-fetch garbage-shape arms match the failFrom design; the claim race/leaseless-move/`stale_lease`-412/`agent_close_forbidden` arms CONFIRMED against the live app (Task 3's pins are server truth).
+- [S3] `AbortSignal.timeout` is an unref'd timer — the timeout arm is vitest-only territory (as written; do not validate with bare-node one-offs). [S4] `docker build` on this box is the LEGACY builder (no buildx) — the Dockerfile is builder-agnostic by construction; the Task 5 build and the final record state the builder used (Task 5 Step 3 carries the duty).
+
+Preflight probes executed (all PASS; outcomes folded into the ledger above):
 
 - **P1** `z.url()` + `z.coerce.number()` + `z.enum(readonly tuple)` exist and behave as written on zod@4.5.4 (compile probe).
 - **P2** `AbortSignal.timeout(ms)` + the `fetch: (input, init) => base(input, { ...init, signal })` wrapper compiles under TS 6.0.3 nodenext and the inject-fetch harness ignores the signal; the 100 ms timeout arm is deterministic.
@@ -40,7 +54,7 @@ EMPTY at plan commit. Per the ticket protocol and Plan E's binding lessons ("tre
 
 - **Error taxonomy ONE map, ZERO new codes:** `src/domain/errors.ts`, `problem.ts` `ADAPTER_ERROR_CODES` and the yaml `Problem.code` enum stay byte-untouched. The CLI's three ladder strings (`transport_error`, `usage_error`, `config_error`) are CLI-stderr-only strings and DO NOT join the taxonomy (no yaml change — that is the "no server contract change" proof). Server codes on CLI stderr are the taxonomy verbatim, never reworded.
 - **ZERO server-contract change:** `openapi/openapi.yaml`, `src/client/schema.d.ts`, the 35-tool MCP snapshot (`mount.test.ts`), `PUBLIC_PATHS`/`AUTH_PRE_SESSION`/`/ui`/`MCP_ROUTES`/drift wildcard-sentinel exact sets, `__Host-` cookie attrs, hook order — byte-untouched. `src/adapters/**`, `src/domain/**`, `src/application/**`, `src/infra/**`, `src/main/**`, `src/index.ts` receive NO edits (F is additive: `src/cli/`, `bin/`, `scripts/`, `deploy/`, `Dockerfile`, `.dockerignore`, `package.json` bin+script lines only, plan doc). If anything seems to require a server change, that is a recorded ruling (amendment + decision letter), not a side effect.
-- **Coverage never lowered:** thresholds unchanged (global ≥85, `src/domain/**` 100×4), `vitest.config.ts` byte-unchanged; every global axis ≥ the Plan E record (99.49 / 98.38 / 99.74 / 99.69). `src/cli/**` lands inside `src/**/*.ts` coverage include — every arm in the Task 1–3 inventories closes by test (no `??`/`?.`/ternary without a covering arm; trust-casts are documented, not asserted away). Test helpers live under `src/testing/**` (coverage-excluded — placement is a coverage decision, not style).
+- **Coverage never lowered:** thresholds unchanged (global ≥85, `src/domain/**` 100×4), `vitest.config.ts` byte-unchanged; every global axis ≥ the Plan E record (99.49 / 98.38 / 99.78 / 99.69). `src/cli/**` lands inside `src/**/*.ts` coverage include — every arm in the Task 1–3 inventories closes by test (no `??`/`?.`/ternary without a covering arm; trust-casts are documented, not asserted away). Test helpers live under `src/testing/**` (coverage-excluded — placement is a coverage decision, not style).
 - **Machine strings are grep-pinned** by their test in the same task (CLI exit ladder + stderr tokens included); never reworded later.
 - Secrets (D-ff): `NS_TOKEN`/`NS_LEASE_TOKEN`/`NS_SESSION_KEY`/`NS_OIDC_CLIENT_SECRET`/`NS_BOOTSTRAP_TOKEN` env-only, never argv, never logged, never echoed in errors (a pin proves stderr never echoes them); `.dockerignore` excludes `.env*` (secrets NEVER bake into an image layer); the smoke script reads secrets from env only.
 - New runtime deps: NONE (D14's four stay four). DevDeps: none. `pnpm-lock.yaml` gains ZERO churn beyond the existing lockfile (package.json bin/script edits touch no resolutions).
@@ -93,7 +107,7 @@ The code blocks below are the planned text. If shipped code lands byte-different
 ## File structure (created / modified / why)
 
 **Create (production):** `src/cli/run.ts` (the D-aaa CLI core — DI-pure, exit-code-returning), `bin/nightshift.mjs` (the D-bbb shim), `Dockerfile` (D-ddd), `.dockerignore`.
-**Create (deploy-side, gate-invisible by precedent):** `scripts/deploy-smoke.mjs` (D-eee automated probes), `deploy/README.md`, `deploy/DEPLOY-SMOKE.md`.
+**Create (deploy-side, gate-invisible by precedent):** `scripts/deploy-smoke.mjs` (D-eee automated probes), `scripts/fts-probe.mjs` (the FTS5 declared-not-pinned arms, copy-only), `deploy/README.md`, `deploy/DEPLOY-SMOKE.md`.
 **Create (test-side):** `src/cli/cli.test.ts` (all CLI arms, colocated), `src/cli/shim.test.ts` (Task 4 spawn smoke + shape-pin), `src/testing/inject-fetch.ts` (the client.test.ts injectFetch extracted — reused by the CLI tests; behavior byte-identical).
 **Modify:** `package.json` (ONLY: `"bin"` map + the `cli` dev script — no dep changes, lockfile untouched), `src/client/client.test.ts` (import the extracted `makeInjectFetch` instead of its inline copy — test-side DRY, byte-behavior unchanged), this plan doc (amendments + final-gate record).
 **Untouched (pinned):** `vitest.config.ts`, `lefthook.yaml`, `.github/workflows/ci.yaml`, `problem.ts`, `domain/errors.ts`, `src/domain/**` (TASK_STATUSES is IMPORTED, never edited), the whole `src/adapters/**`+`src/application/**`+`src/infra/**`+`src/main/**` tree + `src/index.ts` (F adds zero server code — the zero-churn proof in Task 8 lists the empty diff), `openapi/openapi.yaml`, `src/client/schema.d.ts`, `mount.test.ts`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, the spec, all Plan A–E records.
@@ -140,7 +154,7 @@ export const makeInjectFetch = (getApp: () => FastifyInstance): typeof globalThi
 }
 ```
 
-In `src/client/client.test.ts`: delete the inline `injectFetch` const and replace it with `const injectFetch = makeInjectFetch(() => CURRENT)` (module level, `CURRENT` stays the existing `let`) plus the import `import { makeInjectFetch } from '#root/testing/inject-fetch'`. Run `pnpm test src/client/client.test.ts` → GREEN immediately — this is a test-only extraction, **no RED phase to claim and none is claimed**.
+In `src/client/client.test.ts`: delete the inline `injectFetch` const and replace it with `const injectFetch = makeInjectFetch(() => CURRENT.app)` (module level, `CURRENT` stays the existing `let`; the accessor is `.app` — B4 fix: `CURRENT` is the TestApp, the getter must yield the FastifyInstance) plus the import `import { makeInjectFetch } from '#root/testing/inject-fetch'`. Run `pnpm test src/client/client.test.ts` → GREEN immediately — this is a test-only extraction, **no RED phase to claim and none is claimed**.
 
 - [ ] **Step 2: Write the failing tests (`src/cli/cli.test.ts`)**
 
@@ -449,8 +463,10 @@ export const runCli = async (io: CliIo): Promise<number> => {
     })
     const f = failFrom(io, r)
     if (f !== null) return f
-    // server DTO pass-through as JSONL (D-aaa) — the CLI never reshapes the contract
-    for (const task of r.data ?? []) io.stdout(JSON.stringify(task))
+    // server DTO pass-through as JSONL (D-aaa) — the CLI never reshapes the contract.
+    // Trust-cast (B5/P10): failFrom PROVED data present — a `?? []` right-arm would be
+    // statically uncoverable and the never-lower bar forbids it.
+    for (const task of r.data as unknown[]) io.stdout(JSON.stringify(task))
     return 0
   } catch (err) {
     io.stderr('nightshift: transport_error')
@@ -581,13 +597,17 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(cli): claim with lease st
 
 ```ts
 // appended to src/cli/cli.test.ts — the report arms incl. the honest partial-state pin
-const threads = async (id: string): Promise<{ kind: string; messages: { body: string }[] }[]> => {
+// B1/S1 fix: the server serves ThreadWithMessages = { thread: {...}, messages: [...] }
+// (ports.ts:288-291) — `kind` lives UNDER thread, `messages` is top-level.
+const threads = async (
+  id: string
+): Promise<{ thread: { kind: string }; messages: { body: string }[] }[]> => {
   const res = await CURRENT.app.inject({
     method: 'GET',
     url: `/tasks/${id}/threads`,
     headers: { authorization: `Bearer ${CURRENT.adminToken}` },
   })
-  return JSON.parse(res.payload) as { kind: string; messages: { body: string }[] }[]
+  return JSON.parse(res.payload) as { thread: { kind: string }; messages: { body: string }[] }[]
 }
 const claimAs = async (id: string, token: string): Promise<string> => {
   const r = await run(['claim', id], { NS_TOKEN: token })
@@ -605,7 +625,7 @@ describe('cli report (D-aaa)', () => {
     expect(typeof parsed.message_id).toBe('string')
     const list = await threads(t.id)
     expect(list[0]).toMatchObject({
-      kind: 'note',
+      thread: { kind: 'note' },
       messages: [{ body: 'progress: wired the door' }],
     })
   })
@@ -757,7 +777,7 @@ return 0
 
 ```bash
 git add src/cli/run.ts src/cli/cli.test.ts
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(cli): report — note thread + lease-gated status, honest partial (D-aaa)"
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(cli): report — note thread + lease-gated status (D-aaa)"
 ```
 
 ## Task 4: The bin shim + package wiring (D-bbb) — spawned, not assumed
@@ -935,7 +955,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --start-interval=1s --
 ENTRYPOINT ["node", "dist/index.js"]
 ```
 
-- [ ] **Step 3: Build the image** — `docker build -t nightshift:planf .` → exit 0; the log ends with the offline gate's own line (`ui build offline-safe; hosts seen: http://www.w3.org https://svelte.dev`) — record it VERBATIM (it is the gate running in the image, not in the repo). Config-plane pin: `docker image inspect nightshift:planf --format '{{json .Config}}'` → record the pins: `User":"node"`, `Entrypoint":["node","dist/index.js"]`, Env contains `NS_DB_PATH=/data/nightshift.db` + `NS_DATA_DIR=/data`, `Healthcheck` present, `ExposedPorts` 3123/tcp.
+- [ ] **Step 3: Build the image** — `docker build -t nightshift:planf .` → exit 0; the log ends with the offline gate's own line (`ui build offline-safe; hosts seen: http://www.w3.org https://svelte.dev`) — record it VERBATIM (it is the gate running in the image, not in the repo). Record the BUILDER FORM used (S4: this box runs docker 29.7.2's LEGACY builder — no buildx; the Dockerfile is builder-agnostic by construction, no syntax directive, no cache mounts). Config-plane pin: `docker image inspect nightshift:planf --format '{{json .Config}}'` → record the pins: `User":"node"`, `Entrypoint":["node","dist/index.js"]`, Env contains `NS_DB_PATH=/data/nightshift.db` + `NS_DATA_DIR=/data`, `Healthcheck` present, `ExposedPorts` 3123/tcp.
 
 - [ ] **Step 4: Boot + probe the container** (the D-ccc/D-ddd evidence — every arm machine-checked, no ad-hoc curls):
 
@@ -1188,7 +1208,7 @@ try {
     back.res.status === 200 && back.text.includes(`deploy-smoke ${stamp}`)
   )
   const events = await call('/events?cursor=0&limit=500')
-  const cursors = Array.isArray(events.json) ? events.json.map((e) => e.cursor ?? e.id) : []
+  const cursors = Array.isArray(events.json) ? events.json.map((e) => e.cursor) : []
   check(
     '/events answers the ascending cursor feed',
     events.res.status === 200 &&
@@ -1196,8 +1216,16 @@ try {
       cursors.every((v, i) => i === 0 || v > cursors[i - 1]),
     `rows ${cursors.length}`
   )
-  // cleanup: the HUMAN closes (agents may not); the token goes away; the task + note
-  // stay as the honest audit-visible residue the checklist names
+  // cleanup: in_progress does NOT clear the claim (update-status.ts clears it only on
+  // in_review/done — B2/S2) — the AGENT releases first (the arm P9 verified
+  // claim→move→release→human-cancel = 200), then the HUMAN closes (agents may not);
+  // the token goes away; the task + note stay as the honest audit-visible residue
+  const released2 = await agentCall(`/tasks/${id}/release`, { method: 'POST' })
+  check(
+    'agent releases the claim for the human close',
+    released2.res.status === 200,
+    released2.text.slice(0, 160)
+  )
   const canceled = await call(
     `/tasks/${id}/status`,
     json('PATCH', { status: 'canceled', reason: 'deploy smoke cleanup — the human close path' })
@@ -1268,14 +1296,14 @@ process.exit(survives === 0 ? 0 : 1)
 
 ```bash
 docker start ns-f
-NS_URL=http://127.0.0.1:3123 NS_TOKEN="planf-local-smoke-token-0123456789abcdef" node scripts/deploy-smoke.mjs
+NS_URL=http://127.0.0.1:3199 NS_TOKEN="planf-local-smoke-token-0123456789abcdef" node scripts/deploy-smoke.mjs
 docker stop -t 12 ns-f
 docker cp ns-f:/data/nightshift.db /tmp/ns-fts-copy.db
 for s in -wal -shm; do docker cp "ns-f:/data/nightshift.db$s" "/tmp/ns-fts-copy.db$s" 2>/dev/null || true; done
 node scripts/fts-probe.mjs /tmp/ns-fts-copy.db && rm -f /tmp/ns-fts-copy.db*
 ```
 
-Expected: `deploy-smoke: ALL PASS` exit 0; `PASS fts data-carry …` + `PASS fts delete-trigger …` exit 0. Any FAIL ⇒ fix the script (or record the honest server finding) before committing — amendments to this plan block per the byte-sync protocol. (The container's NS_PORT default is 3123 INSIDE the container; `docker start` + env at exec-time is what this step uses — if the operator prefers the host-mapped port, `NS_URL=http://127.0.0.1:3199` runs the same script from the host — both are recorded.)
+Expected: `deploy-smoke: ALL PASS` exit 0; `PASS fts data-carry …` + `PASS fts delete-trigger …` exit 0. Any FAIL ⇒ fix the script (or record the honest server finding) before committing — amendments to this plan block per the byte-sync protocol. (B3/S1 fix: the script runs HOST-side — it byte-compares against this checkout's `../openapi/openapi.yaml` via `import.meta.url` — so it hits the published mapping `127.0.0.1:3199`; container-internal `3123` is valid only INSIDE `docker exec`, which is what Task 5's in-container CLI arm uses. Both arms are recorded.)
 
 - [ ] **Step 4: Write `deploy/DEPLOY-SMOKE.md`** — the numbered operator checklist (0 Inputs · 1 automated probes · 2 container/health/shutdown posture · 3 the CLI live legs · 4 REAL Pocket ID incl. the `INTERNAL_APP_URL` caveat + one-shot browser login + nonce echo verification · 5 first-login allow-list round-trip · 6 the FTS5 copy-probe commands · 7 the §14 live walkthrough · 8 residue ledger + recording duty). Full text ships in the commit; content per D-eee.
 
@@ -1298,7 +1326,7 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(deploy): deploy-smoke + f
 
 ```bash
 git add deploy/README.md
-LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "docs(deploy): README with the full NS_* surface + Pocket ID caveats (D-eee)"
+LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "docs(deploy): README with the NS_* surface + Pocket ID caveats (D-eee)"
 ```
 
 ## Task 8: Final whole-plan gate + record + PR (Night-shift endgame)
@@ -1321,7 +1349,7 @@ git diff main --stat -- vitest.config.ts lefthook.yaml .github/workflows/ci.yaml
 
 → EVERY line empty: F ships ZERO server-code change (the D-aaa proof), the taxonomy/contract/MCP surfaces byte-frozen, all prior plan records untouched. `git diff main --stat -- package.json` shows ONLY the `bin` + `cli` lines (+ lockfile untouched); the whole F footprint is additive: `src/cli/`, `src/testing/inject-fetch.ts`, `bin/`, `scripts/`, `deploy/`, `Dockerfile`, `.dockerignore`, this plan doc.
 
-- [ ] **Step 2: The gate:** `pnpm test:coverage && pnpm lint && pnpm typecheck && pnpm build && pnpm ui:build && pnpm ui:offline-check && pnpm test:e2e` — every global axis ≥ the Plan E record (**99.49 / 98.38 / 99.74 / 99.69**, never-lower HELD — the `src/cli/**` arms closed by test, P10); `test:e2e` probe-first per D-xx (browser may still be installed from Plan E — honest posture either way); THEN the F-native gates re-run for the record: `docker build` (fresh, no cache — the offline gate line quoted verbatim) → boot → `node scripts/deploy-smoke.mjs` → `ALL PASS` + the graceful `docker stop` exit-0 measurement. Honest counts recorded (650 → N tests / 86 → N files).
+- [ ] **Step 2: The gate:** `pnpm test:coverage && pnpm lint && pnpm typecheck && pnpm build && pnpm ui:build && pnpm ui:offline-check && pnpm test:e2e` — every global axis ≥ the Plan E record (**99.49 / 98.38 / 99.78 / 99.69**, never-lower HELD — the `src/cli/**` arms closed by test, P10; B6 fix: E's Funcs axis is 99.78); `test:e2e` probe-first per D-xx (browser may still be installed from Plan E — honest posture either way); THEN the F-native gates re-run for the record: `docker build` (fresh, no cache — the offline gate line quoted verbatim) → boot → `node scripts/deploy-smoke.mjs` → `ALL PASS` + the graceful `docker stop` exit-0 measurement. Honest counts recorded (650 → N tests / 86 → N files).
 
 - [ ] **Step 3: Append the FINAL-GATE RECORD** to this header (Plan E's format): figures vs baseline; the zero-churn proof quoted; the image evidence lines (offline-gate output, config pins, healthy + exit-0 stop, CLI-in-image); the deploy-smoke + fts-probe local-run outputs (what RAN here vs what the operator runs at home — D-eee honesty, D-xx posture bar); the P1–P10 preflight outcomes; the CLI chain restatement (D-oo→D-yy→D-aaa CLOSED — the CLI shipped); the commit chain task-by-task; the QUEUED (HUMAN) ledger (Pocket ID real credentials + verify-once, browser/CI e2e, CSP hardening, session rotation, removeAdditional flip, npm publish + extensionless bin, home-ops HelmRelease + digest pin); the slice-out restatement (state frozen — SSE/search/undo/keepalive/capability scopes untouched).
 
@@ -1340,4 +1368,4 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "docs(plan): plan F final gate 
 
 Plan complete. Per the ticket's Night-shift protocol the human sign-off gate is WAIVED and replaced by: (1) this plan's **independent plan-review lane** — PASS on spec §9/§12/§14 coverage, scope vs ticket #11 items 1–5, the five rulings, and the inherited-agreements restatement BEFORE any implementer dispatch (FAIL ⇒ revision as a logged amendment here), and (2) the **machine artifact-preflight** — probes P1–P10 above run against the real pinned environment BEFORE dispatch (every embedded block is treated as untrusted input; the silent-ignore class — a Dockerfile flag that quietly no-ops, a `z.url()` that does not exist on 4.5.4, a spawn condition that never resolves `#root` — is exactly E's failure class; a `--start-interval` the daemon rejects is exactly Plan E's `customFetch` lesson re-run). Results land in the pre-dispatch ledger above; revisions ship as amendments with lineage.
 
-Then execute with subagent-driven-development — fresh implementer per task, TDD with honest REDs, spec-compliance review THEN code-quality review per task, fix rounds re-verified by the same reviewer, serial execution on shared wiring, byte-sync amendments with lineage, coverage never lowered (99.49 / 98.38 / 99.74 / 99.69 floor, `src/domain/**` 100×4, `vitest.config.ts` byte-untouched), **raw-git-verify every commit before claiming it**. QUEUED (HUMAN) items never block; stop conditions: baseline not green at the recorded numbers, an unbridgeable spec conflict, or the docker daemon absent mid-Task-5 (record, stop honestly — the image is F's deliverable, not an optional). NEVER merge.
+Then execute with subagent-driven-development — fresh implementer per task, TDD with honest REDs, spec-compliance review THEN code-quality review per task, fix rounds re-verified by the same reviewer, serial execution on shared wiring, byte-sync amendments with lineage, coverage never lowered (99.49 / 98.38 / 99.78 / 99.69 floor, `src/domain/**` 100×4, `vitest.config.ts` byte-untouched), **raw-git-verify every commit before claiming it**. QUEUED (HUMAN) items never block; stop conditions: baseline not green at the recorded numbers, an unbridgeable spec conflict, or the docker daemon absent mid-Task-5 (record, stop honestly — the image is F's deliverable, not an optional). NEVER merge.
