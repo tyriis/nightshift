@@ -1368,6 +1368,83 @@ git add scripts/deploy-smoke.mjs scripts/fts-probe.mjs deploy/DEPLOY-SMOKE.md
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(deploy): deploy-smoke + fts-probe arms + the §14 checklist (D-eee)"
 ```
 
+> **Amendment (Task 6, byte-sync — the fts-probe execution corrections; the Step-2 block above is sync = shipped form):** `scripts/deploy-smoke.mjs` shipped BYTE-VERBATIM to its Step-1 block (uniform-dedent diff empty; prettier-clean before and after — the pre-commit hook never reflowed it: zero divergence, none claimed). `scripts/fts-probe.mjs` met the machine twice and the PLAN text lost both times (the "preflight correction" class); the assertion and every PASS/FAIL machine string are byte-unchanged — the probe was made EXECUTABLE, never weakened.
+>
+> 1. **Arm 1 — the MATCH query text.** The planned `match 'deploy-smoke'` crashed at execution with `SqliteError: no such column: smoke`: in FTS5's QUERY GRAMMAR a bare hyphen is column-exclusion syntax, not a term (the columns are `title`/`description`/`acceptance_criteria` — `migrations.ts:238`), so the planned string never consults the index on ANY database. Shipped (phrase-wrapped — same tokens under `unicode61`, same predicate, same count assertion; comment carries the lineage):
+>    ```text
+>    // arm 1 — data-carry: the deploy-smoke task (created by scripts/deploy-smoke.mjs)
+>    // must be MATCH-able through the fts index exactly as the app writes it
+>    // the double-quote PHRASE wrapping is load-bearing: bare deploy-smoke is FTS5
+>    // column-exclusion grammar (the hyphen), not a term — the plan text threw
+>    // "no such column: smoke" at execution (Task 6 amendment; same tokens, same test)
+>    const matched = count(`select count(*) as n from task_fts where task_fts match '"deploy-smoke"'`)
+>    ```
+>    Proof-of-no-weakening: the phrase form counted `1` on the same volume copy the raw form crashed on — the data-carry property the plan intended is now actually measured (Record below, `PASS fts data-carry …`).
+> 2. **Arm 2 — the FK-enforced copy.** The planned single `delete from tasks where id = ?` threw `SqliteError: FOREIGN KEY constraint failed`: the smoke leaves the task's children (note thread + attachment) as residue BY DESIGN and they FK-reference the task — the plan's own procedure (run deploy-smoke, THEN probe) makes this arm unschedulable as written. The header's premise was also false: better-sqlite3 enforces FKs on a bare connection (measured `foreign_keys: 1`; the plan comment said "off (bare default)"). Shipped: the task's own child rows are cleared on the throwaway COPY first (setup), then the plan's tasks delete + pruning assertion run UNTOUCHED; the header comment now states the measured FK truth:
+>
+>    ```text
+>    // copy). Uses the repo's/image's better-sqlite3; FK enforcement is ON on a bare
+>    // connection (measured at Task 6 execution — the plan's "off (bare default)" claim is
+>    // wrong; amendment) — this is a TRIGGER + index check, stated honestly, so the
+>    // smoke task's FK children (their own note + attachment) are cleared on the COPY first.
+>    ```
+>
+>    ```text
+>    // arm 2 — the delete trigger: on the COPY, removing the tasks row must prune task_fts.
+>    // The three child-row deletes are copy-side SETUP for the FK-enforced copy (deploy-smoke
+>    // INTENTIONALLY leaves the note + attachment children); the arm under test stays the
+>    // tasks delete + the pruning assertion below.
+>    const before = count('select count(*) as n from task_fts')
+>    db.prepare(
+>      'delete from messages where thread_id in (select id from threads where task_id = ?)'
+>    ).run(smoke.id)
+>    db.prepare('delete from attachments where task_id = ?').run(smoke.id)
+>    db.prepare('delete from threads where task_id = ?').run(smoke.id)
+>    db.prepare('delete from tasks where id = ?').run(smoke.id)
+>    ```
+>
+>    Trigger verdict, established independently BEFORE shipping (throwaway copy, transaction: clear children → delete tasks row): `task_fts` `1 → 0`, `smoke rowid survives: 0` — **`task_fts_ad` PRUNES**; the declared-not-pinned arm is now deploy-PROVEN, and the shipped probe re-measures it every run (Record below). `deploy/DEPLOY-SMOKE.md` is per Step-4/D-eee (no plan block to sync); step 6 carries the shipped copy-probe commands, step 1 carries the known-RED note for the server finding.
+
+> **Record (Task 6, execution evidence — gate is EXECUTION):** The Step-3 sequence ran HOST-side against Task 5's inherited twin (B3: published mapping `127.0.0.1:3199`). `docker start ns-f` → health `healthy` at i=3. Then, env-only (`NS_URL=http://127.0.0.1:3199 NS_TOKEN="planf-local-smoke-token-0123456789abcdef"` — the plan's documented local-smoke literal, never argv, never echoed by any arm):
+>
+> - **`node scripts/deploy-smoke.mjs` — EVERY probe line, verbatim, exit 1:**
+>   ```text
+>   PASS /ping answers the pong
+>   PASS served /openapi.yaml byte-matches the repo contract
+>   PASS /ui/ answers the html shell
+>   FAIL /ui shell is no-cache — public, max-age=2592000, immutable
+>   PASS hashed asset /ui/_app/immutable/entry/start.Cr60qnhU.… max-age cached
+>   PASS SPA deep-link answers the shell 200 html
+>   PASS GET /tasks without a bearer is 401
+>   PASS POST /mcp without a bearer is 401 (D-ww)
+>   PASS admin creates the smoke agent
+>   PASS admin issues the smoke token (shown once)
+>   PASS the agent on /admin/actors is 403 (admin is human-only)
+>   PASS agent creates a ready task
+>   PASS agent claims (lease issued)
+>   PASS release answers with the task
+>   PASS re-claim after release works
+>   PASS lease-gated status → in_progress
+>   PASS agent posts a thread note
+>   PASS attachment uploads to the volume (octet-stream)
+>   PASS attachment content round-trips
+>   PASS /events answers the ascending cursor feed
+>   PASS agent releases the claim for the human close
+>   PASS human(admin) cancels the smoke task (the §14-6 close path)
+>   PASS smoke token revoked
+>   deploy-smoke: 1 FAIL
+>   ```
+>   **22/23 PASS; exit code 1. The one FAIL is a SERVER finding, not a script or transcription defect** (the script is byte-verbatim; B2/B3 arms all green). Measured characterization: `GET /ui/` WITHOUT encoding negotiation answers `cache-control: no-cache` (the arm E's inject-based U1 pin could see — inject negotiates nothing); `GET /ui/` (and `/ui/index.html`) WITH `Accept-Encoding: br` — what browsers and node fetch send — serves the preCompressed variant (`content-encoding: br`) as `public, max-age=2592000, immutable`: `ui.ts`'s `setHeaders` `.endsWith('.html')` check misses the `.br`/`.gz` paths. Real deploy hazard (shell cached 30d immutable), honest RED kept, probe NOT weakened; production behavior is NOT Task 6's to change (`src/**` byte-frozen in F) — carried as the checklist's known-RED note and a FINAL-GATE duty for Task 8.
+> - **Graceful stop re-check:** `docker stop -t 12 ns-f` → command exit **0**; `docker inspect -f '{{.State.ExitCode}}' ns-f` → **`0`** (WAL checkpoints on the SIGTERM drain — the measurement, not the claim).
+> - **FTS5 arms, copy-only (shipped amended form, per the Amendment above):** `docker cp ns-f:/data/nightshift.db /tmp/ns-fts-copy.db` + the `-wal`/`-shm` loop (`|| true`), then `node scripts/fts-probe.mjs /tmp/ns-fts-copy.db` → both planned lines, exit **0**:
+>   ```text
+>   PASS fts data-carry — 1 MATCH 'deploy-smoke' row(s), task t_bz4m5jhdlm7kitfu
+>   PASS fts delete-trigger — rowid 1 pruned (1 → 0, copy only)
+>   ```
+>   Cleanup: `rm -f /tmp/ns-fts-copy.db*` (glob empty afterwards; the diagnostic copy `/tmp/ns-fts-exp.db*` was removed the same way).
+> - **Residue, as designed and audit-visible:** ONE smoke lifecycle on the volume — agent actor `deploy-smoke-<stamp>` (token revoked, 204), the CANCELED task `deploy-smoke <stamp>` (`t_bz4m5jhdlm7kitfu`) with its note + `smoke.txt` attachment, and the audit spine; the probe deleted the task row ONLY inside the throwaway copy. Recording duty (date/image-tag/steps-run in the PR thread) ships as checklist step 8.
+> - **Left intact:** `ns-f` STOPPED (ExitCode 0), volume `nightshift-smoke` untouched. Zero edits to `src/**`/Dockerfile/package.json/openapi/lockfile; the three shipped files are `scripts/deploy-smoke.mjs` (verbatim), `scripts/fts-probe.mjs` (amended, sync above), `deploy/DEPLOY-SMOKE.md`. Zero stop conditions tripped.
+
 ## Task 7: `deploy/README.md` — the full NS\_\* surface and the Pocket ID caveats
 
 **Files:**
