@@ -258,7 +258,7 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** @description liveness record only; keepalive enforcement is deferred (spec §12) */
+    /** @description liveness record for the keepalive lease; silent leases expire via the server-side sweeper (Plan G, spec §12) */
     post: operations['heartbeatTask']
     delete?: never
     options?: never
