@@ -54,30 +54,32 @@ keeps it env-only.
 
 ## The environment — every `NS_*` the server reads
 
-Transcribed from `src/main/config.ts:5-34` (schema), bounds verbatim. The image
+Transcribed from `src/main/config.ts:5-40` (schema), bounds verbatim. The image
 sets `NS_DB_PATH=/data/nightshift.db` and `NS_DATA_DIR=/data` as `ENV`
 (`Dockerfile:47-48`); repo defaults apply when running from source.
 
-| Variable                    | Default                                          | Rule (config.ts)                                                                                                                                       |
-| --------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NS_PORT`                   | `3123`                                           | int, `1024`–`65535`                                                                                                                                    |
-| `NS_DB_PATH`                | `./nightshift.db` (image: `/data/nightshift.db`) | non-empty string                                                                                                                                       |
-| `NS_BOOTSTRAP_TOKEN`        | unset (optional)                                 | ≥32 chars; first-boot admin + token — **env-as-truth per boot**, see Volumes                                                                           |
-| `NS_DATA_DIR`               | `./data` (image: `/data`)                        | non-empty string; uploads live here                                                                                                                    |
-| `NS_MAX_UPLOAD_BYTES`       | `20971520`                                       | int, ≥`1024`                                                                                                                                           |
-| `NS_RATE_LIMIT_PER_MIN`     | `120`                                            | int, ≥`0`; **`0` = limiter off** (`rate-limit.ts:15`)                                                                                                  |
-| `NS_WEBHOOK_INTERVAL_MS`    | `1000`                                           | int, ≥`0`; **`0` disables the delivery loop** (`config.ts:65`, `index.ts:27`)                                                                          |
-| `NS_WEBHOOK_TIMEOUT_MS`     | `5000`                                           | int, ≥`100`                                                                                                                                            |
-| `NS_WEBHOOK_MAX_BACKOFF_MS` | `300000`                                         | int, ≥`1000`                                                                                                                                           |
-| `NS_OIDC_ISSUER`            | unset (optional)                                 | non-empty; **trailing `/` stripped at load**                                                                                                           |
-| `NS_OIDC_CLIENT_ID`         | unset (optional)                                 | non-empty                                                                                                                                              |
-| `NS_OIDC_CLIENT_SECRET`     | unset (optional)                                 | ≥8 chars; env-only; sent in the token-endpoint **BODY** only (`client_secret_post`), never the URL, never logged (D-ff); absent ⇒ public client + PKCE |
-| `NS_OIDC_SCOPE`             | `openid profile email`                           | non-empty                                                                                                                                              |
-| `NS_PUBLIC_URL`             | unset (optional)                                 | non-empty; **trailing `/` stripped at load**; REQUIRED with OIDC                                                                                       |
-| `NS_SESSION_KEY`            | unset (optional)                                 | ≥32 chars; REQUIRED with OIDC; env-only                                                                                                                |
-| `NS_SESSION_TTL_S`          | `28800`                                          | int, `60`–`2592000` (8 h absolute, no idle refresh)                                                                                                    |
+| Variable                    | Default                                          | Rule (config.ts)                                                                                                                                                                                                        |
+| --------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NS_PORT`                   | `3123`                                           | int, `1024`–`65535`                                                                                                                                                                                                     |
+| `NS_DB_PATH`                | `./nightshift.db` (image: `/data/nightshift.db`) | non-empty string                                                                                                                                                                                                        |
+| `NS_BOOTSTRAP_TOKEN`        | unset (optional)                                 | ≥32 chars; first-boot admin + token — **env-as-truth per boot**, see Volumes                                                                                                                                            |
+| `NS_DATA_DIR`               | `./data` (image: `/data`)                        | non-empty string; uploads live here                                                                                                                                                                                     |
+| `NS_MAX_UPLOAD_BYTES`       | `20971520`                                       | int, ≥`1024`                                                                                                                                                                                                            |
+| `NS_RATE_LIMIT_PER_MIN`     | `120`                                            | int, ≥`0`; **`0` = limiter off** (`rate-limit.ts:15`)                                                                                                                                                                   |
+| `NS_WEBHOOK_INTERVAL_MS`    | `1000`                                           | int, ≥`0`; **`0` disables the delivery loop** (`config.ts:97`, `index.ts:27`)                                                                                                                                           |
+| `NS_WEBHOOK_TIMEOUT_MS`     | `5000`                                           | int, ≥`100`                                                                                                                                                                                                             |
+| `NS_WEBHOOK_MAX_BACKOFF_MS` | `300000`                                         | int, ≥`1000`                                                                                                                                                                                                            |
+| `NS_OIDC_ISSUER`            | unset (optional)                                 | non-empty; **trailing `/` stripped at load**                                                                                                                                                                            |
+| `NS_OIDC_CLIENT_ID`         | unset (optional)                                 | non-empty                                                                                                                                                                                                               |
+| `NS_OIDC_CLIENT_SECRET`     | unset (optional)                                 | ≥8 chars; env-only; sent in the token-endpoint **BODY** only (`client_secret_post`), never the URL, never logged (D-ff); absent ⇒ public client + PKCE                                                                  |
+| `NS_OIDC_SCOPE`             | `openid profile email`                           | non-empty                                                                                                                                                                                                               |
+| `NS_PUBLIC_URL`             | unset (optional)                                 | non-empty; **trailing `/` stripped at load**; REQUIRED with OIDC                                                                                                                                                        |
+| `NS_SESSION_KEY`            | unset (optional)                                 | ≥32 chars; REQUIRED with OIDC; env-only                                                                                                                                                                                 |
+| `NS_SESSION_TTL_S`          | `28800`                                          | int, `60`–`2592000` (8 h absolute, no idle refresh)                                                                                                                                                                     |
+| `NS_KEEPALIVE_INTERVAL_MS`  | `0`                                              | int, ≥`0`; **`0` = sweeper never starts (dormant default, D-ggg)**; the sweep tick when enabled                                                                                                                         |
+| `NS_KEEPALIVE_TIMEOUT_S`    | `0`                                              | int, ≥`0`; **`0` = claims never expire**; silence budget before a silent claim reverts to `todo`; with the interval it forms an all-or-nothing pair — half-open fails the boot, budget ≥ tick (`config.ts` superRefine) |
 
-**Fail-closed matrix (D-qq, `config.ts:39-56`):** once OIDC is configured —
+**Fail-closed matrix (D-qq, `config.ts:45-61`):** once OIDC is configured —
 `NS_OIDC_ISSUER` **AND** `NS_OIDC_CLIENT_ID` set — then `NS_SESSION_KEY` and
 `NS_PUBLIC_URL` are **REQUIRED**; a half-configured login surface fails the
 boot with the pinned `invalid env: …` throw (exit 1). No issuer/client-id ⇒
@@ -135,6 +137,23 @@ nonce does not byte-match) — tick the box in `DEPLOY-SMOKE.md` §4.
 Reissue `NS_SESSION_KEY` ⇒ every existing cookie fails signature verification
 by the `NS_SESSION_TTL_S` outer bound at the latest; restart alone does NOT
 invalidate sessions (the `sessions` table survives — stated).
+
+## Keepalive enforcement (Plan G)
+
+**Dormant by default** (`0`/`0` — D-ggg). To ENABLE, set BOTH (half-open fails
+the boot, exit 1): e.g. `NS_KEEPALIVE_INTERVAL_MS=10000 NS_KEEPALIVE_TIMEOUT_S=300`.
+A claimed task whose last liveness (heartbeat — or the claim itself, which counts
+as the first) predates the budget reverts to `todo` at the next tick: claim
+cleared, generation bumped, audit gains action `lease_expired` with reason
+`lease expired` (spec §6.7's pre-named reason — it rides `GET /audit` and the
+event feed). Any LATER write with the old lease answers `412 stale_lease` — the
+zombie fence, zero new error surface. Holders stay alive by heartbeating inside
+the budget (`nightshift heartbeat`, or MCP `post_update` which already rides it).
+
+Effective budget is TICK-QUANTIZED: expiry is checked only on sweep
+ticks, so detection can lag the configured budget by up to one interval
+(worst case budget == interval means up to a full interval late — quality-lane
+advisory off ed74a60, sanctioned here into the operator text).
 
 ## Volumes & WAL
 

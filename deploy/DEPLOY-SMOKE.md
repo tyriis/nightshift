@@ -71,6 +71,11 @@ host form: `NS_URL=… NS_TOKEN=… node bin/nightshift.mjs …` (built `dist/`)
 - [ ] `… next` → exit 0, one compact JSON line per ready task (empty output + 0 when none).
 - [ ] `… claim <task-id>` → exit 0 with `{task_id, lease_token, generation}` — the lease
       rides STDOUT (the agent's own pipe), never argv (D-ff).
+- [ ] `NS_LEASE_TOKEN=<lease> … heartbeat <task-id>` → exit 0 with the server Task
+      DTO (`last_heartbeat_at` fresh). Absent lease ⇒ exit 2, nothing sent. A dead
+      lease ⇒ exit 3, stderr line 1 `nightshift: stale_lease`. With enforcement
+      enabled (both `NS_KEEPALIVE_*` set), a SILENT claim reverts to `todo` past the
+      budget — audit action `lease_expired` — and the old lease then fences exit 3.
 - [ ] `… report <task-id> --message "progress: wired the door"` → exit 0 with
       `{task_id, message_id}` (a `note` thread; `kind: question` is deliberately NOT
       exposed by the CLI — humans decide).
