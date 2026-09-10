@@ -1,3 +1,5 @@
+packages:
+  - adapters/sveltekit
 onlyBuiltDependencies:
   - esbuild
   - better-sqlite3

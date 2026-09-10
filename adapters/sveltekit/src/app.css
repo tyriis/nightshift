@@ -1,0 +1,105 @@
+/* D-vv: system-font stack, no external fonts (offline rule). Structure primitives
+   only — Task 9's e2e pins structure, not pixels. */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  line-height: 1.4;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #d4d4d8;
+}
+
+main {
+  padding: 1rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0.5rem 0;
+}
+
+.chip {
+  border: 1px solid #d4d4d8;
+  border-radius: 999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.column {
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  padding: 0.5rem;
+  min-height: 5rem;
+}
+
+.card {
+  display: block;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  padding: 0.375rem 0.5rem;
+  margin: 0.25rem 0;
+}
+
+.swimlane {
+  border-top: 1px dashed #d4d4d8;
+  padding: 0.5rem 0;
+}
+
+.rollup {
+  color: #52525b;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  border-bottom: 1px solid #d4d4d8;
+}
+
+.tab {
+  border: 1px solid #d4d4d8;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 0.25rem 0.625rem;
+}
+
+.pill {
+  display: inline-block;
+  border: 1px solid #d4d4d8;
+  border-radius: 4px;
+  padding: 0 0.375rem;
+  margin: 0 0.125rem;
+  font-size: 0.8125rem;
+}
+
+.file-task {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0.5rem 0;
+}

@@ -25,6 +25,9 @@
     "lint:fix": "eslint src --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "ui:build": "pnpm --filter nightshift-ui build",
+    "ui:offline-check": "node scripts/ui-offline-check.mjs",
+    "test:e2e": "playwright test",
     "gen:client": "openapi-typescript openapi/openapi.yaml -o src/client/schema.d.ts && prettier --write src/client/schema.d.ts"
   },
   "packageManager": "pnpm@10.33.0",
@@ -44,6 +47,7 @@
     "fast-check": "^4.2.0",
     "openapi-typescript": "7.13.0",
     "prettier": "3.8.3",
+    "prettier-plugin-svelte": "4.1.1",
     "tsx": "4.21.0",
     "typescript": "6.0.3",
     "vitest": "^4.1.5",
