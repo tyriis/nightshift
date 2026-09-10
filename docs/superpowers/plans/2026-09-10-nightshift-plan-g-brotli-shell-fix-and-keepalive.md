@@ -1030,3 +1030,9 @@ The §1 KNOWN FINDING blockquote stays byte-untouched — ONLY Task 8's live 23/
 ## Scope guard (what this plan REJECTS)
 
 No MCP tool changes (frozen at 35), no UI staleness surfacing, no per-claim response fields, no spec edits, no cancel-path claim-clear quirk fix, no new error codes, no `scripts/` changes, no CI changes, no session-key/CSP/npm work. Each REJECTED item is QUEUED above — surfaced in the PR, never smuggled.
+
+---
+
+## Execution ledger (per-task, appended at execution)
+
+- **Task 1 COMPLETE — `fb68015`.** TDD honest RED verbatim (U9/U9b `expected 'public, max-age=2592000, immutable' to be 'no-cache'`; U10 pre-fix PASS as the declared posture-arm) → GREEN 14/14 ui.test.ts, full `pnpm test` 677/88 (baseline + exactly the 3 arms), lint/typecheck clean, 2-file diff raw-git-verified. SPEC-REVIEW: PASS (independent lane, live-ran the arms 14/14, vacuity-checked). QUALITY: PASS — advisories dispositioned: **A1 (.deflate)** NO code change (precompress never emits it; P3 measured; YAGNI holds, logged here instead) · **A2 (U10 find-DRY)** no change (per-arm-inline is the file's doctrine). Zero implementer drift.
