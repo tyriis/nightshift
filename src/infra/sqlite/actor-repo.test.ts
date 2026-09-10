@@ -64,6 +64,38 @@ describe('SqliteActorRepo', () => {
     await db.destroy()
   })
 
+  it('findByOidcSubject: full row for a bound subject; null for unknown (Task 7, D-tt)', async () => {
+    const { db, repo } = await seed() // the agent: oidc_subject NULL
+    await db
+      .insertInto('actors')
+      .values({
+        id: 'a_prov',
+        kind: 'human',
+        handle: 'prov',
+        display_name: 'Provisioned',
+        description: 'bound',
+        created_at: '2026-01-02T00:00:00.000Z',
+        role: 'member',
+        oidc_subject: 'sub-bound',
+      })
+      .execute()
+    // FULL row, no trim (the login path is not the token-lookup hot path)
+    expect(await repo.findByOidcSubject('sub-bound')).toEqual({
+      id: 'a_prov',
+      kind: 'human',
+      handle: 'prov',
+      display_name: 'Provisioned',
+      description: 'bound',
+      created_at: '2026-01-02T00:00:00.000Z',
+      role: 'member',
+      oidc_subject: 'sub-bound',
+    })
+    expect(await repo.findByOidcSubject('sub-unknown')).toBeNull()
+    // NULL subjects (agents, pre-E humans) never match — not even the empty string
+    expect(await repo.findByOidcSubject('')).toBeNull()
+    await db.destroy()
+  })
+
   it('policy get/set with upsert', async () => {
     const { db, repo } = await seed()
     expect(await repo.getPolicy('review_gate')).toBe('on')

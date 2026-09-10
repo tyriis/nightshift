@@ -169,8 +169,13 @@ export interface ActorRepo {
     created_at: string
     /** D-ss: explicit at every creation site — agents pass null, humans admin|member */
     role: HumanRole | null
+    /** D-tt: first-login provisioning binds the verified subject; every other site omits */
+    oidc_subject?: string
   }): Promise<ActorRow>
   findByHandle(handle: string): Promise<ActorRow | null>
+  /** D-tt: first-login lookup by the verified id_token sub — FULL row, no trim
+   * (the login path is NOT the token-lookup hot path). */
+  findByOidcSubject(subject: string): Promise<ActorRow | null>
   findById(id: string): Promise<ActorRow | null>
   /** Actor that owns the given token id (for exposing a claim holder's public identity). */
   findActorByTokenId(tokenId: string): Promise<ActorRow | null>

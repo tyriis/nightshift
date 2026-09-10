@@ -22,6 +22,7 @@ tags:
   - name: links
   - name: webhooks
   - name: events
+  - name: auth
 paths:
   /ping:
     get:
@@ -45,6 +46,87 @@ paths:
           content:
             application/yaml:
               schema: { type: string }
+  /auth/login:
+    get:
+      tags: [auth]
+      # pre-session leg (D-vv(b) hook exempt): security [] states the truth — GET runs
+      # with NO identity; every other method keeps the bearerAuth wall (401 pinned)
+      security: []
+      operationId: authLogin
+      description: >-
+        OIDC login kick-off (D-pp): 302 to the provider authorize endpoint with a
+        PKCE(S256) challenge; state/nonce/verifier ride a signed HttpOnly flow
+        cookie (600 s). returnTo may only point into /ui/ — anything else collapses
+        to /ui/ inside the flow. OIDC unconfigured answers 500 problem+json (the
+        dormant posture, pinned).
+      parameters:
+        - { name: returnTo, in: query, schema: { type: string } }
+      responses:
+        "302": { description: redirect to the provider authorize URL }
+        default: { $ref: "#/components/responses/Problem" }
+  /auth/callback:
+    get:
+      tags: [auth]
+      security: [] # pre-session leg (D-vv(b)) — the OIDC state parameter is its CSRF
+      operationId: authCallback
+      description: >-
+        authorization-code leg (D-pp): flow cookie + state (+ iss when present)
+        validated, code exchanged, id_token verified; then the D-tt first-login
+        tree — bound subject logs in; else the fail-closed oidc_provisioning policy
+        (off ⇒ deny). SUCCESS 302 to the flow returnTo with the session+CSRF cookie
+        pair (D-qq/D-rr); DENY 302 /ui/login?error=pending for browsers or 403
+        problem+json for accept: application/json (same audit); validation
+        rejections are one pinned 403. The flow cookie is always cleared.
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: iss, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        "302": { description: login success (returnTo) or browser deny (/ui/login?error=…) }
+        default: { $ref: "#/components/responses/Problem" } # 403 validation/deny shapes ride the default
+  /auth/logout:
+    post:
+      tags: [auth]
+      # DELIBERATE (review note (j)): the op is cookie+CSRF — bearerAuth would
+      # misdescribe it. The drift test pins path×method only and cannot see this
+      # field, so the honest posture lives in this description, not in a machine pin.
+      security: []
+      operationId: authLogout
+      description: >-
+        revoke the CALLER's session row (audited, session_revoked) and clear both
+        cookies (Max-Age=0). Requires a cookie session + X-CSRF-Token (D-rr — the
+        hook answers 403 before the route); bearer actors get 400 invalid_request
+        (a token is not a session, D-qq).
+      responses:
+        "204": { description: revoked (no body; both cookies cleared) }
+        default: { $ref: "#/components/responses/Problem" }
+  /auth/me:
+    get:
+      tags: [auth]
+      operationId: authMe
+      description: >-
+        identity echo for the SPA shell (D-zz): the caller's ActorRef — ANY
+        authenticated actor; the global bearerAuth documents the agent leg, cookie
+        sessions resolve through the same identity (role rides — the SPA nav and
+        admin gate read it). NO new auth concept, reads actorCtx.
+      responses:
+        "200":
+          description: the caller's ActorRef
+          content:
+            application/json:
+              # the ActorRef projection inline (D-zz: no new component) — documented
+              # in the shipped Actor schema style, §5 nothing-hidden
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  kind: { type: string, enum: [human, agent] }
+                  # D-ss: admin|member for humans; null for agents (and pre-E legacy rows)
+                  role: { type: ["string", "null"], enum: ["admin", "member", null] }
+                  handle: { type: string }
+                  display_name: { type: string }
+        default: { $ref: "#/components/responses/Problem" }
   /tasks:
     get:
       tags: [tasks]

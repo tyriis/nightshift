@@ -21,6 +21,13 @@ declare module 'fastify' {
 
 export const PUBLIC_PATHS = new Set(['/ping', '/openapi.yaml'])
 
+// D-vv(b): the TWO pre-session OIDC legs run with NO identity — GET-only, exact
+// members (membership equality pinned in routes/auth.test.ts; a fourth member
+// fails it). Every other method keeps the bearer requirement: POST /auth/login
+// answers the byte-identical missing-bearer 401. /auth/me and /auth/logout
+// deliberately stay auth-gated (D-zz/D-qq).
+export const AUTH_PRE_SESSION = ['/auth/login', '/auth/callback'] as const
+
 // async on purpose: fastify's hook iterator advances via the hook's returned thenable,
 // so this guard is a real Promise; a sync-throwing preHandler would deadlock the
 // iterator (R4). Fixed at the source — routes wire requireHuman directly.
@@ -68,6 +75,10 @@ export const registerAuth = (app: FastifyInstance, deps: AppDeps): void => {
     // can only add PUBLIC spellings, never unprotect anything absent from the set.
     const path = (request.url.split('?')[0] ?? '/').replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1')
     if (PUBLIC_PATHS.has(path)) return
+    // D-vv(b) AUTH_PRE_SESSION: the two pre-session OIDC legs run with NO identity;
+    // GET-only, exact members (normalized path above). Every other method keeps the
+    // bearer requirement — POST /auth/login answers the byte-identical 401.
+    if (request.method === 'GET' && (AUTH_PRE_SESSION as readonly string[]).includes(path)) return
     // ---- Plan E session arm (D-qq/D-rr): IN THIS HOOK, at the commented seam — no
     // new onRequest hook exists; hook order auth→idem→rate-limit is byte-unchanged.
     // A garbage/expired/absent-key cookie FALLS THROUGH to the bearer arm: a

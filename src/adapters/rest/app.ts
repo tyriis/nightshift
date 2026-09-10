@@ -7,6 +7,7 @@ import { registerAuth } from '#root/adapters/rest/auth'
 import { registerIdempotency } from '#root/adapters/rest/idempotency'
 import { registerRateLimit } from '#root/adapters/rest/rate-limit'
 import { registerAdminRoutes } from '#root/adapters/rest/routes/admin'
+import { registerAuthRoutes } from '#root/adapters/rest/routes/auth'
 import { registerWebhookRoutes } from '#root/adapters/rest/routes/webhooks'
 import { registerAuditRoutes } from '#root/adapters/rest/routes/audit'
 import { registerEventRoutes } from '#root/adapters/rest/routes/events'
@@ -62,6 +63,7 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerDependencyRoutes(server, deps)
   registerLabelRoutes(server, deps)
   registerAdminRoutes(server, deps)
+  registerAuthRoutes(server, deps) // the OIDC login surface (hooks are app-level — order vs the other blocks is inert)
   registerWebhookRoutes(server, deps) // admin surface groups together (plan Task 9)
 
   mountMcp(server, deps) // adapters/mcp — the /mcp surface (D-hh); keeps hook order intact

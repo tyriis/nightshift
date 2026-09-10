@@ -9,18 +9,13 @@ import { createHash, generateKeyPairSync, sign as rsaSign } from 'node:crypto'
 import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest'
 import { DomainError } from '#root/domain/errors'
 import { decodeSignedJson, encodeSignedJson } from '#root/adapters/shared/session-codec'
-import { makeTestApp, type TestApp } from '#root/testing/test-app'
-import { buildStubIdp, makeInjectFetch, type StubIdp, type StubUser } from '#root/testing/stub-idp'
+import { makeTestApp } from '#root/testing/test-app'
+import { makeOidcApp as makeOidcHarness, oidcBaseEnv } from '#root/testing/oidc-harness'
+import type { StubUser } from '#root/testing/stub-idp'
 
 const ISSUER = 'http://idp.test'
 const KEY = 'k'.repeat(32)
-const BASE_ENV: NodeJS.ProcessEnv = {
-  NS_OIDC_ISSUER: ISSUER,
-  NS_OIDC_CLIENT_ID: 'ns',
-  NS_OIDC_CLIENT_SECRET: 'supersecret1',
-  NS_PUBLIC_URL: 'http://board.test',
-  NS_SESSION_KEY: KEY,
-}
+const BASE_ENV = oidcBaseEnv(ISSUER)
 
 const USERS: Record<string, StubUser> = {
   alice: { sub: 'stub-alice', email: 'alice@example.test', preferred_username: 'alice' },
@@ -65,44 +60,16 @@ afterEach(async () => {
   for (const c of CLEANUP.splice(0)) await c()
 })
 
-// helper: makeOidcApp(userKey='alice', mutateEnv?) → { t, idp, log, fetch, runFlow }
+// helper: makeOidcApp(userKey='alice', mutateEnv?) → { t, idp, log, fetch, authorizeOnly, runFlow }
+// (Task 7: the body lives in src/testing/oidc-harness.ts — the exported twin the
+// route/scenario tests reuse; the fresh-imported `rp` rides along per the module note)
 const makeOidcApp = async (
   userKey = 'alice',
   mutateEnv?: (env: NodeJS.ProcessEnv) => NodeJS.ProcessEnv
 ) => {
-  const env = mutateEnv ? mutateEnv({ ...BASE_ENV }) : { ...BASE_ENV }
-  const idp = buildStubIdp({
-    issuer: env.NS_OIDC_ISSUER as string,
-    clientId: env.NS_OIDC_CLIENT_ID as string,
-    ...(env.NS_OIDC_CLIENT_SECRET ? { clientSecret: env.NS_OIDC_CLIENT_SECRET } : {}),
-    redirectUris: [`${env.NS_PUBLIC_URL}/auth/callback`],
-    users: USERS,
-  })
-  const log: string[] = []
-  const fetchFn = makeInjectFetch(env.NS_OIDC_ISSUER as string, idp.app, log)
-  const t = await makeTestApp(env, fetchFn)
-  CLEANUP.push(async () => {
-    await t.close()
-    await idp.app.close()
-  })
-  const authorizeOnly = async () => {
-    const { url, flow } = rp.buildAuthorize(t.deps, '/ui/')
-    const res = await idp.app.inject({
-      method: 'GET',
-      url: `${url.slice(ISSUER.length)}&login_hint=${userKey}`,
-    })
-    expect(res.statusCode).toBe(302)
-    const loc = new URL(res.headers.location as string)
-    expect(loc.searchParams.get('state')).toBe(flow.state) // the browser-side echo check
-    expect(loc.searchParams.get('iss')).toBe(ISSUER) // RFC 9207
-    return { flow, code: String(loc.searchParams.get('code')) }
-  }
-  const runFlow = async () => {
-    const { flow, code } = await authorizeOnly()
-    const tokens = await rp.exchangeCode(t.deps, code, flow.verifier)
-    return { flow, code, tokens }
-  }
-  return { t, idp, log, fetch: fetchFn, authorizeOnly, runFlow }
+  const h = await makeOidcHarness({ rp, issuer: ISSUER, users: USERS, userKey, mutateEnv })
+  CLEANUP.push(h.close)
+  return h
 }
 
 // canned (zero-network by construction) fetch for RP input-validation arms the

@@ -49,6 +49,7 @@ import {
 } from '#root/application/usecases/manage-webhooks'
 import { ReleaseClaim } from '#root/application/usecases/release-claim'
 import { RemoveBlock } from '#root/application/usecases/remove-block'
+import { ProvisionHumanFromOidc } from '#root/application/usecases/provision-human'
 import { SplitTask } from '#root/application/usecases/split-task'
 import { UpdateStatus } from '#root/application/usecases/update-status'
 import { UpdateTask } from '#root/application/usecases/update-task'
@@ -112,6 +113,8 @@ export interface AppDeps {
     addAllowlist: AddAllowlist
     removeAllowlist: RemoveAllowlist
     listAllowlist: ListAllowlist
+    // D-tt: OIDC first-login provisioning (the callback's allow-list leg)
+    provisionHumanFromOidc: ProvisionHumanFromOidc
     getPolicy: GetPolicy
     setPolicy: SetPolicy
     createWebhook: CreateWebhook
@@ -197,6 +200,7 @@ export const makeDepsFromDb = (
       addAllowlist: new AddAllowlist(uow, clock),
       removeAllowlist: new RemoveAllowlist(uow, clock),
       listAllowlist: new ListAllowlist(uow),
+      provisionHumanFromOidc: new ProvisionHumanFromOidc(uow, clock, ids),
       getPolicy: new GetPolicy(uow),
       setPolicy: new SetPolicy(uow, clock),
       createWebhook: new CreateWebhook(uow, clock, ids),
