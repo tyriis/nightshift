@@ -740,15 +740,17 @@ export interface components {
       claim_generation: number
       last_heartbeat_at: string | null
     }
-    /** @description flat task DTO — the row plus its rollup counts (toTaskDto) */
+    /** @description flat task DTO — the row plus its rollup counts and label names (toTaskDto) */
     Task: components['schemas']['TaskRecord'] & {
       child_count?: number
       unmet_blockers?: number
+      labels?: string[]
     }
     TaskWithCounts: {
       task?: components['schemas']['TaskRecord']
       child_count?: number
       unmet_blockers?: number
+      labels?: string[]
     }
     ContextBundle: {
       task?: components['schemas']['TaskRecord']

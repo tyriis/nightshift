@@ -994,13 +994,14 @@ components:
         claim_generation: { type: integer }
         last_heartbeat_at: { type: ["string", "null"] }
     Task:
-      description: flat task DTO — the row plus its rollup counts (toTaskDto)
+      description: flat task DTO — the row plus its rollup counts and label names (toTaskDto)
       allOf:
         - $ref: "#/components/schemas/TaskRecord"
         - type: object
           properties:
             child_count: { type: integer }
             unmet_blockers: { type: integer }
+            labels: { type: array, items: { type: string } }
     TaskWithCounts:
       # The un-DTO'd repository shape (ports.ts): row nested under `task`, counts beside it.
       # Served raw by split's parent (ora-20); task endpoints everywhere else use flat Task.
@@ -1009,6 +1010,7 @@ components:
         task: { $ref: "#/components/schemas/TaskRecord" }
         child_count: { type: integer }
         unmet_blockers: { type: integer }
+        labels: { type: array, items: { type: string } }
     ContextBundle:
       type: object
       properties:

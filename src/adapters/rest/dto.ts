@@ -18,12 +18,15 @@ export interface TaskDto {
   last_heartbeat_at: string | null
   child_count: number
   unmet_blockers: number
+  labels: string[]
 }
 
 // The ONLY place tasks become public JSON. Claim internals are exposed
-// deliberately — "nothing hidden" (spec §5).
+// deliberately — "nothing hidden" (spec §5). Label names ride the row
+// (review R3/B12): the batch resolution lives in the repo, empty array unlabeled.
 export const toTaskDto = (row: TaskWithCounts): TaskDto => ({
   ...row.task,
   child_count: row.child_count,
   unmet_blockers: row.unmet_blockers,
+  labels: row.labels,
 })

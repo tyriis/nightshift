@@ -61,6 +61,9 @@ export interface TaskWithCounts {
   task: TaskRecord
   child_count: number
   unmet_blockers: number
+  /** Label NAMES resolved in one batched query per response (review R3/B12, Task 9
+   * Step 0): every path returning this shape carries them — sorted by name, [] unlabeled. */
+  labels: string[]
 }
 
 export interface TaskPatch {
