@@ -992,6 +992,11 @@ cleared, generation bumped, audit gains action `lease_expired` with reason
 event feed). Any LATER write with the old lease answers `412 stale_lease` — the
 zombie fence, zero new error surface. Holders stay alive by heartbeating inside
 the budget (`nightshift heartbeat`, or MCP `post_update` which already rides it).
+
+Effective budget is TICK-QUANTIZED: expiry is checked only on sweep
+ticks, so detection can lag the configured budget by up to one interval
+(worst case budget == interval means up to a full interval late — quality-lane
+advisory off ed74a60, sanctioned here into the operator text).
 ```
 
 - [ ] **Step 3: DEPLOY-SMOKE §3 arm.** After the `claim` checklist item add:
@@ -1036,3 +1041,4 @@ No MCP tool changes (frozen at 35), no UI staleness surfacing, no per-claim resp
 ## Execution ledger (per-task, appended at execution)
 
 - **Task 1 COMPLETE — `fb68015`.** TDD honest RED verbatim (U9/U9b `expected 'public, max-age=2592000, immutable' to be 'no-cache'`; U10 pre-fix PASS as the declared posture-arm) → GREEN 14/14 ui.test.ts, full `pnpm test` 677/88 (baseline + exactly the 3 arms), lint/typecheck clean, 2-file diff raw-git-verified. SPEC-REVIEW: PASS (independent lane, live-ran the arms 14/14, vacuity-checked). QUALITY: PASS — advisories dispositioned: **A1 (.deflate)** NO code change (precompress never emits it; P3 measured; YAGNI holds, logged here instead) · **A2 (U10 find-DRY)** no change (per-arm-inline is the file's doctrine). Zero implementer drift.
+- **Task 2 COMPLETE — `ed74a60`.** Honest RED (3 fail verbatim, undefined-members face) → GREEN config 17/17, full `pnpm test` 680/88, lint/typecheck clean, 2-file diff raw-git-verified, +60/−0 (defaults-pin the sole sanctioned existing-assertion touch). SPEC-REVIEW: PASS (boundary 30/30-equality parses confirmed by-design). QUALITY: PASS — advisories: #1 block-1/block-3 redundant co-fire DISPOSED keep (redundant-but-honest, self-healing); #2 Config field doc-comments DISPOSED deferred-to-Task-4-wiring-comment (the deps.ts entry carries the units+dormant note at the consumption seam); #3 30/30 boundary test-comment DISPOSED keep (test name covers intent); **#4 tick-quantized lag — SANCTIONED into Task 7 Step 2 operator text (amended above)**. Zero implementer drift.
