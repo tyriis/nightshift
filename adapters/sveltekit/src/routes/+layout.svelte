@@ -4,6 +4,8 @@
   import { csrfToken } from '$lib/api'
   import type { ActorMe } from '$lib/types'
 
+  let { children } = $props()
+
   // Task 9's sign-out affordance (Task 8's shell). The identity read is a plain
   // fetch, NOT api(): api() bounces 401→login, and the nav must stay usable on
   // the login page itself (an api()-based nav identity would ping-pong there).
