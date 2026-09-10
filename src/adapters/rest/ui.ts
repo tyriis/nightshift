@@ -43,15 +43,26 @@ export const mountUi = (app: FastifyInstance, deps: AppDeps): void => {
         maxAge: '30d',
         preCompressed: true, // pairs adapter-static precompress:true
         setHeaders(reply, path) {
-          if (path.endsWith('.html')) reply.header('cache-control', 'no-cache')
+          // D-fff (Plan G): with preCompressed the plugin hands this callback the
+          // VARIANT path (…/index.html.br — @fastify/static 10.1.3 index.js:289-308
+          // builds it, :442 passes metadata.path), so the bare .html check MISSED
+          // it and the 30d-immutable plugin default reached the wire: the recorded
+          // deploy-smoke FAIL. Strip the encoding extension first — every shell
+          // spelling answers no-cache; hashed assets keep 30d either way.
+          const logicalPath = path.replace(/\.(?:br|gz)$/, '')
+          if (logicalPath.endsWith('.html')) reply.header('cache-control', 'no-cache')
         },
       })
       scope.setNotFoundHandler((request, reply) => {
         // SPA fallback: scope-local ONLY — deep-links answer the shell; the root
         // handler (problem+json) owns everything outside /ui.
         if (request.method === 'GET' || request.method === 'HEAD') {
-          // html arm: no-cache via setHeaders is route-path-based; the explicit
-          // header wins for the fallback (sendFile ships the 30d plugin default)
+          // D-fff honesty (P2 measured): the old comment here claimed the
+          // explicit header "wins for the fallback" — FALSE under encoding
+          // negotiation, where sendFile re-applied the plugin 30d default over
+          // it (the second, smoke-unprobed face of the hazard — U9b pins it).
+          // Post-fix the re-pinned setHeaders answers no-cache for every
+          // variant; the explicit header stays belt-and-braces for the plain path.
           return reply.code(200).header('cache-control', 'no-cache').sendFile('index.html')
         }
         // non-GET deep-links fall to the root problem+json 404 — the root notFound
