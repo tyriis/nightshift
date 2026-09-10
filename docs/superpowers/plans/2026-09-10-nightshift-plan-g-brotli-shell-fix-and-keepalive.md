@@ -6,7 +6,7 @@
 
 **Architecture:** Zero new dependencies, zero new tables, zero new error codes. The brotli act edits one `setHeaders` predicate (`src/adapters/rest/ui.ts`) and adds test arms. The keepalive act adds two dormant env flags, two CAS primitives on `SqliteTaskRepo`, one loop class shaped on `WebhookDeliveryLoop` (kill-switch `start()`, injectable-`now` `tick()` seam, `unref`'d timer, drain-on-`stop()`), and one CLI command. Lease state already lives on the `tasks` row (`claim_token_id`/`claim_generation`/`last_heartbeat_at` — `schema.ts:41-43`); expiry rides those columns, audit lands on the spine that already feeds `/events` and webhooks (D-aa), and every post-revert zombie write is rejected by the invariant-3 fence already shipped in `update-status.ts`/`heartbeat.ts`/`release-claim.ts`.
 
-**Tech Stack:** inherited A–F stack (fastify 5 + @fastify/static 10.1.3, Kysely 0.29.5/better-sqlite3, zod 4, vitest 3.2.4); no new deps of ANY kind.
+**Tech Stack:** inherited A–F stack (fastify 5 + @fastify/static 10.1.3, Kysely 0.29.5/better-sqlite3, zod 4, vitest 4.1.x — pin ^4.1.5, probed at 4.1.11); no new deps of ANY kind.
 
 ---
 
@@ -29,7 +29,7 @@ Per the ticket protocol and the A–F binding lessons ("treat your own plan as u
 - **P7 — regen-delta probe:** on a scratch copy, edit the heartbeat `description` line and run `pnpm gen:client`; the `schema.d.ts` delta must be JSDoc-comment-only (proves the D-kkk sanctioned-delta size).
 - **P8 — CLI exact-set probe:** apply the Task-5 `run.ts` delta to a scratch copy and run `src/cli/cli.test.ts` + `src/cli/shim.test.ts` unchanged — no hidden COMMANDS-set/USAGE pins may RED (unknown-command/`help` pins are regex-loose and must stay green).
 - **P9 — sweeper-vs-suite probe:** with the new `leaseSweeper` in `AppDeps`, `makeTestApp` defaults keep it inert (`start()` refuses on 0/0) — run the FULL suite once with the wiring applied and no sweeper tests; zero new flakes, zero stray timers.
-- **P10 — coverage-ghost analysis:** enumerate every new branch (sweeper `continue` arm, `start()` refusal arms, `!` casts, CLI local-config-error arm) and name its covering arm; any statically uncoverable branch is REWRITTEN OUT of the plan before dispatch (Plan D "prove it, not document it" precedent).
+- **P10 — coverage-ghost analysis (enumerated at preflight, all covered):** sweeper start-refusal ×2 (dormant-pair test) · start-armed face + `isRunning` (armed-failing-timer test + drain test) · `stop()` TRUE arm (drain test) + FALSE never-started arm (dormant test gained `await s.stop()`) · timer callback FUNCTION + `Date.now()` default-param + `.catch` SWALLOW arm (armed-failing-timer test with a scripted rejecting UoW) · overlap early-return (identity-proof test) · `continue` on CAS miss (scripted honest-miss test) · config superRefine ×3 (matrix test) · `ui.ts` regex match/nomatch × html/asset (U1/U9/U9b/U10) · CLI local-config-error + arity + hf-miss (the four D-jjj arms). No statically uncoverable branch survives (Plan D "prove it, not document it").
 
 ### Plan-review lane — VERDICT: PASS (attempt 1, 2026-09-10, independent oracle)
 
@@ -42,6 +42,10 @@ Advisories A1–A4 applied as sanctions in this wave (non-blocking):
 - **A3:** Task 8 Step 1 `sed` span corrected to :73-77 (the no-cache check itself).
 - **A4:** Task 2 Step 3(2) placement wording — "inside the callback, before its closing `})`".
 
+### Artifact preflight — VERDICT: PREFLIGHT: PASS (2026-09-10, throwaway worktree @ 90a9ffb)
+
+Pinned env (node 24.20.0 / @fastify/static 10.1.3 / Kysely 0.29.5 / zod 4.5.4 / vitest 4.1.11). Key verbatims: **P1** live LISTEN reproduction — br → `public, max-age=2592000, immutable`, identity → `no-cache` (hazard REAL); **P2** inject honors explicit accept-encoding (in-suite arms valid, no mcp-parity relocation needed) + with the Task-1 fix applied: shell/fallback → `no-cache`, asset → 30d, ui.test 11/11; **EXTRA FINDING:** the gzip fallback leaked 30d pre-fix too (smoke never probed it) — the shipped fallback comment is a lie (⇒ Task 1 Step 3b, U9b pins it); **P3** build emits exactly {br×8, gz×8}, zero `.deflate` — regex covers exactly; **P4** Kysely CAS compiles+runs, ISO-UTC lexicographic `<` byte-exact, canceled never listed, claim stamp round-trips — ONE forced test fix (cutoff 01-07 → 01-05, applied); **P5** all five config cases + treeify shape pinned; **P6** `revokeToken` does NOT clear claims, `findActorByTokenId` unfiltered by revoked ⇒ the sweeper `!` is LICENSED; sweeper 7/7 with wiring; **P7** regen delta = 1 JSDoc line; **P8** cli+shim 28/28 with the delta, usage span measured 42-44; **P9** full suite 684/88 with wiring, timer-inert, typecheck clean; 691/89 with the sweeper tests; **P10** ghosts: timer callback/default-param/swallow/stop-false — FORCED two arms, applied above (dormant-test stop() + armed-failing-timer). Amendments 1/3/4/5/6 applied in this commit; A2 confirmed aligned upstream. **No probe weakened; dispatch may proceed.**
+
 ## Decision records (Plan G — `D-fff … D-lll`; triples continue from F; `D-uu` stays dead)
 
 Grep duty: the triples CONTAIN earlier pairs (`D-ff` ⊂ `D-fff`) — every ledger citation is whole-token.
@@ -51,7 +55,7 @@ Grep duty: the triples CONTAIN earlier pairs (`D-ff` ⊂ `D-fff`) — every ledg
 
 - **D-hhh — Repo primitives: claim = first liveness; expiry = guarded CAS.** (a) `tryClaim` stamps `last_heartbeat_at` inside the claim CAS itself (the claim IS a liveness signal; amendment recorded here against B/C's pinned claim arms — the claim HTTP response is `{lease_token, generation}`, NOT a Task DTO, so no pinned response arm changes; heartbeat/model arms assert post-heartbeat values and stay green — P4 re-verifies). (b) `listStaleClaims` + `expireStaleClaim` follow `tryClaim`'s single-statement `UPDATE … RETURNING` CAS shape; staleness = `coalesce(last_heartbeat_at, updated_at) < cutoff` on `claim_token_id IS NOT NULL AND status = 'in_progress'` — the coalesce carries pre-G claims (NULL anchor) honestly on their `updated_at` (claim time, when untouched); the `in_progress`-only guard respects `canceled`-terminal (a pre-existing quirk: the cancel path does not clear claims — the sweeper NEVER touches it, QUEUED) and never reverts review/done states. The staleness predicate is RE-CHECKED inside the expiry UPDATE, so a heartbeat landing between the sweep read and the sweep write is an honest MISS, never a false revert.
 - **D-iii — The sweeper loop.** `src/infra/keepalive/lease-sweeper.ts`, shaped on `WebhookDeliveryLoop` (kill-switch `start()`, overlap-guarded `tick(nowMs = Date.now())` seam per T14 lineage, `unref`'d interval, `stop()` drains) with ONE stated divergence: the sweeper HOLDS a transaction per sweep — the loop-no-UoW clause exists because of NETWORK I/O; the sweep is pure DB, so revert+audit land ATOMICALLY (audit is the system's memory — spec §6.7 — and the outbox feeding `/events` + webhooks: one write, one truth). Audit vocabulary is NEW and grep-pinned: action `lease_expired`, reason exactly `lease expired` — the reason spec §6.7 pre-named ("including 'claim released by split', 'lease expired' later" — later is now). Attribution honesty: actor = the token's holder (`findActorByTokenId`, P6 licenses the `!`), token = the dying claim — the row answers WHOSE lease died; the reason answers what happened. Zombie fencing adds ZERO code: the generation bump rides the shipped `stale_lease` 412 arms (`update-status.ts:42-56`, `heartbeat.ts:30-34`, `release-claim.ts:23-27`) — no new error code ⇒ the Problem-code enum pins stay byte-green. `heartbeat.ts:11`'s doc-comment ("no keepalive enforcement in v1") is amended with lineage in the same wave.
-- **D-jjj — CLI `heartbeat` command.** `COMMANDS` grows to `next|claim|heartbeat|report` (exact set, lockstep — dispatch, USAGE, README mirror, arms, all in one commit). `heartbeat <task-id>` requires `NS_LEASE_TOKEN`: its absence is a LOCAL `config_error` (exit 2, NOTHING sent — the D-aaa ladder, never a server round-trip); on the wire it rides the EXISTING `POST /tasks/{id}/heartbeat` op (zero contract change) and prints the server's Task DTO (D-aaa: the DTO IS the truth). The USAGE edit is string-content-only (3 lines stay 3 lines) BUT the `COMMANDS` insertion shifts `run.ts` line numbers — deploy/README's verbatim-usage-block citation (`run.ts:41-43`) is RE-DERIVED against the final file in the same commit (docs-mirror duty: grep, never guess).
+- **D-jjj — CLI `heartbeat` command.** `COMMANDS` grows to `next|claim|heartbeat|report` (exact set, lockstep — dispatch, USAGE, README mirror, arms, all in one commit). `heartbeat <task-id>` requires `NS_LEASE_TOKEN`: its absence is a LOCAL `config_error` (exit 2, NOTHING sent — the D-aaa ladder, never a server round-trip); on the wire it rides the EXISTING `POST /tasks/{id}/heartbeat` op (zero contract change) and prints the server's Task DTO (D-aaa: the DTO IS the truth). The USAGE edit is string-content-only (3 lines stay 3 lines) BUT the `COMMANDS` insertion shifts `run.ts` line numbers — deploy/README's verbatim-usage-block citation (`run.ts:41-43`, P8 measured: lands at `42-44` post-delta) is RE-DERIVED against the final file in the same commit (docs-mirror duty: grep, never guess).
 - **D-kkk — Contract: ONE description flip, ZERO shape change.** `openapi.yaml` heartbeat op: `description: liveness record only; keepalive enforcement is deferred (spec §12)` becomes the shipped truth; `pnpm gen:client` regen lands IN THE SAME COMMIT (D-zz duty). Paths×methods, schemas, required-sets, the Problem-code enum — byte-untouched (no new code; P7 proves the regen delta is JSDoc-only). SPEC STAYS FROZEN: §3's non-goal line and §7.2's heartbeat row go stale exactly as §12's CLI row went stale when F shipped the CLI — the F precedent is binding: §12 migration is recorded in plan docs, never by editing the frozen spec.
 - **D-lll — Deploy surface: re-derived citations + the keepalive section.** `deploy/README.md`: the NS\_\* table grows two rows (defaults/rules copied from the FINAL `config.ts`); the "Transcribed from `config.ts:5-34`" and `config.ts:39-56` citations are re-derived against the final file (grep the real bounds — machine strings point at truth or drift); a short `## Keepalive (Plan G)` section carries the enable pair, what expiry looks like, and the copy-pasteable heartbeat/expiry operator legs. `DEPLOY-SMOKE.md` §3 gains the `heartbeat` CLI arm; the §1 known-RED note stays UNTOUCHED until Task 8's live 23/0 evidence exists (flip with lineage, never before).
 - **QUEUED (HUMAN / follow-up, honest):** cancel-leaves-claim-attached quirk (sweeper respects it; clearing on cancel is a behavior change for its own wave) · per-lease `interval`/`timeout` echoed into the claim response (would be a real contract ruling) · UI staleness surfacing (`last_heartbeat_at` already public) · F's unchanged ledger (real Pocket ID, nonce verify-once, role surgery, session-key rotation, CSP, npm publish).
@@ -172,6 +176,24 @@ with:
         },
 ```
 
+- [ ] **Step 3b: Replace the stale fallback comment (P2 FORCED).** P2 measured the old comment's claim FALSE pre-fix (sendFile re-applied the plugin 30d default OVER the explicit header under negotiation — exactly the U9b hazard). In the scope notFound, replace exactly:
+
+```ts
+// html arm: no-cache via setHeaders is route-path-based; the explicit
+// header wins for the fallback (sendFile ships the 30d plugin default)
+```
+
+with:
+
+```ts
+// D-fff honesty (P2 measured): the old comment here claimed the
+// explicit header "wins for the fallback" — FALSE under encoding
+// negotiation, where sendFile re-applied the plugin 30d default over
+// it (the second, smoke-unprobed face of the hazard — U9b pins it).
+// Post-fix the re-pinned setHeaders answers no-cache for every
+// variant; the explicit header stays belt-and-braces for the plain path.
+```
+
 - [ ] **Step 4: Verify GREEN.** `pnpm vitest run src/adapters/rest/ui.test.ts` ⇒ ALL PASS (U1–U4/U5/U6–U8 byte-untouched). Then `pnpm test && pnpm lint && pnpm typecheck` — clean.
 - [ ] **Step 5: Commit.** `git add src/adapters/rest/ui.ts src/adapters/rest/ui.test.ts && LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "fix(ui): shell no-cache survives preCompressed br/gz (D-fff)"`. Raw-git verify the hash (`git log -1 --format='%h %s'`).
 
@@ -222,7 +244,7 @@ describe('plan G keepalive config (D-ggg)', () => {
     NS_KEEPALIVE_TIMEOUT_S: z.coerce.number().int().min(0).default(0),
 ```
 
-(2) at the END of the `superRefine` callback body add:
+(2) INSIDE the `superRefine` callback body, after the OIDC block and BEFORE its closing `})`, add:
 
 ```ts
 // D-ggg fail-closed matrix: enforcement is all-or-nothing, and the budget must
@@ -316,9 +338,12 @@ describe('stale-claim sweep primitives (D-hhh)', () => {
     )
     const hit = await repo.listStaleClaims('2026-01-05T00:00:00.000Z', 50)
     expect(hit.map((h) => h.id)).toEqual(['t_legacy', 't_stale']) // ascending by id
-    // canceled is terminal — a claimed canceled row is NEVER sweep material
+    // canceled is terminal — a claimed canceled row is NEVER sweep material.
+    // (P4 FORCED amendment: the cutoff stays 01-05 — at 01-07 t_live is
+    // HONESTLY stale and the assertion would record the wrong truth; at 01-05
+    // the CANCEL is what excludes t_stale, so the arm stays discriminating.)
     await repo.setStatus('t_stale', 'canceled', '2026-01-06T00:00:00.000Z')
-    const after = await repo.listStaleClaims('2026-01-07T00:00:00.000Z', 50)
+    const after = await repo.listStaleClaims('2026-01-05T00:00:00.000Z', 50)
     expect(after.map((h) => h.id)).toEqual(['t_legacy'])
     await db.destroy()
   })
@@ -543,7 +568,7 @@ const auditOf = async (id: string, action: string) =>
   (await t.deps.auditRoot.search({ entity_id: id, limit: 50 })).filter((a) => a.action === action)
 
 describe('lease sweeper (D-iii)', () => {
-  it('the dormant pair refuses to arm the timer (interval 0 OR timeout 0)', () => {
+  it('the dormant pair refuses to arm; stop() on a never-started sweeper resolves', async () => {
     for (const cfg of [
       { intervalMs: 0, timeoutS: 300 },
       { intervalMs: 1000, timeoutS: 0 },
@@ -551,7 +576,29 @@ describe('lease sweeper (D-iii)', () => {
       const s = new LeaseSweeper(t.deps.uow, cfg)
       s.start()
       expect(s.isRunning).toBe(false)
+      await s.stop() // the FALSE timer arm (delivery-loop test:201-238 lineage)
     }
+  })
+
+  it('an armed timer fires tick() on the default clock; a failing pass is SWALLOWED (P10 arms)', async () => {
+    // scripted rejecting UoW is the ONLY way to exercise the real interval
+    // callback FUNCTION, the Date.now() default-param arm and the
+    // .catch(() => undefined) swallow arm — the delivery loop pins it the
+    // same way (delivery-loop.test.ts armed-timer lineage).
+    let fired = 0
+    const uow = {
+      withTransaction: async () => {
+        fired += 1
+        throw new Error('scripted sweep failure')
+      },
+    } as unknown as UnitOfWork
+    const s = new LeaseSweeper(uow, { intervalMs: 10, timeoutS: 300 })
+    s.start()
+    expect(s.isRunning).toBe(true)
+    await new Promise((r) => setTimeout(r, 50))
+    await s.stop()
+    expect(s.isRunning).toBe(false)
+    expect(fired).toBeGreaterThan(0) // the timer REALLY fired; nothing rejected
   })
 
   it('a silent claim reverts: todo, unclaimed, generation bumped, audit "lease expired"', async () => {
@@ -878,7 +925,7 @@ if (cmd === 'heartbeat') {
 }
 ```
 
-- [ ] **Step 4: README byte-sync, SAME commit.** In `deploy/README.md` §The CLI: replace the three lines inside the ` ```text ` block with the FINAL USAGE lines byte-exact; RE-DERIVE the "`src/cli/run.ts:41-43`" citation against the final file (`grep -n "usage: nightshift" src/cli/run.ts` — COMMANDS gained a line, so the span moved; cite the true span). A1 (review): RE-DERIVE **ALL** `run.ts:N` citations in deploy/README.md — whole-file `grep -n "run.ts:" deploy/README.md` (the env-table span :203, the never-echoed quote :213, the secret-scan note :245 all shift; the COMMANDS line and the inserted dispatch arm push everything down). Add the commands-table row between `claim` and `report`:
+- [ ] **Step 4: README byte-sync, SAME commit.** In `deploy/README.md` §The CLI: replace the three lines inside the ` ```text ` block with the FINAL USAGE lines byte-exact; RE-DERIVE the "`src/cli/run.ts:41-43`" citation against the final file (`grep -n "usage: nightshift" src/cli/run.ts` — P8 measured the block at `run.ts:42-44` post-delta; confirm by grep, cite the measured span). A1 (review): RE-DERIVE **ALL** `run.ts:N` citations in deploy/README.md — whole-file `grep -n "run.ts:" deploy/README.md` (the env-table span :203, the never-echoed quote :213, the secret-scan note :245 all shift; the COMMANDS line and the inserted dispatch arm push everything down). Add the commands-table row between `claim` and `report`:
 
 ```markdown
 | `heartbeat` | `<task-id>` (exactly one); the lease via `NS_LEASE_TOKEN` — REQUIRED (absent ⇒ exit 2, nothing sent) | the server's Task DTO (liveness recorded) |
@@ -971,7 +1018,7 @@ The §1 KNOWN FINDING blockquote stays byte-untouched — ONLY Task 8's live 23/
 - Modify (after the run ONLY): `deploy/DEPLOY-SMOKE.md` §1 note, `deploy/README.md` Deploy-smoke section
 - Modify: this plan doc (FINAL-GATE RECORD)
 
-- [ ] **Step 1: Script-truth verification (the no-change claim).** `sed -n 67,77p scripts/deploy-smoke.mjs` — confirm the `/ui shell is no-cache` check already asserts `includes('no-cache')` and sends no explicit `accept-encoding` (undici auto-negotiates br) ⇒ ZERO script change; quote the arm in the record. `grep -rn "22 PASS\|recorded-FAIL\|must NOT be weakened" deploy/` — the flip targets are exactly `README.md` (:257-266) and `DEPLOY-SMOKE.md` §1; plan-F/E docs are history and NEVER rewritten.
+- [ ] **Step 1: Script-truth verification (the no-change claim).** `sed -n 73,77p scripts/deploy-smoke.mjs` (the no-cache arm's own span) — confirm the `/ui shell is no-cache` check already asserts `includes('no-cache')` and sends no explicit `accept-encoding` (undici auto-negotiates br) ⇒ ZERO script change; quote the arm in the record. `grep -rn "22 PASS\|recorded-FAIL\|must NOT be weakened" deploy/` — the flip targets are exactly `README.md` (:257-266) and `DEPLOY-SMOKE.md` §1; plan-F/E docs are history and NEVER rewritten.
 - [ ] **Step 2: The full local gate.** `pnpm test:coverage && pnpm lint && pnpm typecheck && pnpm build && pnpm ui:build && pnpm ui:offline-check && pnpm test:e2e` — coverage floor **99.52 / 98.52 / 99.78 / 99.70** every axis ≥ F's record (Funcs HELD; `src/domain/**` 100×4; `vitest.config.ts` byte-untouched; honest counts 674 → N / 88 → N files); e2e probe-first per D-xx; zero-drift audit: `git diff origin/main..HEAD --stat` vs this plan's File-structure table — sanctioned deltas ONLY (plan/CLI/deploy/keepalive additions + D-fff/D-kkk named edits).
 - [ ] **Step 3: The LIVE leg — fresh image, then the smoke.** `docker build --no-cache -t ns-g .` (quote the offline-check build line) → boot the twin on a THROWAWAY volume (F's Task-6 recipe: `-v` a fresh volume, `NS_BOOTSTRAP_TOKEN` local-smoke literal, published `127.0.0.1:3199`) → `NS_URL=… NS_TOKEN=… node scripts/deploy-smoke.mjs` — **expect 23 PASS / 0 FAIL, exit 0** (the brotli arm goes GREEN live — the recorded finding's death certificate). Then the keepalive ENABLED twin: boot with `NS_KEEPALIVE_INTERVAL_MS=1000 NS_KEEPALIVE_TIMEOUT_S=3`, create+claim via CLI, wait > 4 s, verify `GET /audit` shows `lease_expired`/`lease expired`, the task is `todo`, and the old lease fences exit 3 (heartbeat AND status). `docker stop -t 12` ⇒ ExitCode 0.
 - [ ] **Step 4: The flip (ONLY after Steps 2-3 are green).** In `DEPLOY-SMOKE.md` §1 REPLACE the KNOWN FINDING blockquote with a RESOLVED record (quote the original 3 lines of finding, then: fixed by the D-fff `setHeaders` re-pin + in-suite arms U9/U9b; live G-wave run 23 PASS / 0 FAIL, exit 0, verbatim tail quoted below; probe never weakened — the script is byte-identical since F). In `deploy/README.md` §Deploy-smoke, mirror that resolution (expect 23/0; the 22/1 is history with lineage). Commit `git add deploy && git commit -m "docs(deploy): brotli finding RESOLVED — live run 23 PASS / 0 FAIL (D-fff)"`.
