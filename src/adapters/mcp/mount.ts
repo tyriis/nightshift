@@ -33,6 +33,12 @@ export const mountMcp = (app: FastifyInstance, deps: AppDeps): void => {
       method: ['GET', 'POST', 'DELETE'],
       url: '/mcp',
       handler: async (request, reply: FastifyReply) => {
+        // D-ww second layer (defense-in-depth): the auth hook already refuses
+        // session identities on /mcp; a future hook refactor must not silently
+        // open this surface. Same pinned string; reachable only past the hook.
+        if (request.authVia === 'session') {
+          throw new DomainError('forbidden', 'mcp requires a bearer token (D-ww)')
+        }
         const ctx = mcpActor(request) // before hijack: the defensive 401 stays problem+json
         const webRequest = webRequestFromFastify(request, request.body as Uint8Array | undefined)
         reply.hijack() // MCP owns the socket

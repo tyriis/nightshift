@@ -6,3 +6,5 @@ coverage/
 *.db-wal
 .env
 .env.*
+playwright-report/
+test-results/

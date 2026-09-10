@@ -1,4 +1,4 @@
-import type { ActorKind } from '#root/domain/task'
+import type { ActorKind, HumanRole } from '#root/domain/task'
 import { DomainError } from '#root/domain/errors'
 // Utility import (pure node:crypto, no DB/adapter/transport) — sanctioned as
 // plan-verbatim by orchestrator ruling; the hexagonal no-infra rule targets repo/adapter layers.
@@ -17,6 +17,8 @@ export interface CreateActorInput extends ActorContext {
   handle: string
   display_name: string
   description?: string
+  /** D-ss: humans only; default 'member' (admins stay an explicit decision); dropped for agents */
+  role?: HumanRole
 }
 
 export class CreateActor {
@@ -39,6 +41,9 @@ export class CreateActor {
         display_name: input.display_name,
         description: input.description ?? '',
         created_at: now,
+        // D-ss: humans default to 'member' — admin is always an explicit decision;
+        // agents carry no role (null, never admin).
+        role: input.kind === 'human' ? (input.role ?? 'member') : null,
       })
       await repos.audit.append({
         actor_id: input.actor.id,

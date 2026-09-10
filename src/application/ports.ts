@@ -1,5 +1,5 @@
 import type { InboxItemKind, LinkKind, QuestionState, ThreadKind } from '#root/domain/discussion'
-import type { ActorKind, TaskDraft, TaskRecord, TaskStatus } from '#root/domain/task'
+import type { ActorKind, HumanRole, TaskDraft, TaskRecord, TaskStatus } from '#root/domain/task'
 
 export interface Clock {
   now(): Date
@@ -14,6 +14,9 @@ export interface ActorRef {
   kind: ActorKind
   handle: string
   display_name: string
+  // D-ss: human role rides the ref into every gate (requireAdmin, Task 4);
+  // agents and pre-E legacy rows are NULL — null is never admin.
+  role: HumanRole | null
 }
 
 // ---- audit
@@ -58,6 +61,9 @@ export interface TaskWithCounts {
   task: TaskRecord
   child_count: number
   unmet_blockers: number
+  /** Label NAMES resolved in one batched query per response (review R3/B12, Task 9
+   * Step 0): every path returning this shape carries them — sorted by name, [] unlabeled. */
+  labels: string[]
 }
 
 export interface TaskPatch {
@@ -139,6 +145,7 @@ export interface ActorRow {
   display_name: string
   description: string
   created_at: string
+  role: HumanRole | null
 }
 
 export interface TokenRow {
@@ -163,8 +170,15 @@ export interface ActorRepo {
     display_name: string
     description: string
     created_at: string
+    /** D-ss: explicit at every creation site — agents pass null, humans admin|member */
+    role: HumanRole | null
+    /** D-tt: first-login provisioning binds the verified subject; every other site omits */
+    oidc_subject?: string
   }): Promise<ActorRow>
   findByHandle(handle: string): Promise<ActorRow | null>
+  /** D-tt: first-login lookup by the verified id_token sub — FULL row, no trim
+   * (the login path is NOT the token-lookup hot path). */
+  findByOidcSubject(subject: string): Promise<ActorRow | null>
   findById(id: string): Promise<ActorRow | null>
   /** Actor that owns the given token id (for exposing a claim holder's public identity). */
   findActorByTokenId(tokenId: string): Promise<ActorRow | null>
@@ -183,6 +197,48 @@ export interface ActorRepo {
   listTokensForActor(actorId: string): Promise<TokenRow[]>
   getPolicy(key: string): Promise<string | null>
   setPolicy(key: string, value: string): Promise<void>
+}
+
+// ---- sessions (D-qq)
+
+export interface SessionRow {
+  id: string
+  actor_id: string
+  csrf: string
+  created_at: string
+  expires_at: string
+  revoked_at: string | null
+}
+export interface SessionLookup {
+  session: SessionRow
+  actor: ActorRow
+}
+/** D-qq: server-side truth for cookie sessions; lazy expiry on read, no sweeper. */
+export interface SessionRepo {
+  create(input: {
+    id: string
+    actor_id: string
+    csrf: string
+    created_at: string
+    expires_at: string
+  }): Promise<void>
+  findValid(id: string, now: string): Promise<SessionLookup | null>
+  revoke(id: string, at: string): Promise<void>
+}
+
+// ---- allow-list (D-tt)
+
+export interface AllowlistRow {
+  email: string
+  added_by: string
+  created_at: string
+}
+/** D-tt: admin-managed first-login allow-list rows (emails stored lowercased). */
+export interface AllowlistRepo {
+  list(): Promise<AllowlistRow[]>
+  findByEmail(email: string): Promise<AllowlistRow | null>
+  insert(input: { email: string; added_by: string; created_at: string }): Promise<void>
+  remove(email: string): Promise<boolean>
 }
 
 // ---- idempotency (spec §7.3)
@@ -422,6 +478,7 @@ export interface Repos {
   deps: DependencyRepo
   labels: LabelRepo
   actors: ActorRepo
+  allowlist: AllowlistRepo
   threads: ThreadRepo
   inbox: InboxRepo
   attachments: AttachmentRepo

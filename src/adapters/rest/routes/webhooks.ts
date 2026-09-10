@@ -1,16 +1,18 @@
 import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
-import { actorCtx, requireHuman } from '#root/adapters/rest/auth'
+import { actorCtx, requireHuman, requireAdmin } from '#root/adapters/rest/auth'
 
 // /admin/webhooks* — human-only (requireHuman stays async: sync-void deadlocks fastify
 // 5's hook iterator, auth.ts/R4). Secrets: created/rotated shown once, never listable (D-ff).
 export const registerWebhookRoutes = (app: FastifyInstance, deps: AppDeps): void => {
-  app.get('/admin/webhooks', { preHandler: [requireHuman] }, async () => deps.webhooksRoot.list())
+  app.get('/admin/webhooks', { preHandler: [requireHuman, requireAdmin] }, async () =>
+    deps.webhooksRoot.list()
+  )
 
   app.post(
     '/admin/webhooks',
     {
-      preHandler: [requireHuman],
+      preHandler: [requireHuman, requireAdmin],
       schema: {
         body: {
           type: 'object',
@@ -35,18 +37,26 @@ export const registerWebhookRoutes = (app: FastifyInstance, deps: AppDeps): void
     }
   )
 
-  app.post('/admin/webhooks/:id/rotate-secret', { preHandler: [requireHuman] }, async (request) => {
-    const { id } = request.params as { id: string }
-    const rotated = await deps.useCases.rotateWebhookSecret.run({
-      ...actorCtx(request),
-      webhook_id: id,
-    })
-    return { ...rotated.webhook, secret: rotated.secret }
-  })
+  app.post(
+    '/admin/webhooks/:id/rotate-secret',
+    { preHandler: [requireHuman, requireAdmin] },
+    async (request) => {
+      const { id } = request.params as { id: string }
+      const rotated = await deps.useCases.rotateWebhookSecret.run({
+        ...actorCtx(request),
+        webhook_id: id,
+      })
+      return { ...rotated.webhook, secret: rotated.secret }
+    }
+  )
 
-  app.delete('/admin/webhooks/:id', { preHandler: [requireHuman] }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    await deps.useCases.deleteWebhook.run({ ...actorCtx(request), webhook_id: id })
-    return reply.code(204).send()
-  })
+  app.delete(
+    '/admin/webhooks/:id',
+    { preHandler: [requireHuman, requireAdmin] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      await deps.useCases.deleteWebhook.run({ ...actorCtx(request), webhook_id: id })
+      return reply.code(204).send()
+    }
+  )
 }

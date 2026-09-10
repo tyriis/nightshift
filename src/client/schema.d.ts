@@ -36,6 +36,74 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/auth/login': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** @description OIDC login kick-off (D-pp): 302 to the provider authorize endpoint with a PKCE(S256) challenge; state/nonce/verifier ride a signed HttpOnly flow cookie (600 s). returnTo may only point into /ui/ — anything else collapses to /ui/ inside the flow. OIDC unconfigured answers 500 problem+json (the dormant posture, pinned). */
+    get: operations['authLogin']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/auth/callback': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** @description authorization-code leg (D-pp): flow cookie + state (+ iss when present) validated, code exchanged, id_token verified; then the D-tt first-login tree — bound subject logs in; else the fail-closed oidc_provisioning policy (off ⇒ deny). SUCCESS 302 to the flow returnTo with the session+CSRF cookie pair (D-qq/D-rr); DENY 302 /ui/login?error=pending for browsers or 403 problem+json for accept: application/json (same audit); validation rejections are one pinned 403. The flow cookie is always cleared. */
+    get: operations['authCallback']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/auth/logout': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** @description revoke the CALLER's session row (audited, session_revoked) and clear both cookies (Max-Age=0). Requires a cookie session + X-CSRF-Token (D-rr — the hook answers 403 before the route); bearer actors get 400 invalid_request (a token is not a session, D-qq). */
+    post: operations['authLogout']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/auth/me': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** @description identity echo for the SPA shell (D-zz): the caller's ActorRef — ANY authenticated actor; the global bearerAuth documents the agent leg, cookie sessions resolve through the same identity (role rides — the SPA nav and admin gate read it). NO new auth concept, reads actorCtx. */
+    get: operations['authMe']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/tasks': {
     parameters: {
       query?: never
@@ -359,6 +427,43 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/admin/allowlist': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** @description D-tt first-login allow-list rows (emails lowercased), emails ascending */
+    get: operations['listAllowlist']
+    put?: never
+    /** @description add an email to the first-login allow-list (D-tt). Stored LOWERCASED; a duplicate is idempotent — 200 with the existing row (data, not error). */
+    post: operations['addAllowlist']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/allowlist/{email}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        email: string
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /** @description remove an entry (lowercase rule applies before lookup); absent is 404 not_found. */
+    delete: operations['removeAllowlist']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/admin/webhooks': {
     parameters: {
       query?: never
@@ -635,15 +740,17 @@ export interface components {
       claim_generation: number
       last_heartbeat_at: string | null
     }
-    /** @description flat task DTO — the row plus its rollup counts (toTaskDto) */
+    /** @description flat task DTO — the row plus its rollup counts and label names (toTaskDto) */
     Task: components['schemas']['TaskRecord'] & {
       child_count?: number
       unmet_blockers?: number
+      labels?: string[]
     }
     TaskWithCounts: {
       task?: components['schemas']['TaskRecord']
       child_count?: number
       unmet_blockers?: number
+      labels?: string[]
     }
     ContextBundle: {
       task?: components['schemas']['TaskRecord']
@@ -682,9 +789,18 @@ export interface components {
       id?: string
       /** @enum {string} */
       kind?: 'human' | 'agent'
+      /** @enum {string|null} */
+      role?: 'admin' | 'member' | null
+      /** @description internal OIDC subject binding; admin-visible */
+      oidc_subject?: string | null
       handle?: string
       display_name?: string
       description?: string
+      created_at?: string
+    }
+    AllowlistEntry: {
+      email?: string
+      added_by?: string
       created_at?: string
     }
     AuditEntry: {
@@ -875,6 +991,99 @@ export interface operations {
           'application/yaml': string
         }
       }
+    }
+  }
+  authLogin: {
+    parameters: {
+      query?: {
+        returnTo?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description redirect to the provider authorize URL */
+      302: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  authCallback: {
+    parameters: {
+      query?: {
+        code?: string
+        state?: string
+        iss?: string
+        error?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description login success (returnTo) or browser deny (/ui/login?error=…) */
+      302: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  authLogout: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description revoked (no body; both cookies cleared) */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  authMe: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description the caller's ActorRef */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': {
+            id?: string
+            /** @enum {string} */
+            kind?: 'human' | 'agent'
+            /** @enum {string|null} */
+            role?: 'admin' | 'member' | null
+            handle?: string
+            display_name?: string
+          }
+        }
+      }
+      default: components['responses']['Problem']
     }
   }
   listTasks: {
@@ -1401,6 +1610,8 @@ export interface operations {
           handle: string
           display_name: string
           description?: string
+          /** @enum {string} */
+          role?: 'admin' | 'member'
         }
       }
     }
@@ -1512,7 +1723,7 @@ export interface operations {
       content: {
         'application/json': {
           /** @enum {string} */
-          value: 'on' | 'off'
+          value: 'on' | 'off' | 'allowlist'
         }
       }
     }
@@ -1528,6 +1739,84 @@ export interface operations {
             value?: string
           }
         }
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  listAllowlist: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description allow-list entries */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AllowlistEntry'][]
+        }
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  addAllowlist: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': {
+          email: string
+        }
+      }
+    }
+    responses: {
+      /** @description already present — the existing row (idempotent, D-tt) */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AllowlistEntry']
+        }
+      }
+      /** @description created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AllowlistEntry']
+        }
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  removeAllowlist: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        email: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description removed (no body) */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
       default: components['responses']['Problem']
     }

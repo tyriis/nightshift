@@ -15,7 +15,7 @@ import { AddBlock } from '#root/application/usecases/add-block'
 import type { ActorContext } from '#root/application/ports'
 
 const agent: ActorContext = {
-  actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'Hermes' },
+  actor: { id: 'a_agent', kind: 'agent', handle: 'hermes-1', display_name: 'Hermes', role: null },
   tokenId: 'tok_agent',
 }
 

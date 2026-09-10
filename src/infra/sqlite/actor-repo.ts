@@ -12,6 +12,9 @@ export class SqliteActorRepo implements ActorRepo {
     display_name: string
     description: string
     created_at: string
+    role: ActorRow['role']
+    /** D-tt: present only on OIDC-provisioned rows (the create site owns the binding) */
+    oidc_subject?: string
   }): Promise<ActorRow> {
     return this.db.insertInto('actors').values(input).returningAll().executeTakeFirstOrThrow()
   }
@@ -21,6 +24,18 @@ export class SqliteActorRepo implements ActorRepo {
       .selectFrom('actors')
       .selectAll()
       .where('handle', '=', handle)
+      .executeTakeFirst()
+    return r ?? null
+  }
+
+  async findByOidcSubject(subject: string): Promise<ActorRow | null> {
+    // D-tt login path, not the token hot path: FULL row, no trim (plan pin). The
+    // unique index lives on actors(oidc_subject); NULLs never match ('=' is null-
+    // rejecting), so agents and pre-E humans are invisible here by construction.
+    const r = await this.db
+      .selectFrom('actors')
+      .selectAll()
+      .where('oidc_subject', '=', subject)
       .executeTakeFirst()
     return r ?? null
   }
@@ -72,6 +87,7 @@ export class SqliteActorRepo implements ActorRepo {
         'actors.kind as a_kind',
         'actors.handle as a_handle',
         'actors.display_name as a_display',
+        'actors.role as a_role',
       ])
       .where('tokens.token_hash', '=', hash)
       .where('tokens.revoked_at', 'is', null)
@@ -92,6 +108,7 @@ export class SqliteActorRepo implements ActorRepo {
       display_name: r.a_display,
       description: '',
       created_at: '',
+      role: r.a_role,
     }
     return { token, actor }
   }

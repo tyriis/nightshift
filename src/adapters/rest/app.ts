@@ -7,6 +7,7 @@ import { registerAuth } from '#root/adapters/rest/auth'
 import { registerIdempotency } from '#root/adapters/rest/idempotency'
 import { registerRateLimit } from '#root/adapters/rest/rate-limit'
 import { registerAdminRoutes } from '#root/adapters/rest/routes/admin'
+import { registerAuthRoutes } from '#root/adapters/rest/routes/auth'
 import { registerWebhookRoutes } from '#root/adapters/rest/routes/webhooks'
 import { registerAuditRoutes } from '#root/adapters/rest/routes/audit'
 import { registerEventRoutes } from '#root/adapters/rest/routes/events'
@@ -18,6 +19,7 @@ import { registerThreadRoutes } from '#root/adapters/rest/routes/threads'
 import { registerAttachmentRoutes } from '#root/adapters/rest/routes/attachments'
 import { registerLinkRoutes } from '#root/adapters/rest/routes/links'
 import { mountMcp } from '#root/adapters/mcp/mount'
+import { mountUi } from '#root/adapters/rest/ui'
 
 export interface BuildAppOptions {
   logger?: boolean
@@ -62,9 +64,12 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerDependencyRoutes(server, deps)
   registerLabelRoutes(server, deps)
   registerAdminRoutes(server, deps)
+  registerAuthRoutes(server, deps) // the OIDC login surface (hooks are app-level — order vs the other blocks is inert)
   registerWebhookRoutes(server, deps) // admin surface groups together (plan Task 9)
 
   mountMcp(server, deps) // adapters/mcp — the /mcp surface (D-hh); keeps hook order intact
+
+  mountUi(server, deps) // D-vv — static SPA mount, last mount; exact-set pins in auth.ts + the drift test
 
   return server
 }

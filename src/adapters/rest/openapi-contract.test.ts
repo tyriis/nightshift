@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import type { FastifyInstance } from 'fastify'
 import { makeTestApp } from '#root/testing/test-app'
+import { uiBuildPresent } from '#root/adapters/rest/ui'
 import { DOMAIN_ERROR_STATUS } from '#root/domain/errors'
 import { ADAPTER_ERROR_CODES } from '#root/adapters/rest/problem'
 import { TASK_STATUSES } from '#root/domain/task'
@@ -31,10 +32,12 @@ const specKeys = (spec: { paths: Record<string, SpecPathItem> }): string[] => {
 // line prints a leading-slash segment, so the indent stack reconstructs the full path.
 // Lines shaped like tree nodes but outside this grammar all fail LOUD, never drop
 // silently: a wildcard route prints (commonPrefix:false) as a bare `── * (GET, HEAD)`
-// leaf with no path segment; method-varying constraints print as extra data lines; a
-// find-my-way format change shifts every other shape. This app registers neither — if
-// that ever changes, teach the grammar before trusting the diff.
-const ROUTE_LINE = /^((?:│ {3}| {4})*)(?:├── |└── )(\/\S*) \(([^)]+)\)$/
+// leaf with NO path segment in ANY printRoutes mode — the /ui static mount (D-vv)
+// prints exactly that, so the grammar LEARNS the leaf as a sentinel (`GET *`) and the
+// /ui/* spelling is pinned via hasRoute below. Method-varying constraints still print
+// as extra data lines — this app registers none; if a find-my-way format change ever
+// shifts the other shapes, they land in the loud fail, never in a silent skip.
+const ROUTE_LINE = /^((?:│ {3}| {4})*)(?:├── |└── )(\/\S*|\*) \(([^)]+)\)$/
 
 const routeKeys = (app: FastifyInstance): string[] => {
   const keys = new Set<string>()
@@ -43,17 +46,27 @@ const routeKeys = (app: FastifyInstance): string[] => {
     const match = ROUTE_LINE.exec(line)
     if (!match) {
       // fail LOUD, never silent: any tree-shaped line the regex cannot parse means the
-      // grammar missed a class (wildcard leaf, constraint data line, format drift).
+      // grammar missed a class (constraint data line, format drift — the wildcard leaf
+      // itself is grammar since D-vv and lands in the sentinel arm below).
       if (line.includes('── ')) {
         throw new Error(
           `routeKeys: unparseable route-tree line ${JSON.stringify(line)} — ROUTE_LINE covers only ` +
-            'plain "/segment (METHOD)" leaves; wildcards (── *), method constraints, or a ' +
-            'find-my-way format change land here — teach the grammar before trusting the diff'
+            'plain "/segment (METHOD)" leaves and the bare wildcard leaf (── *); method constraints ' +
+            'or a find-my-way format change land here — teach the grammar before trusting the diff'
         )
       }
       continue
     }
     stack.length = match[1].length / 4
+    if (match[2] === '*') {
+      // wildcard leaf (the /ui static mount): pretty-print carries NO path for wildcards,
+      // so the key is the SENTINEL `GET *`; the '/ui/*' spelling is pinned by hasRoute.
+      for (const method of match[3].split(', ')) {
+        if (method === 'HEAD') continue
+        keys.add(`${method} *`)
+      }
+      continue
+    }
     stack.push(match[2])
     for (const method of match[3].split(', ')) {
       // fastify answers HEAD wherever GET is registered; the contract documents GET
@@ -85,6 +98,10 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
     // (mount.ts) and plugin routes only enter the router tree at boot
     await t.app.ready()
     const served = routeKeys(t.app)
+    // hasRoute captures MUST sit before t.close() (fastify refuses router access
+    // after close): the /ui/* SPELLING the sentinel cannot carry
+    const hasUiGet = t.app.hasRoute({ method: 'GET', url: '/ui/*' })
+    const hasUiPost = t.app.hasRoute({ method: 'POST', url: '/ui/*' })
     const documented = specKeys(spec)
     await t.close()
 
@@ -96,7 +113,24 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
     const mcpPresent = served.filter((key) => key.endsWith(' /mcp')).sort()
     expect(mcpPresent).toEqual(MCP_ROUTES)
     expect(documented.some((key) => key.includes('/mcp'))).toBe(false)
-    expect(served.filter((key) => !mcpPresent.includes(key))).toEqual(documented)
+
+    // D-vv exact-set #2 — the yaml cannot describe a built asset tree. The static
+    // mount prints as the BARE wildcard leaf (no path in ANY printRoutes mode), so
+    // routeKeys classifies it as the sentinel `GET *`; a second wildcard registration
+    // duplicates the sentinel and fails this pin, and the hasRoute pair pins the
+    // '/ui/*' spelling + the absence of any POST sibling. Both faces honest: with a
+    // build the sentinel is served; without one the STATIC set is EMPTY (zero-member
+    // pin) — uiBuildPresent() is the SAME helper ui.ts uses, so test and mount share
+    // one tree-truth.
+    const STATIC_KEYS = ['GET *'] // sentinel — the /ui/* spelling is pinned by hasRoute
+    const staticPresent = served.filter((key) => key.endsWith(' *')).sort()
+    expect(staticPresent).toEqual(uiBuildPresent() ? STATIC_KEYS : [])
+    expect(hasUiGet).toBe(uiBuildPresent())
+    expect(hasUiPost).toBe(false)
+    expect(documented.some((key) => key.includes('/ui'))).toBe(false)
+    expect(
+      served.filter((key) => !mcpPresent.includes(key) && !staticPresent.includes(key))
+    ).toEqual(documented)
   })
 
   it('pins schema enums to the domain single sources (no stale-enum drift)', async () => {
@@ -122,12 +156,19 @@ describe('OpenAPI contract (spec §7.1: committed spec = product contract)', () 
   })
 
   it('routeKeys fails loudly on tree shapes outside the grammar', () => {
-    // Live capture (find-my-way 9.9.0): registering GET /wildcard-probe/* prints a bare
-    // wildcard leaf with no path segment — the silent skip this replaced read as false
-    // GREEN (reviewer exp-15). Stubbing printRoutes is the pin's injection point: fastify
-    // refuses route registration after boot, so the wildcard shape stays out of the app.
-    const tree = '├── /tasks (POST, GET, HEAD)\n└── * (GET, HEAD)\n'
-    const app = { printRoutes: () => tree } as unknown as FastifyInstance
-    expect(() => routeKeys(app)).toThrow('── * (GET, HEAD)')
+    // RE-PINNED in the SAME edit that taught the grammar the wildcard leaf (D-vv,
+    // preflight P7/fix12): the old wildcard-as-junk fixture IS grammar now — it
+    // parses to the sentinel plus the plain leaves — so the loud-fail class keeps a
+    // GENUINELY out-of-shape line (the junk leaf must still throw). The bite stays.
+    const wildcard = '├── /tasks (POST, GET, HEAD)\n└── * (GET, HEAD)\n'
+    expect(routeKeys({ printRoutes: () => wildcard } as unknown as FastifyInstance)).toEqual([
+      'GET *',
+      'GET /tasks',
+      'POST /tasks',
+    ])
+    const junk = '├── /tasks (POST, GET, HEAD)\n└── ???junk (GET)\n'
+    expect(() => routeKeys({ printRoutes: () => junk } as unknown as FastifyInstance)).toThrow(
+      '── ???junk (GET)'
+    )
   })
 })

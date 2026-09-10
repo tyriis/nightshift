@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '#root/main/deps'
 import { DomainError } from '#root/domain/errors'
 
-const MUTATING = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
+export const MUTATING = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
 
 export const registerIdempotency = (app: FastifyInstance, deps: AppDeps): void => {
   app.addHook('onRequest', async (request, reply) => {

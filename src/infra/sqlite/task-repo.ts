@@ -47,6 +47,27 @@ const hasLabel = (label: string): RawBuilder<SqlBool> => sql<SqlBool>`
 export class SqliteTaskRepo implements TaskRepo {
   constructor(private readonly db: Kysely<DB>) {}
 
+  // Task 9 Step 0 (review R3/B12): label NAMES ride TaskWithCounts so the board
+  // DTO carries them with NO per-card GET. ONE batched query per response —
+  // the empty-id guard is load-bearing: `in ()` is invalid SQL.
+  private async labelsFor(taskIds: string[]): Promise<Map<string, string[]>> {
+    if (taskIds.length === 0) return new Map()
+    const rows = await this.db
+      .selectFrom('task_labels')
+      .innerJoin('labels', 'labels.id', 'task_labels.label_id')
+      .select(['task_labels.task_id as task_id', 'labels.name as name'])
+      .where('task_labels.task_id', 'in', taskIds)
+      .orderBy('labels.name', 'asc')
+      .execute()
+    const out = new Map<string, string[]>()
+    for (const r of rows) {
+      const list = out.get(r.task_id) ?? []
+      list.push(r.name)
+      out.set(r.task_id, list)
+    }
+    return out
+  }
+
   async create(draft: TaskDraft): Promise<TaskRecord> {
     const row = await this.db
       .insertInto('tasks')
@@ -86,10 +107,12 @@ export class SqliteTaskRepo implements TaskRepo {
       .where('id', '=', id)
       .executeTakeFirst()
     if (!r) return null
+    const labels = await this.labelsFor([r.id])
     return {
       task: toRecord(r),
       child_count: Number(r.child_count),
       unmet_blockers: Number(r.unmet_blockers),
+      labels: labels.get(r.id) ?? [],
     }
   }
 
@@ -101,10 +124,12 @@ export class SqliteTaskRepo implements TaskRepo {
       .select(unmetBlockers.as('unmet_blockers'))
       .orderBy('position', 'asc')
       .execute()
+    const labels = await this.labelsFor(rows.map((r) => r.id))
     return rows.map((r) => ({
       task: toRecord(r),
       child_count: Number(r.child_count),
       unmet_blockers: Number(r.unmet_blockers),
+      labels: labels.get(r.id) ?? [],
     }))
   }
 
@@ -122,10 +147,12 @@ export class SqliteTaskRepo implements TaskRepo {
       .orderBy('tasks.position', 'asc')
     const query = filter.label ? base.where(hasLabel(filter.label)) : base
     const rows = await query.limit(filter.limit).execute()
+    const labels = await this.labelsFor(rows.map((r) => r.id))
     return rows.map((r) => ({
       task: toRecord(r),
       child_count: Number(r.child_count),
       unmet_blockers: Number(r.unmet_blockers),
+      labels: labels.get(r.id) ?? [],
     }))
   }
 

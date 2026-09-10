@@ -1,6 +1,6 @@
 import type { Generated } from 'kysely'
 import type { InboxItemKind, LinkKind, QuestionState, ThreadKind } from '#root/domain/discussion'
-import type { ActorKind, TaskStatus } from '#root/domain/task'
+import type { ActorKind, HumanRole, TaskStatus } from '#root/domain/task'
 
 export interface ActorsTable {
   id: string
@@ -9,6 +9,10 @@ export interface ActorsTable {
   display_name: string
   description: string
   created_at: string
+  // D-ss: added IN PLACE by 2026-09-13_human_identity (ADD COLUMN, not a rebuild);
+  // role is NULL for agents, oidc_subject NULL for agents and pre-E humans.
+  role: HumanRole | null
+  oidc_subject: string | null
 }
 
 export interface TokensTable {
@@ -101,6 +105,8 @@ export interface DB {
   attachments: AttachmentsTable
   links: LinksTable
   webhooks: WebhooksTable
+  sessions: SessionsTable
+  oidc_allowlist: OidcAllowlistTable
   // FTS5 virtual table: queried via sql templates (Kysely's builder has no match-op);
   // column interface matches the fts5 columns (rowid implicit). Declared for type-honest
   // sql-template composition only.
@@ -173,4 +179,22 @@ export interface WebhooksTable {
   delivered_cursor: number
   attempts: number
   next_attempt_at: number
+}
+
+// D-qq: server-side session store — the revocation truth. Lazy expiry on read
+// (expires_at/revoked_at checked per request via the Clock port); no sweeper loop.
+export interface SessionsTable {
+  id: string
+  actor_id: string
+  csrf: string
+  created_at: string
+  expires_at: string
+  revoked_at: string | null
+}
+
+// D-tt: admin-managed OIDC first-login allow-list (email = lowercased identity email)
+export interface OidcAllowlistTable {
+  email: string
+  added_by: string
+  created_at: string
 }

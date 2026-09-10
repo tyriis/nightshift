@@ -9,7 +9,13 @@ import type { ActorContext } from '#root/application/ports'
 import type { AppDeps } from '#root/main/deps'
 
 const ctx: ActorContext = {
-  actor: { id: 'actor_fake', kind: 'human', handle: 'a_fake', display_name: 'Fake' },
+  actor: {
+    id: 'actor_fake',
+    kind: 'human',
+    handle: 'a_fake',
+    display_name: 'Fake',
+    role: 'admin',
+  },
   tokenId: null,
 }
 const deps = {} as AppDeps // the fixtures below never touch deps

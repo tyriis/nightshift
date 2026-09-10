@@ -1,16 +1,59 @@
 import { z } from 'zod'
 
-const EnvSchema = z.object({
-  NS_PORT: z.coerce.number().int().min(1024).max(65535).default(3123),
-  NS_DB_PATH: z.string().min(1).default('./nightshift.db'),
-  NS_BOOTSTRAP_TOKEN: z.string().min(32).optional(),
-  NS_DATA_DIR: z.string().min(1).default('./data'),
-  NS_MAX_UPLOAD_BYTES: z.coerce.number().int().min(1024).default(20_971_520),
-  NS_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(0).default(120),
-  NS_WEBHOOK_INTERVAL_MS: z.coerce.number().int().min(0).default(1_000),
-  NS_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(100).default(5_000),
-  NS_WEBHOOK_MAX_BACKOFF_MS: z.coerce.number().int().min(1_000).default(300_000),
-})
+const EnvSchema = z
+  .object({
+    NS_PORT: z.coerce.number().int().min(1024).max(65535).default(3123),
+    NS_DB_PATH: z.string().min(1).default('./nightshift.db'),
+    NS_BOOTSTRAP_TOKEN: z.string().min(32).optional(),
+    NS_DATA_DIR: z.string().min(1).default('./data'),
+    NS_MAX_UPLOAD_BYTES: z.coerce.number().int().min(1024).default(20_971_520),
+    NS_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(0).default(120),
+    NS_WEBHOOK_INTERVAL_MS: z.coerce.number().int().min(0).default(1_000),
+    NS_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(100).default(5_000),
+    NS_WEBHOOK_MAX_BACKOFF_MS: z.coerce.number().int().min(1_000).default(300_000),
+    // Plan E (D-pp/D-qq): OIDC RP + cookie sessions. All optional — the suite and
+    // every pre-E deployment stays byte-identical when absent (dormant). Trailing
+    // slashes are STRIPPED here once: issuer string-equality (D-pp) and the
+    // redirect_uri are built from these exact values.
+    NS_OIDC_ISSUER: z
+      .string()
+      .min(1)
+      .optional()
+      .transform((v) => v?.replace(/\/+$/, '')),
+    NS_OIDC_CLIENT_ID: z.string().min(1).optional(),
+    // D-ff posture: env-only, never logged, never printed in tests; sent in the
+    // token-endpoint BODY only (client_secret_post), never the URL.
+    NS_OIDC_CLIENT_SECRET: z.string().min(8).optional(),
+    NS_OIDC_SCOPE: z.string().min(1).default('openid profile email'),
+    NS_PUBLIC_URL: z
+      .string()
+      .min(1)
+      .optional()
+      .transform((v) => v?.replace(/\/+$/, '')),
+    NS_SESSION_KEY: z.string().min(32).optional(),
+    NS_SESSION_TTL_S: z.coerce.number().int().min(60).max(2_592_000).default(28_800),
+    // fail-closed matrix (D-qq): once OIDC is configured (issuer AND client id),
+    // the session key and our own public URL are REQUIRED — a half-configured
+    // login surface is worse than no login surface.
+  })
+  .superRefine((e, ctx) => {
+    if (e.NS_OIDC_ISSUER && e.NS_OIDC_CLIENT_ID) {
+      if (!e.NS_SESSION_KEY) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'NS_SESSION_KEY is required when OIDC is configured',
+          path: ['NS_SESSION_KEY'],
+        })
+      }
+      if (!e.NS_PUBLIC_URL) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'NS_PUBLIC_URL is required when OIDC is configured',
+          path: ['NS_PUBLIC_URL'],
+        })
+      }
+    }
+  })
 
 export interface Config {
   port: number
@@ -23,6 +66,13 @@ export interface Config {
   webhookIntervalMs: number
   webhookTimeoutMs: number
   webhookMaxBackoffMs: number
+  oidcIssuer?: string
+  oidcClientId?: string
+  oidcClientSecret?: string
+  oidcScope: string
+  publicUrl?: string
+  sessionKey?: string
+  sessionTtlS: number
 }
 
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
@@ -40,5 +90,23 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
     webhookIntervalMs: r.data.NS_WEBHOOK_INTERVAL_MS,
     webhookTimeoutMs: r.data.NS_WEBHOOK_TIMEOUT_MS,
     webhookMaxBackoffMs: r.data.NS_WEBHOOK_MAX_BACKOFF_MS,
+    oidcIssuer: r.data.NS_OIDC_ISSUER,
+    oidcClientId: r.data.NS_OIDC_CLIENT_ID,
+    oidcClientSecret: r.data.NS_OIDC_CLIENT_SECRET,
+    oidcScope: r.data.NS_OIDC_SCOPE,
+    publicUrl: r.data.NS_PUBLIC_URL,
+    sessionKey: r.data.NS_SESSION_KEY,
+    sessionTtlS: r.data.NS_SESSION_TTL_S,
   }
 }
+
+/** The SINGLE enabled-truth (D-pp/D-qq): superRefine above guarantees the other
+ * three members whenever issuer+clientId are set, so this guard is complete. */
+export const oidcEnabled = (
+  c: Config
+): c is Config & {
+  oidcIssuer: string
+  oidcClientId: string
+  publicUrl: string
+  sessionKey: string
+} => Boolean(c.oidcIssuer && c.oidcClientId && c.publicUrl && c.sessionKey)

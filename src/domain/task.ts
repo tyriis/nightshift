@@ -11,6 +11,9 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
 export const ACTOR_KINDS = ['human', 'agent'] as const
 export type ActorKind = (typeof ACTOR_KINDS)[number] // identical union to the prior hand-written type
 
+export const HUMAN_ROLES = ['admin', 'member'] as const
+export type HumanRole = (typeof HUMAN_ROLES)[number]
+
 export interface TaskRecord {
   id: string
   parent_id: string | null

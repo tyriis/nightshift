@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { sql } from 'kysely'
+import { Migrator } from 'kysely/migration'
 import { makeDb } from '#root/infra/sqlite/db'
 import { migrateToLatest } from '#root/infra/sqlite/migrations'
 
@@ -19,6 +20,9 @@ const TABLES = [
   'attachments',
   'links',
   'webhooks',
+  // Plan E (D-ss/D-qq/D-tt): human-identity migration's two tables
+  'oidc_allowlist',
+  'sessions',
   // FTS5 (D-gg): names PROBE-CONFIRMED against sqlite_master after migrateToLatest.
   // External-content FTS5 creates NO `task_fts_content` shadow (the content lives in
   // `tasks`) — the plan's expected list included it; the probe output is the source of truth.
@@ -58,6 +62,53 @@ describe('migrations', () => {
       value: string
     }>`select value from policy where key = 'review_gate'`.execute(db)
     expect(r.rows[0]?.value).toBe('on')
+    await db.destroy()
+  })
+
+  it('human-identity migration: humans pre-E backfill to admin, agents NULL; tables exist', async () => {
+    const db = makeDb(':memory:')
+    const { MIGRATIONS } = await import('#root/infra/sqlite/migrations')
+    const migrator = new Migrator({ db, provider: { getMigrations: async () => MIGRATIONS } })
+    // PRE-E HEAD = webhooks (fix6): kysely sorts names lexicographically; fts_search is NOT the head
+    const { error } = await migrator.migrateTo('2026-09-12_webhooks')
+    expect(error).toBeUndefined()
+    await db
+      .insertInto('actors')
+      .values([
+        {
+          id: 'a_pre_human',
+          kind: 'human',
+          handle: 'prehum',
+          display_name: 'Pre',
+          description: '',
+          created_at: '2026-09-01T00:00:00.000Z',
+        },
+        {
+          id: 'a_pre_agent',
+          kind: 'agent',
+          handle: 'preagent',
+          display_name: 'PreA',
+          description: '',
+          created_at: '2026-09-01T00:00:00.000Z',
+        },
+      ])
+      .execute()
+    await migrateToLatest(db)
+    const rows = await db
+      .selectFrom('actors')
+      .select(['id', 'role', 'oidc_subject'])
+      .orderBy('id') // fix7: no implicit row order after the migration — pin the array's order
+      .execute()
+    expect(rows).toEqual([
+      { id: 'a_pre_agent', role: null, oidc_subject: null },
+      { id: 'a_pre_human', role: 'admin', oidc_subject: null },
+    ])
+    const pol = await db
+      .selectFrom('policy')
+      .where('key', '=', 'oidc_provisioning')
+      .select('value')
+      .executeTakeFirst()
+    expect(pol?.value).toBe('off')
     await db.destroy()
   })
 

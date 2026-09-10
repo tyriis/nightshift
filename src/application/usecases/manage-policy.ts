@@ -3,6 +3,9 @@ import type { ActorContext, Clock, UnitOfWork } from '#root/application/ports'
 
 const POLICY_ALLOWLIST: Record<string, readonly string[]> = {
   review_gate: ['on', 'off'],
+  // D-tt: first-login provisioning flag — fail-closed ('off' is the migration seed);
+  // 'allowlist' is this key's ONLY enabling value, so 'on' is deliberately NOT a value.
+  oidc_provisioning: ['off', 'allowlist'],
 }
 
 export class GetPolicy {

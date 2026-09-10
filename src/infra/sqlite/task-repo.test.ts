@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { sql } from 'kysely'
+import { sql, type Kysely, type KyselyPlugin } from 'kysely'
 import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
+import type { DB } from '#root/infra/sqlite/schema'
 import { freshDb, seedActor, seedToken } from '#root/testing/fixtures'
 
 const setup = async () => {
@@ -82,8 +83,12 @@ describe('SqliteTaskRepo', () => {
 
     const all = await repo.listReady({ limit: 10 })
     expect(all.map((r) => r.task.id)).toEqual(['t_child', 't_ready'])
+    // Task 9 Step 0 (R3/B12): the listReady path carries labels too — GET /tasks/next
+    // serializes toTaskDto, so the yaml Task schema promises labels on this path.
+    expect(all.map((r) => r.labels)).toEqual([[], ['infra']])
     const labeled = await repo.listReady({ label: 'infra', limit: 10 })
     expect(labeled.map((r) => r.task.id)).toEqual(['t_ready'])
+    expect(labeled[0]?.labels).toEqual(['infra'])
     const other = await repo.listReady({ label: 'ui', limit: 10 })
     expect(other).toHaveLength(0)
     await db.destroy()
@@ -230,6 +235,79 @@ describe('SqliteTaskRepo', () => {
     await repo.create(draft('t_1'))
     await repo.setHeartbeat('t_1', '2026-01-04T00:00:00.000Z')
     expect((await repo.findById('t_1'))?.last_heartbeat_at).toBe('2026-01-04T00:00:00.000Z')
+    await db.destroy()
+  })
+
+  // ---- Task 9 Step 0 (review R3/B12): labels ride the TaskDto ----
+  // The batched resolution gets pinned coverage on EVERY path returning
+  // TaskWithCounts: exactly ONE labels query per response (N+1 fails the
+  // delta pins) and ZERO queries when the id set is empty (the guard —
+  // `in ()` is invalid SQL, the guard arm is the whole story).
+  const countedRepo = async (db: Kysely<DB>) => {
+    const nodes: string[] = []
+    const plugin: KyselyPlugin = {
+      transformQuery: (args) => {
+        nodes.push(JSON.stringify(args.node))
+        return args.node
+      },
+      transformResult: async (args) => args.result,
+    }
+    return { repo: new SqliteTaskRepo(db.withPlugin(plugin)), nodes }
+  }
+
+  const seedLabel = async (db: Kysely<DB>, taskId: string, name: string): Promise<void> => {
+    await sql`insert or ignore into labels (id, name, color, created_at)
+              values (${'l_' + name}, ${name}, '#f00', '2026-01-01')`.execute(db)
+    await sql`insert into task_labels (task_id, label_id)
+              values (${taskId}, ${'l_' + name})`.execute(db)
+  }
+
+  it('findWithCounts resolves label names sorted; unlabeled tasks get []', async () => {
+    const db = await setup()
+    const repo = new SqliteTaskRepo(db)
+    await repo.create(draft('t_1'))
+    await repo.create(draft('t_2'))
+    await seedLabel(db, 't_1', 'zeta')
+    await seedLabel(db, 't_1', 'alpha')
+    expect((await repo.findWithCounts('t_1'))?.labels).toEqual(['alpha', 'zeta'])
+    expect((await repo.findWithCounts('t_2'))?.labels).toEqual([])
+    await db.destroy()
+  })
+
+  it('labels ride ONE batched query per response; empty sets issue none', async () => {
+    const db = await setup()
+    const { repo, nodes } = await countedRepo(db)
+    expect(await repo.listAllWithCounts()).toEqual([])
+    expect(nodes).toHaveLength(1) // empty-set guard: no labels query exists to run
+
+    await repo.create(draft('t_1', null, 1))
+    await repo.create(draft('t_2', null, 2))
+    await repo.create(draft('t_3', null, 3))
+    await seedLabel(db, 't_1', 'alpha')
+    await seedLabel(db, 't_1', 'zeta')
+    await seedLabel(db, 't_2', 'beta')
+    nodes.length = 0
+    const rows = await repo.listAllWithCounts()
+    expect(rows.map((r) => r.labels)).toEqual([['alpha', 'zeta'], ['beta'], []])
+    expect(nodes).toHaveLength(2) // base + exactly ONE labels query for 3 tasks (N+1 = 5)
+    expect(nodes[1]).toContain('task_labels')
+
+    nodes.length = 0
+    expect((await repo.findWithCounts('t_1'))?.labels).toEqual(['alpha', 'zeta'])
+    expect(nodes).toHaveLength(2) // single-get path: one batch too, never per-label joins
+
+    nodes.length = 0
+    expect(await repo.findWithCounts('t_ghost')).toBeNull()
+    expect(nodes).toHaveLength(1) // the miss returns BEFORE any labels query
+
+    nodes.length = 0
+    const ready = await repo.listReady({ limit: 10 })
+    expect(ready.map((r) => r.labels)).toEqual([['alpha', 'zeta'], ['beta'], []])
+    expect(nodes).toHaveLength(2)
+
+    nodes.length = 0
+    expect(await repo.listReady({ label: 'nope', limit: 10 })).toEqual([])
+    expect(nodes).toHaveLength(1) // empty-set guard on the filtered path
     await db.destroy()
   })
 })

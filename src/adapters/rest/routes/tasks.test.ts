@@ -369,4 +369,39 @@ describe('agent loop over HTTP (spec §7.4, §11.2)', () => {
 
     await t.close()
   })
+
+  it('task wire bodies carry label names — the board chip read side (R3/B12, Task 9 Step 0)', async () => {
+    const t = await makeTestApp()
+    const chipped = await t.app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: bearer(t),
+      payload: { title: 'chipped', status: 'todo', labels: ['scope-b', 'scope-a'] },
+    })
+    expect(chipped.statusCode).toBe(201)
+    // create's 201 rides the same toTaskDto path (sorted names)
+    expect(chipped.json().labels).toEqual(['scope-a', 'scope-b'])
+
+    const bare = await t.app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: bearer(t),
+      payload: { title: 'bare', status: 'todo' },
+    })
+    expect(bare.json().labels).toEqual([]) // unlabeled → empty array, never absent
+
+    const list = await t.app.inject({ method: 'GET', url: '/tasks', headers: bearer(t) })
+    const byId = (id: string) =>
+      list.json().find((x: { id: string }) => x.id === id) as { labels: string[] }
+    expect(byId(chipped.json().id).labels).toEqual(['scope-a', 'scope-b'])
+    expect(byId(bare.json().id).labels).toEqual([])
+
+    const single = await t.app.inject({
+      method: 'GET',
+      url: `/tasks/${chipped.json().id}`,
+      headers: bearer(t),
+    })
+    expect(single.json().labels).toEqual(['scope-a', 'scope-b'])
+    await t.close()
+  })
 })

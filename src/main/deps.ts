@@ -7,6 +7,7 @@ import { SystemClock } from '#root/infra/clock'
 import { RandomIdGen } from '#root/infra/ids'
 import { DiskFileStore } from '#root/infra/files/disk-file-store'
 import { SqliteActorRepo } from '#root/infra/sqlite/actor-repo'
+import { SqliteAllowlistRepo } from '#root/infra/sqlite/allowlist-repo'
 import { SqliteAttachmentRepo } from '#root/infra/sqlite/attachment-repo'
 import { SqliteAuditRepo } from '#root/infra/sqlite/audit-repo'
 import { SqliteDependencyRepo } from '#root/infra/sqlite/dependency-repo'
@@ -15,6 +16,7 @@ import { SqliteInboxRepo } from '#root/infra/sqlite/inbox-repo'
 import { SqliteLabelRepo } from '#root/infra/sqlite/label-repo'
 import { SqliteLinkRepo } from '#root/infra/sqlite/link-repo'
 import { SqliteSearchRepo } from '#root/infra/sqlite/search-repo'
+import { SqliteSessionRepo } from '#root/infra/sqlite/session-repo'
 import { SqliteTaskRepo } from '#root/infra/sqlite/task-repo'
 import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
 import { SqliteUnitOfWork } from '#root/infra/sqlite/uow'
@@ -34,6 +36,11 @@ import { AddLink, RemoveLink } from '#root/application/usecases/manage-links'
 import { MarkInboxRead } from '#root/application/usecases/mark-inbox-read'
 import { AttachLabel, CreateLabel, DetachLabel } from '#root/application/usecases/labels'
 import { CreateActor, CreateToken, RevokeToken } from '#root/application/usecases/manage-actors'
+import {
+  AddAllowlist,
+  ListAllowlist,
+  RemoveAllowlist,
+} from '#root/application/usecases/manage-allowlist'
 import { GetPolicy, SetPolicy } from '#root/application/usecases/manage-policy'
 import {
   CreateWebhook,
@@ -42,6 +49,7 @@ import {
 } from '#root/application/usecases/manage-webhooks'
 import { ReleaseClaim } from '#root/application/usecases/release-claim'
 import { RemoveBlock } from '#root/application/usecases/remove-block'
+import { ProvisionHumanFromOidc } from '#root/application/usecases/provision-human'
 import { SplitTask } from '#root/application/usecases/split-task'
 import { UpdateStatus } from '#root/application/usecases/update-status'
 import { UpdateTask } from '#root/application/usecases/update-task'
@@ -55,6 +63,11 @@ export interface AppDeps {
   uow: SqliteUnitOfWork
   // root-connection repos for auth/queries/idempotency (outside use-case txs)
   actorsRoot: SqliteActorRepo
+  // D-qq: auth-path repo, NOT in the tx Repos seam — same dual-wiring rationale as actorsRoot
+  sessionsRoot: SqliteSessionRepo
+  // D-tt: root-connection twin for read paths outside the use-case tx (the auth
+  // callback's allow-list check rides here) — same rationale as sessionsRoot
+  allowlistRoot: SqliteAllowlistRepo
   idemRoot: SqliteIdempotencyRepo
   tasksRoot: SqliteTaskRepo
   depsRoot: SqliteDependencyRepo
@@ -68,6 +81,8 @@ export interface AppDeps {
   // D-gg: read-only FTS5 search — root connection only, NOT in the tx Repos seam
   searchRoot: SqliteSearchRepo
   files: FileStore
+  /** D-pp: ALL OIDC-initiated HTTP goes here — tests route every call through fastify inject (zero sockets). */
+  fetch: typeof globalThis.fetch
   deliveryLoop: WebhookDeliveryLoop
   useCases: {
     createTask: CreateTask
@@ -95,6 +110,11 @@ export interface AppDeps {
     createActor: CreateActor
     createToken: CreateToken
     revokeToken: RevokeToken
+    addAllowlist: AddAllowlist
+    removeAllowlist: RemoveAllowlist
+    listAllowlist: ListAllowlist
+    // D-tt: OIDC first-login provisioning (the callback's allow-list leg)
+    provisionHumanFromOidc: ProvisionHumanFromOidc
     getPolicy: GetPolicy
     setPolicy: SetPolicy
     createWebhook: CreateWebhook
@@ -103,7 +123,11 @@ export interface AppDeps {
   }
 }
 
-export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
+export const makeDepsFromDb = (
+  db: Kysely<DB>,
+  config: Config,
+  fetchFn: typeof globalThis.fetch = globalThis.fetch
+): AppDeps => {
   const clock = new SystemClock()
   const ids = new RandomIdGen()
   const uow = new SqliteUnitOfWork(db)
@@ -115,6 +139,8 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     ids,
     uow,
     actorsRoot: new SqliteActorRepo(db),
+    sessionsRoot: new SqliteSessionRepo(db),
+    allowlistRoot: new SqliteAllowlistRepo(db),
     idemRoot: new SqliteIdempotencyRepo(db),
     tasksRoot: new SqliteTaskRepo(db),
     depsRoot: new SqliteDependencyRepo(db),
@@ -127,6 +153,7 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
     webhooksRoot: new SqliteWebhookRepo(db),
     searchRoot: new SqliteSearchRepo(db),
     files, // shared instance: uploads and content serving hit the same store
+    fetch: fetchFn, // D-pp inject-seam; production lands on globalThis.fetch
     // D-bb loop: constructed here, STARTED only by the composition root (index.ts) —
     // makeTestApp never starts it (intervalMs 0 default there) so the suite stays inert.
     // Its repo instances are its own (root connections) — the loop touches no UoW
@@ -170,6 +197,10 @@ export const makeDepsFromDb = (db: Kysely<DB>, config: Config): AppDeps => {
       createActor: new CreateActor(uow, clock, ids),
       createToken: new CreateToken(uow, clock, ids),
       revokeToken: new RevokeToken(uow, clock),
+      addAllowlist: new AddAllowlist(uow, clock),
+      removeAllowlist: new RemoveAllowlist(uow, clock),
+      listAllowlist: new ListAllowlist(uow),
+      provisionHumanFromOidc: new ProvisionHumanFromOidc(uow, clock, ids),
       getPolicy: new GetPolicy(uow),
       setPolicy: new SetPolicy(uow, clock),
       createWebhook: new CreateWebhook(uow, clock, ids),

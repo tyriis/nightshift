@@ -22,6 +22,7 @@ tags:
   - name: links
   - name: webhooks
   - name: events
+  - name: auth
 paths:
   /ping:
     get:
@@ -45,6 +46,87 @@ paths:
           content:
             application/yaml:
               schema: { type: string }
+  /auth/login:
+    get:
+      tags: [auth]
+      # pre-session leg (D-vv(b) hook exempt): security [] states the truth — GET runs
+      # with NO identity; every other method keeps the bearerAuth wall (401 pinned)
+      security: []
+      operationId: authLogin
+      description: >-
+        OIDC login kick-off (D-pp): 302 to the provider authorize endpoint with a
+        PKCE(S256) challenge; state/nonce/verifier ride a signed HttpOnly flow
+        cookie (600 s). returnTo may only point into /ui/ — anything else collapses
+        to /ui/ inside the flow. OIDC unconfigured answers 500 problem+json (the
+        dormant posture, pinned).
+      parameters:
+        - { name: returnTo, in: query, schema: { type: string } }
+      responses:
+        "302": { description: redirect to the provider authorize URL }
+        default: { $ref: "#/components/responses/Problem" }
+  /auth/callback:
+    get:
+      tags: [auth]
+      security: [] # pre-session leg (D-vv(b)) — the OIDC state parameter is its CSRF
+      operationId: authCallback
+      description: >-
+        authorization-code leg (D-pp): flow cookie + state (+ iss when present)
+        validated, code exchanged, id_token verified; then the D-tt first-login
+        tree — bound subject logs in; else the fail-closed oidc_provisioning policy
+        (off ⇒ deny). SUCCESS 302 to the flow returnTo with the session+CSRF cookie
+        pair (D-qq/D-rr); DENY 302 /ui/login?error=pending for browsers or 403
+        problem+json for accept: application/json (same audit); validation
+        rejections are one pinned 403. The flow cookie is always cleared.
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: iss, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        "302": { description: login success (returnTo) or browser deny (/ui/login?error=…) }
+        default: { $ref: "#/components/responses/Problem" } # 403 validation/deny shapes ride the default
+  /auth/logout:
+    post:
+      tags: [auth]
+      # DELIBERATE (review note (j)): the op is cookie+CSRF — bearerAuth would
+      # misdescribe it. The drift test pins path×method only and cannot see this
+      # field, so the honest posture lives in this description, not in a machine pin.
+      security: []
+      operationId: authLogout
+      description: >-
+        revoke the CALLER's session row (audited, session_revoked) and clear both
+        cookies (Max-Age=0). Requires a cookie session + X-CSRF-Token (D-rr — the
+        hook answers 403 before the route); bearer actors get 400 invalid_request
+        (a token is not a session, D-qq).
+      responses:
+        "204": { description: revoked (no body; both cookies cleared) }
+        default: { $ref: "#/components/responses/Problem" }
+  /auth/me:
+    get:
+      tags: [auth]
+      operationId: authMe
+      description: >-
+        identity echo for the SPA shell (D-zz): the caller's ActorRef — ANY
+        authenticated actor; the global bearerAuth documents the agent leg, cookie
+        sessions resolve through the same identity (role rides — the SPA nav and
+        admin gate read it). NO new auth concept, reads actorCtx.
+      responses:
+        "200":
+          description: the caller's ActorRef
+          content:
+            application/json:
+              # the ActorRef projection inline (D-zz: no new component) — documented
+              # in the shipped Actor schema style, §5 nothing-hidden
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  kind: { type: string, enum: [human, agent] }
+                  # D-ss: admin|member for humans; null for agents (and pre-E legacy rows)
+                  role: { type: ["string", "null"], enum: ["admin", "member", null] }
+                  handle: { type: string }
+                  display_name: { type: string }
+        default: { $ref: "#/components/responses/Problem" }
   /tasks:
     get:
       tags: [tasks]
@@ -401,6 +483,8 @@ paths:
                 handle: { type: string, minLength: 1, maxLength: 60 }
                 display_name: { type: string, minLength: 1, maxLength: 120 }
                 description: { type: string }
+                # D-ss: humans only, optional; default member (agents: dropped by the use-case)
+                role: { type: string, enum: [admin, member] }
   /admin/actors/{id}/tokens:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
@@ -463,7 +547,7 @@ paths:
               type: object
               required: [value]
               additionalProperties: false
-              properties: { value: { type: string, enum: ["on", "off"] } }
+              properties: { value: { type: string, enum: ["on", "off", "allowlist"] } }
       responses:
         "200":
           description: stored
@@ -472,6 +556,61 @@ paths:
               schema:
                 type: object
                 properties: { key: { type: string }, value: { type: string } }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/allowlist:
+    get:
+      tags: [admin]
+      operationId: listAllowlist
+      description: D-tt first-login allow-list rows (emails lowercased), emails ascending
+      responses:
+        "200":
+          description: allow-list entries
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/AllowlistEntry" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [admin]
+      operationId: addAllowlist
+      description: >-
+        add an email to the first-login allow-list (D-tt). Stored LOWERCASED; a
+        duplicate is idempotent — 200 with the existing row (data, not error).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              additionalProperties: false
+              properties:
+                email:
+                  {
+                    type: string,
+                    minLength: 3,
+                    maxLength: 254,
+                    pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                  }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AllowlistEntry" }
+        "200":
+          description: already present — the existing row (idempotent, D-tt)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AllowlistEntry" }
+        default: { $ref: "#/components/responses/Problem" }
+  /admin/allowlist/{email}:
+    parameters: [{ name: email, in: path, required: true, schema: { type: string } }]
+    delete:
+      tags: [admin]
+      operationId: removeAllowlist
+      description: remove an entry (lowercase rule applies before lookup); absent is 404 not_found.
+      responses:
+        "204": { description: removed (no body) }
         default: { $ref: "#/components/responses/Problem" }
   /admin/webhooks:
     get:
@@ -855,13 +994,14 @@ components:
         claim_generation: { type: integer }
         last_heartbeat_at: { type: ["string", "null"] }
     Task:
-      description: flat task DTO — the row plus its rollup counts (toTaskDto)
+      description: flat task DTO — the row plus its rollup counts and label names (toTaskDto)
       allOf:
         - $ref: "#/components/schemas/TaskRecord"
         - type: object
           properties:
             child_count: { type: integer }
             unmet_blockers: { type: integer }
+            labels: { type: array, items: { type: string } }
     TaskWithCounts:
       # The un-DTO'd repository shape (ports.ts): row nested under `task`, counts beside it.
       # Served raw by split's parent (ora-20); task endpoints everywhere else use flat Task.
@@ -870,6 +1010,7 @@ components:
         task: { $ref: "#/components/schemas/TaskRecord" }
         child_count: { type: integer }
         unmet_blockers: { type: integer }
+        labels: { type: array, items: { type: string } }
     ContextBundle:
       type: object
       properties:
@@ -923,9 +1064,22 @@ components:
       properties:
         id: { type: string }
         kind: { type: string, enum: [human, agent] }
+        # D-ss: admin|member for humans; null for agents (and pre-E legacy rows)
+        role: { type: ["string", "null"], enum: ["admin", "member", null] }
+        # BL1 (Task 2 review): the admin identity surface serializes what the rows
+        # carry — documented per §5 nothing-hidden, not trimmed
+        oidc_subject:
+          { type: ["string", "null"], description: internal OIDC subject binding; admin-visible }
         handle: { type: string }
         display_name: { type: string }
         description: { type: string }
+        created_at: { type: string }
+    AllowlistEntry:
+      # D-tt: admin-managed first-login allow-list row (email lowercased by the use-case)
+      type: object
+      properties:
+        email: { type: string }
+        added_by: { type: string }
         created_at: { type: string }
     AuditEntry:
       type: object
