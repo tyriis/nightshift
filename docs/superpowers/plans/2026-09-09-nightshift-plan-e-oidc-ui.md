@@ -1688,6 +1688,8 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): five spec-8 views: b
 // GET *,GET /tasks,POST /tasks); the loud-fail class keeps a genuinely out-of-shape
 // line (a junk leaf must still throw). The MCP assertions stay byte-identical;
 // only the single-exemption remainder line is replaced (by design).
+// LANDED: sync = shipped form — the excerpt mirrors the shipped 4-space test-body
+// indent; prettier wraps the final expect as `expect(⏎ filter ⏎ ).toEqual(documented)`.
 const STATIC_KEYS = ['GET *'] // sentinel — the /ui/* spelling is pinned by hasRoute
 const staticPresent = served.filter((key) => key.endsWith(' *')).sort()
 expect(staticPresent).toEqual(uiBuildPresent() ? STATIC_KEYS : [])
@@ -1701,7 +1703,9 @@ expect(served.filter((key) => !mcpPresent.includes(key) && !staticPresent.includ
 
 (`uiBuildPresent()` — the same helper `ui.ts` exports, so test and mount see the SAME tree-truth; when the build dir is absent the drift test proves the ZERO-member set honestly. Capture `const hasUiGet = t.app.hasRoute({ method: 'GET', url: '/ui/*' })` + `const hasUiPost = t.app.hasRoute({ method: 'POST', url: '/ui/*' })` right after `ready()`/`routeKeys`, BEFORE `t.close()`. The preflight verified both exemptions hold simultaneously on live served keys, with-build and without.)
 
-- [ ] **Step 2: Run** → RED. **Step 3: Implement `ui.ts`:**
+- [ ] **Step 3: Implement `ui.ts`:** (block BELOW: sync = shipped form — the two
+      additions over the pre-dispatch text are the measured eslint-disable and the
+      fallback-comment wrap, both quoted in the amendment at the end of this section)
 
 ```ts
 // ui.ts — D-vv: the SvelteKit static SPA mount. Its own encapsulated scope;
@@ -1718,6 +1722,11 @@ import type { AppDeps } from '#root/main/deps'
 const BUILD_DIR = join(process.cwd(), 'adapters', 'sveltekit', 'build')
 export const uiBuildPresent = (): boolean => existsSync(join(BUILD_DIR, 'index.html'))
 
+// the 2-arg signature is buildApp symmetry; deps exists ONLY for the skip-path
+// story (preflight P7/fix11 deleted the dead deliveryLoop line — measured here:
+// eslint's after-used rule flags the unused tail param, the plan sanctions this
+// one-line disable on the signature)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const mountUi = (app: FastifyInstance, deps: AppDeps): void => {
   if (!uiBuildPresent()) {
     // dev/test without a build: the mount skips, /ui/* 404s as problem+json, boot
@@ -1751,10 +1760,15 @@ export const mountUi = (app: FastifyInstance, deps: AppDeps): void => {
         // SPA fallback: scope-local ONLY — deep-links answer the shell; the root
         // handler (problem+json) owns everything outside /ui.
         if (request.method === 'GET' || request.method === 'HEAD') {
-          return reply.code(200).header('cache-control', 'no-cache').sendFile('index.html') // html arm: no-cache via setHeaders is route-path-based; the explicit header wins for the fallback
+          // html arm: no-cache via setHeaders is route-path-based; the explicit
+          // header wins for the fallback (sendFile ships the 30d plugin default)
+          return reply.code(200).header('cache-control', 'no-cache').sendFile('index.html')
         }
         // non-GET deep-links fall to the root problem+json 404 — the root notFound
-        // does NOT fire for in-scope misses; re-shape the problem HERE:
+        // does NOT fire for in-scope misses; re-shape the problem HERE (the body
+        // matches problem.ts's envelope byte-for-byte; ui.test.ts U6c pins the
+        // byte-equality against a live root 404 — problem() stays private, the
+        // pinned-untouched rule for problem.ts stands):
         return reply.code(404).type('application/problem+json').send({
           type: 'https://nightshift.local/errors/not_found',
           title: 'not found',
@@ -1771,13 +1785,14 @@ export const mountUi = (app: FastifyInstance, deps: AppDeps): void => {
 
 (SHIPPED-FORM duties: the `deps` dead-line is RESOLVED pre-dispatch (preflight P7/fix11) — the stray `deps.deliveryLoop` line above is deleted; `mountUi(app: FastifyInstance, deps: AppDeps)` keeps the 2-arg signature for `buildApp` symmetry and `deps` exists ONLY for the skip-path — the warning rides `app.log` (if the repo's eslint flags the unused param, an eslint-disable-next-line on the signature is the sanctioned one-liner — measure, don't guess). The html `sendFile` maxAge option — verify `sendFile('index.html', { maxAge: 0, immutable: false })` at implement (README documents per-send options; the `setHeaders` html arm already covers it — the preflight confirmed the fallback answers `no-cache`). The non-GET in-scope 404 problem body must match `problem.ts`'s shape byte-for-byte — import the ENVELOPE from problem.ts if `problem()` is not exported (it is private — the test pins byte-equality against the root one; if byte-equality needs the builder, exporting it is a recorded one-liner in THIS task).
 
-`app.ts`: `mountUi(server, deps)` immediately after `mountMcp(server, deps)` with a one-line ruling comment (`D-vv — static SPA mount, last mount; exact-set pins in auth.ts + the drift test`). `auth.ts` arm (D-vv #1), between PUBLIC_PATHS and the session arm:
+`app.ts`: `mountUi(server, deps)` immediately after `mountMcp(server, deps)` with a one-line ruling comment (`D-vv — static SPA mount, last mount; exact-set pins in auth.ts + the drift test`). `auth.ts` arm (D-vv #1), between PUBLIC_PATHS and the session arm (block BELOW: sync = shipped form — landed directly after the PUBLIC_PATHS return; the two comment sentences are the amendment's one wording change, the code lines are byte-verbatim):
 
 ```ts
 // D-vv exact-set #1: the static SPA shell/assets are public under the /ui
-// prefix ONLY (GET/HEAD — a POST to /ui answers auth like any other path).
-// Single-member set; membership + shape pinned in auth.test.ts (U6/U7 twins
-// live in ui.test.ts — the hook-arm matrix is pinned HERE byte-identical).
+// prefix ONLY (GET/HEAD — a POST to /ui answers auth like any other path:
+// session POST /ui/x without CSRF gets the D-rr 403, a no-credential POST
+// gets the bearer 401). Single-member set; membership + shape pinned in
+// ui.test.ts (U6/U7 twins — the hook-arm matrix is byte-identical there).
 const isUiPath =
   (request.method === 'GET' || request.method === 'HEAD') &&
   (path === '/ui' || path.startsWith('/ui/'))
@@ -1790,6 +1805,16 @@ if (isUiPath) return
 git add src/adapters/rest/ui.ts src/adapters/rest/ui.test.ts src/adapters/rest/app.ts src/adapters/rest/auth.ts src/adapters/rest/openapi-contract.test.ts
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): static /ui mount + exact-set pins for hook and drift (D-vv)"
 ```
+
+> **Amendment (Task 10, @implementer — three blocks sync = shipped form; two duties resolved; honest RED declared):**
+>
+> 1. **`ui.ts` landed as the block plus EXACTLY two additions** (the block above now carries the shipped bytes): the plan-sanctioned `// eslint-disable-next-line @typescript-eslint/no-unused-vars` on the `mountUi` signature — measured, not guessed: the repo rule is after-used, so the unused tail `deps` flags — and the fallback `html arm` comment wrapped ABOVE `sendFile` (printWidth). The duties' conditional export of `problem()` from `problem.ts` was NOT taken: the in-scope non-GET 404 ships the block's literal body and U6c pins byte-equality LIVE (root ghost 404 ⇄ in-scope `POST /ui/deep/thing` bodies `toEqual`); `problem.ts` stays in the untouched-pinned set.
+> 2. **`auth.ts` arm: code lines byte-verbatim, landed directly after the PUBLIC_PATHS return** (inside the plan's "between PUBLIC_PATHS and the session arm", leaving the D-vv(b) block untouched). One comment wording change (block relabeled): the membership/shape-pin sentence names **ui.test.ts** (U6/U6b/U7) — an auth.test.ts edit is on no Files/add line and the matrix ships byte-identical in the U-arms. Consequences pinned as ruled: session POST /ui/x WITHOUT CSRF ⇒ 403 D-rr (U6b), no-credential POST /ui/ ⇒ bearer 401 (U6), GET /uix ⇒ 401 (U7).
+> 3. **U8 mechanism (the plan's "fresh Fastify w/ cwd pointing elsewhere"):** `BUILD_DIR` is the module-load `process.cwd()` literal, so the shift is `vi.spyOn(process, 'cwd')` + `vi.resetModules()` + fresh `await import('#root/adapters/rest/ui')`, mounted on a FRESH mini-app (`registerProblemHandlers` + `registerAuth` + real `t.deps`) — the real build dir is never moved (parallel-safe); spy/registry restored, tmpdir removed in `finally`. Pinned: warn-ONCE (exact string), `hasRoute GET /ui/* === false`, `/ui/x` ⇒ root problem+json 404, boot never crashes (`ready()` resolves).
+> 4. **U5 mechanism (P7/fix13 re-pin):** the normalizer is unexported and no new export fits the Files line — the unit is MACHINE-COUPLED: the test asserts the three shipped source fragments (`(request.url.split('?')[0] ?? '/')`, `.replace(/\\/{2,}/g, '/')`, `.replace(/(.)\\/+$/, '$1')`) are present VERBATIM in auth.ts, then unit-pins the duplicated pipeline: collapse/trailing/query arms + dot-runs pass-through (`/ui/../openapi.yaml`, `/ui/../../etc/passwd` unchanged — fail-closed membership). No dot-segment inject pin exists or is claimed (light-my-request and every UA normalize before the hook).
+> 5. **Arm growth (coverage duty):** U1 drives both `'/ui/'` and `'/ui'`; U4 also drives the HEAD deep-link (the scope-notFound `'HEAD'` disjunct); U3 additionally pins `content-encoding: br` so `preCompressed: true` is load-bearing; U6c captures the root 404 oracle first. All built-tree arms are `it.skipIf(!BUILD)`.
+> 6. **Drift test:** grammar `(\/\S*|\*)` + the sentinel arm landed as amended (shipped text carries its own why-comments; the loud-fail throw message now names the wildcard leaf as grammar); the fails-loudly test re-pinned in the SAME edit — the old wildcard fixture parses to `['GET *','GET /tasks','POST /tasks']` and a genuinely junk leaf (`── ???junk (GET)`) still throws (bite kept); `hasUiGet`/`hasUiPost` captured before `t.close()`; MCP_ROUTES lines byte-untouched; the file's stale "This app registers neither [wildcards]" header paragraph rewritten to the D-vv reality. Evidence (with build): printRoutes prints exactly ONE bare `* (HEAD, GET)` leaf (no `/ui` node — pretty-print carries no path for wildcards); `hasRoute GET /ui/* → true`, `POST /ui/* → false`.
+> 7. **Both faces (Step 4) + gates:** WITH build — `pnpm test` 639/85 → **650/86**, lint 0, typecheck clean, build exit 0; globals **99.49 / 98.38 / 99.78 / 99.69** (≥ the Task-9 record 99.48/98.35/99.77/99.68, every axis up); `ui.ts` and `app.ts` **100×4**; `auth.ts` 100/97.82/100/100 — the only uncovered branch is the documented `:76` `?? '/'` arm, same arm, unchanged number. WITHOUT build (`rm -rf adapters/sveltekit/build`): 642 passed + **8 skipped, loud in the reporter** (never silent — tonight's gates run WITH the build, where the 8 are counted as run), the drift STATIC arm passes on the ZERO-member set, U8+U5 green; the build was restored via `pnpm ui:build` before commit (artifacts git-invisible). Honest RED: both test files failed at file level on module-absent (`#root/adapters/rest/ui`, 0 tests collected) before Step 3 — per-test REDs were never collected, so none is claimed; everything else passed first-run and none is claimed from that either.
 
 ## Task 11: §11.5 Playwright smoke + the honest runner posture (D-xx)
 

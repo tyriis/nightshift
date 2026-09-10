@@ -75,6 +75,15 @@ export const registerAuth = (app: FastifyInstance, deps: AppDeps): void => {
     // can only add PUBLIC spellings, never unprotect anything absent from the set.
     const path = (request.url.split('?')[0] ?? '/').replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1')
     if (PUBLIC_PATHS.has(path)) return
+    // D-vv exact-set #1: the static SPA shell/assets are public under the /ui
+    // prefix ONLY (GET/HEAD — a POST to /ui answers auth like any other path:
+    // session POST /ui/x without CSRF gets the D-rr 403, a no-credential POST
+    // gets the bearer 401). Single-member set; membership + shape pinned in
+    // ui.test.ts (U6/U7 twins — the hook-arm matrix is byte-identical there).
+    const isUiPath =
+      (request.method === 'GET' || request.method === 'HEAD') &&
+      (path === '/ui' || path.startsWith('/ui/'))
+    if (isUiPath) return
     // D-vv(b) AUTH_PRE_SESSION: the two pre-session OIDC legs run with NO identity;
     // GET-only, exact members (normalized path above). Every other method keeps the
     // bearer requirement — POST /auth/login answers the byte-identical 401.
