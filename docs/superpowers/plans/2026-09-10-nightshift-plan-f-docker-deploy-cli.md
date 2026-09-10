@@ -587,6 +587,8 @@ git add src/cli/run.ts src/cli/cli.test.ts
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(cli): claim with lease stdout + already_claimed race pin (D-aaa)"
 ```
 
+> **Amendment (Task 2, lint normalization on the claim-arm trust-cast):** One byte-sync note. The Step-3 fragment's first line shipped as `const id = parsed.positionals[0] // arity gate proved it` — the planned `as string` assertion was removed: `parsed.positionals` is `string[]` (no `noUncheckedIndexedAccess` in tsconfig — `strict: true` only), so the assertion does not change the type and `@typescript-eslint/no-unnecessary-type-assertion` REDS the lint gate (the preflight compiled the blocks with `tsc --noEmit`, where the cast is legal; eslint is the stricter gate). `id` is still exactly `string`; the comment's proof-duty stands; the rest of the block — and the Step-1 test block and the Step-3 arity-gate block — shipped byte-identical to the planned text (verified by uniform-dedent diff). Block sync = shipped form.
+
 ## Task 3: `report` — note thread + lease-gated status (NS_LEASE_TOKEN env)
 
 **Files:**

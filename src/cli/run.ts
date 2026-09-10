@@ -28,6 +28,7 @@ const EnvSchema = z.object({
 // lockstep — claim (Task 2) and report (Task 3) join BOTH, never one alone
 const COMMANDS: Record<string, readonly string[]> = {
   next: ['label', 'limit'],
+  claim: [],
 }
 
 const LimitSchema = z.coerce.number().int().min(1).max(100) // mirrors the yaml /tasks/next pin
@@ -99,7 +100,12 @@ export const runCli = async (io: CliIo): Promise<number> => {
   for (const key of Object.keys(parsed.flags)) {
     if (!COMMANDS[cmd].includes(key)) return usageError(`unknown flag --${key} for '${cmd}'`)
   }
-  if (parsed.positionals.length !== 0) return usageError(`'${cmd}' takes no positional arguments`)
+  const idWanted = cmd === 'claim'
+  if (parsed.positionals.length !== (idWanted ? 1 : 0)) {
+    return usageError(
+      idWanted ? `'${cmd}' takes exactly one <task-id>` : `'${cmd}' takes no positional arguments`
+    )
+  }
   const env = EnvSchema.safeParse(io.env)
   if (!env.success) {
     io.stderr(
@@ -125,22 +131,32 @@ export const runCli = async (io: CliIo): Promise<number> => {
       io.fetch(input, { ...init, signal: AbortSignal.timeout(env.data.NS_TIMEOUT_MS) }),
   })
   try {
-    // Task 1 ships the single command directly (COMMANDS === {next}); Task 2 grows the
-    // dispatch chain with claim, Task 3 with report — exact set, lockstep.
-    const r = await client.GET('/tasks/next', {
-      params: {
-        query: {
-          ...(label === undefined ? {} : { label }),
-          ...(limit === undefined ? {} : { limit }),
+    if (cmd === 'next') {
+      // Task 1 ships the single command directly (COMMANDS === {next}); Task 2 grows the
+      // dispatch chain with claim, Task 3 with report — exact set, lockstep.
+      const r = await client.GET('/tasks/next', {
+        params: {
+          query: {
+            ...(label === undefined ? {} : { label }),
+            ...(limit === undefined ? {} : { limit }),
+          },
         },
-      },
-    })
-    const f = failFrom(io, r)
+      })
+      const f = failFrom(io, r)
+      if (f !== null) return f
+      // server DTO pass-through as JSONL (D-aaa) — the CLI never reshapes the contract.
+      // Trust-cast (B5/P10): failFrom PROVED data present — a `?? []` right-arm would be
+      // statically uncoverable and the never-lower bar forbids it.
+      for (const task of r.data as unknown[]) io.stdout(JSON.stringify(task))
+      return 0
+    }
+    const id = parsed.positionals[0] // arity gate proved it
+    const claim = await client.POST('/tasks/{id}/claim', { params: { path: { id } } })
+    const f = failFrom(io, claim)
     if (f !== null) return f
-    // server DTO pass-through as JSONL (D-aaa) — the CLI never reshapes the contract.
-    // Trust-cast (B5/P10): failFrom PROVED data present — a `?? []` right-arm would be
-    // statically uncoverable and the never-lower bar forbids it.
-    for (const task of r.data as unknown[]) io.stdout(JSON.stringify(task))
+    // trust-cast (D-aaa): failFrom proved data present
+    const d = claim.data as { lease_token?: string; generation?: number }
+    io.stdout(JSON.stringify({ task_id: id, lease_token: d.lease_token, generation: d.generation }))
     return 0
   } catch (err) {
     io.stderr('nightshift: transport_error')

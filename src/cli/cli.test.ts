@@ -156,3 +156,57 @@ describe('cli run-core (D-aaa)', () => {
     expect(Date.now() - t0).toBeLessThan(5_000) // deterministic abort, not a hang
   })
 })
+
+// appended to src/cli/cli.test.ts — the §14 claim race through the CLI (P8 pin)
+const agentToken = async (handle: string): Promise<string> => {
+  const actor = await CURRENT.app.inject({
+    method: 'POST',
+    url: '/admin/actors',
+    headers: { authorization: `Bearer ${CURRENT.adminToken}`, 'content-type': 'application/json' },
+    payload: { kind: 'agent', handle, display_name: handle },
+  })
+  const tok = await CURRENT.app.inject({
+    method: 'POST',
+    url: `/admin/actors/${(JSON.parse(actor.payload) as { id: string }).id}/tokens`,
+    headers: { authorization: `Bearer ${CURRENT.adminToken}`, 'content-type': 'application/json' },
+    payload: { label: 'cli-test' },
+  })
+  return (JSON.parse(tok.payload) as { raw_token: string }).raw_token
+}
+
+describe('cli claim (D-aaa)', () => {
+  it('claim prints {task_id, lease_token, generation} — the lease NEVER touches argv', async () => {
+    const t = await createTask('claimable')
+    const r = await run(['claim', t.id])
+    expect(r.code).toBe(0)
+    const parsed = JSON.parse(r.out[0]) as Record<string, unknown>
+    expect(parsed.task_id).toBe(t.id)
+    expect(typeof parsed.lease_token).toBe('string')
+    expect(typeof parsed.generation).toBe('number')
+  })
+  it('the race loser exits 3 with `nightshift: already_claimed` + flat holder fields (P8)', async () => {
+    const t = await createTask('contested')
+    const winner = await run(['claim', t.id], { NS_TOKEN: await agentToken('a_winner') })
+    expect(winner.code).toBe(0)
+    const loser = await run(['claim', t.id], { NS_TOKEN: await agentToken('a_loser') })
+    expect(loser.code).toBe(3)
+    expect(loser.err[0]).toBe('nightshift: already_claimed')
+    expect(JSON.parse(loser.err[1])).toMatchObject({
+      code: 'already_claimed',
+      status: 409,
+      holder_handle: 'a_winner',
+    })
+  })
+  it('ghost task → exit 3 not_found; claim arity is exact', async () => {
+    expect((await run(['claim', 't_ghost'])).err[0]).toBe('nightshift: not_found')
+    expect((await run(['claim'])).err[0]).toBe(
+      "nightshift: usage_error 'claim' takes exactly one <task-id>"
+    )
+    expect((await run(['claim', 'a', 'b'])).code).toBe(2)
+  })
+  it('unknown flags die per-command: --label is a next-only flag', async () => {
+    expect((await run(['claim', 't_x', '--label', 'nope'])).err[0]).toBe(
+      "nightshift: usage_error unknown flag --label for 'claim'"
+    )
+  })
+})
