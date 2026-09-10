@@ -202,12 +202,12 @@ The commands (the exact set `run.ts` dispatches):
 
 Environment (CLI-side, `run.ts:22-27`):
 
-| Variable         | Rule                                                                                                                       |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `NS_URL`         | REQUIRED; validated URL                                                                                                    |
-| `NS_TOKEN`       | REQUIRED; non-empty bearer                                                                                                 |
-| `NS_LEASE_TOKEN` | optional; the claim-issued capability — REQUIRED for `--status` moves (absent ⇒ the field is simply omitted from the body) |
-| `NS_TIMEOUT_MS`  | int ≥`100`, default `15000`; a per-call `AbortSignal.timeout`                                                              |
+| Variable         | Rule                                                                                                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NS_URL`         | REQUIRED; validated URL                                                                                                                                                 |
+| `NS_TOKEN`       | REQUIRED; non-empty bearer                                                                                                                                              |
+| `NS_LEASE_TOKEN` | optional; the claim-issued capability — REQUIRED **while the target task is CLAIMED** (absent on an unclaimed task ⇒ the field is simply omitted from the body; n29/P9) |
+| `NS_TIMEOUT_MS`  | int ≥`100`, default `15000`; a per-call `AbortSignal.timeout`                                                                                                           |
 
 **Secrets env-only, never argv (D-ff)** — `NS_TOKEN`/`NS_LEASE_TOKEN` never
 appear in argv and are never echoed (`run.ts:131`:
