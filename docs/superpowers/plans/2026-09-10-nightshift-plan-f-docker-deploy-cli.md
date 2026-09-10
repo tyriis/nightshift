@@ -892,6 +892,18 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(cli): repo-bin shim + pnp
 
 > **Preflight obligations this task cannot dodge (P3):** the exact spawn mechanism (`node --import tsx` + dev condition) MUST be run by the preflight lane before dispatch — a silently-unresolvable `#root` specifier under tsx is precisely E's silent-ignore failure class.
 
+> **Amendment (Task 4, byte-sync — one prettier reflow; the Step-1 test block and the Step-3 shim block are sync = shipped form, verified byte-verbatim by uniform-dedent diff — zero divergence, none claimed):**
+>
+> 1. **Prettier reflow — the `package.json` `bin` line.** The plan's compact one-liner `  "bin": { "nightshift": "bin/nightshift.mjs" },`, is expanded by prettier (object literal on one line is not prettier's style); pre-commit runs prettier, so the shipped bytes are:
+>    ```json
+>    "bin": {
+>      "nightshift": "bin/nightshift.mjs"
+>    },
+>    ```
+>    Key and value byte-identical; formatting-only (Task-3 reflow precedent). The `cli` script line shipped byte-identical to the plan block. `git diff package.json` at ship = exactly these two insertions (+4/−0), the sanctioned delta.
+> 2. **Manual verifications, honest record.** `pnpm cli --help` → **exit 0**, the three USAGE lines on **stderr only** (stdout carries just pnpm's two-line script banner — the CLI itself prints nothing to stdout). `pnpm build` (exit 0) then `node bin/nightshift.mjs --help` → **exit 0**, stdout 0 bytes, the three USAGE lines on stderr — the dist-resolution arm the image ships resolves `#root/cli/run` → `dist/cli/run.js`. Both as expected; nothing to paper over.
+> 3. **Gates:** `pnpm test` 671→**674 passed / 88 files**; `pnpm lint` 0 errors (the 3 warnings are pre-existing coverage-report artifacts, identical stashed-at-HEAD); `pnpm typecheck` clean; prettier-clean. Coverage **99.52 / 98.52 / 99.78 / 99.70** — byte-identical axes to the Task-3 record (shim is outside `src` → zero denominator churn), every axis ≥ floor (99.49 / 98.38 / 99.78 / 99.69); `run.ts` untouched and holds **BRF/BRH 74/74, FNF/FNH 7/7, LF/LH 100/100**. `pnpm-lock.yaml` byte-untouched (two package.json keys touch no resolutions).
+
 ## Task 5: The multi-stage Docker image + the container smoke that PROVES the rulings
 
 **Files:**
