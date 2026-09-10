@@ -1024,6 +1024,27 @@ git add Dockerfile .dockerignore
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(docker): multi-stage image with the offline-gated UI build (D-ddd)"
 ```
 
+> **Record (Task 5, execution evidence — gate is EXECUTION):** Both shipped files are BYTE-IDENTICAL to the Step-1/Step-2 blocks (`diff` against plan lines 916–929 and 937–988 → empty; no amendment needed — prettier leaves them alone, unknown extensions).
+>
+> - **BUILD — `docker build -t nightshift:planf .` → exit 0.** BUILDER FORM (S4 duty): this box ran docker 29.7.2's **LEGACY builder** (no buildx installed — `docker buildx` is an unknown command); the very first log line is `DEPRECATED: The legacy builder is deprecated and will be removed in a future release.` and the log is `Step N/30` legacy form, **30/30 steps**, ending `Successfully built 7752986e3888` / `Successfully tagged nightshift:planf`. The Dockerfile is builder-agnostic as constructed (no syntax directive, no cache mounts) — it fired under the legacy engine.
+> - **Offline gate ran IN THE IMAGE (not the repo) — log line 563 verbatim:** `ui build offline-safe; hosts seen: http://www.w3.org https://svelte.dev` (the D-ddd build gate, matching the Step-3 expectation byte-for-byte).
+> - **Config-plane pins — `docker image inspect nightshift:planf --format '{{json .Config}}'`:** `"User":"node"` · `"Entrypoint":["node","dist/index.js"]` · Env contains `NS_DB_PATH=/data/nightshift.db` and `NS_DATA_DIR=/data` (plus `NODE_ENV=production`) · `Healthcheck` present (`CMD-SHELL` node -e `/ping`; Interval 30s / Timeout 3s / StartPeriod 5s / **StartInterval 1s** / Retries 3) · `ExposedPorts` `3123/tcp` · `WorkingDir":"/app"`.
+> - **Boot:** `docker volume create nightshift-smoke` + `docker run -d --name ns-f -p 127.0.0.1:3199:3123 -v nightshift-smoke:/data -e NS_BOOTSTRAP_TOKEN="$BOOT_TOKEN" nightshift:planf` → **health reached `healthy` at i=3 (~3 s)**, well inside the ≤40 s loop (P7's `--start-interval=1s` honoured — the flag was NOT silently dropped).
+> - **Pinned arms — every one PASS against expectation:**
+>   - `curl -sf .../ping` → `{"pong":"it worked!"}` — PASS
+>   - `diff <(curl -sf .../openapi.yaml) openapi/openapi.yaml` → **EMPTY** — PASS (the **D-ccc proof**: `/openapi.yaml` byte-identical to this checkout)
+>   - `curl -sfI .../ui/` → `content-type: text/html; charset=utf-8`; `grep -qi 'content-type: text/html'` true — PASS (shell served from `/app/adapters/sveltekit/build`)
+>   - `curl -sf .../ui/some/deep/link -o /dev/null -w '%{http_code}'` → `200` — PASS (SPA fallback)
+>   - `docker exec ns-f sh -c 'ls /data'` (while running) → `nightshift.db` + `nightshift.db-shm` + `nightshift.db-wal` — PASS (the WAL family lives beside the db on the ONE `/data` volume)
+>   - `docker exec ns-f id -u` → `1000` — PASS (the node user)
+>   - `docker exec ns-f sh -c 'touch /app/x 2>/dev/null || echo READONLY-APP-OK'` → `READONLY-APP-OK` — PASS (root-owned 755 app tree; only `/data` writable)
+>   - `docker exec -e NS_URL=http://127.0.0.1:3123 -e NS_TOKEN="$BOOT_TOKEN" ns-f node bin/nightshift.mjs next` → exit **0**, stdout empty — PASS (shipped CLI/dist form, zero ready tasks)
+>   - `docker exec ns-f node bin/nightshift.mjs --help >/dev/null 2>&1; echo $?` → `0` — PASS
+>   - **Host-side dist form over the REAL socket (the D-xx honest exception, stated):** `NS_URL=http://127.0.0.1:3199 NS_TOKEN="$BOOT_TOKEN" node --import tsx bin/nightshift.mjs --help` → exit **0**, usage on **stderr** (`usage: nightshift next [--label L] [--limit N] | claim <task-id> | report ...` + env/exit-ladder lines), stdout empty — PASS. This is the one leg that crosses a real socket (host→published 3199); it is recorded as such rather than claimed from the inject harness.
+>   - **Graceful stop (D-ddd SIGTERM drain — the measurement, not the claim):** `docker stop -t 12 ns-f` → `0`; `docker inspect -f '{{.State.ExitCode}}' ns-f` → **`0`** (State=exited). PASS.
+> - **Left intact for Task 6:** the STOPPED `ns-f` container and the `nightshift-smoke` volume are NOT removed.
+> - `$BOOT_TOKEN` is the plan's local smoke literal (`planf-local-smoke-token-0123456789abcdef`, Step 4 verbatim) — never a real secret; it was env-only (never argv, never echoed by any error arm). Zero stop conditions tripped.
+
 ## Task 6: The deploy probes as artifacts — `deploy-smoke.mjs` + `fts-probe.mjs` + the §14 checklist
 
 **Files:**

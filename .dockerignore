@@ -1,0 +1,14 @@
+.git
+.slim
+.env*
+node_modules
+dist
+coverage
+*.db
+*.db-wal
+*.db-shm
+/data
+playwright-report
+test-results
+adapters/sveltekit/build
+adapters/sveltekit/.svelte-kit
