@@ -22,6 +22,7 @@ import { SqliteThreadRepo } from '#root/infra/sqlite/thread-repo'
 import { SqliteUnitOfWork } from '#root/infra/sqlite/uow'
 import { SqliteWebhookRepo } from '#root/infra/sqlite/webhook-repo'
 import { WebhookDeliveryLoop } from '#root/infra/webhooks/delivery-loop'
+import { LeaseSweeper } from '#root/infra/keepalive/lease-sweeper'
 import { AddBlock } from '#root/application/usecases/add-block'
 import { AddMessage } from '#root/application/usecases/add-message'
 import { AnswerQuestion } from '#root/application/usecases/answer-question'
@@ -84,6 +85,7 @@ export interface AppDeps {
   /** D-pp: ALL OIDC-initiated HTTP goes here — tests route every call through fastify inject (zero sockets). */
   fetch: typeof globalThis.fetch
   deliveryLoop: WebhookDeliveryLoop
+  leaseSweeper: LeaseSweeper
   useCases: {
     createTask: CreateTask
     updateTask: UpdateTask
@@ -163,6 +165,14 @@ export const makeDepsFromDb = (
       intervalMs: config.webhookIntervalMs,
       timeoutMs: config.webhookTimeoutMs,
       maxBackoffMs: config.webhookMaxBackoffMs,
+    }),
+    // D-iii: constructed here, STARTED only by the composition root (index.ts) —
+    // makeTestApp never starts it; dormant 0/0 keeps the suite inert; rides the
+    // UoW (pure DB, atomic revert+audit — the no-UoW clause guards NETWORK I/O,
+    // not sqlite txs).
+    leaseSweeper: new LeaseSweeper(uow, {
+      intervalMs: config.keepaliveIntervalMs,
+      timeoutS: config.keepaliveTimeoutS,
     }),
     useCases: {
       createTask: new CreateTask(uow, clock, ids),

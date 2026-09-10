@@ -109,7 +109,11 @@ export interface TaskRepo {
   setHeartbeat(taskId: string, at: string): Promise<void>
   /** Keepalive sweep read (D-hhh): claimed `in_progress` tasks whose staleness
    * anchor — heartbeat, or `updated_at` for pre-G claims (the coalesce) — predates
-   * `cutoff`. Ascending by id, at most `limit` rows. */
+   * `cutoff`. Ascending by id, at most `limit` rows. `limit` must be >= 0 —
+   * SQLite treats a negative LIMIT as unlimited (the sweeper passes BATCH; advisory #7).
+   * Legacy-row caveat: a never-heartbeating PRE-G claim anchors on updated_at —
+   * frequent content edits keep it alive; accept/backfill is an operator question
+   * (advisory #3). */
   listStaleClaims(cutoff: string, limit: number): Promise<StaleClaimRow[]>
   /** Keepalive sweep write (D-hhh): a FULL CAS on the captured claim — id, token,
    * generation, `in_progress` status AND the staleness predicate are re-checked

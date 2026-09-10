@@ -24,12 +24,14 @@ const start = async (): Promise<void> => {
     const server = buildApp(deps, { logger: true })
     await server.listen({ port: config.port, host: '0.0.0.0' })
     deps.deliveryLoop.start() // refuses when intervalMs 0 (config-level kill, D-v lineage)
+    deps.leaseSweeper.start() // refuses when dormant (D-ggg/D-iii)
 
     const shutdown = async (): Promise<void> => {
       if (closing) return
       closing = true
       server.log.info('Graceful shutdown signal received')
       await deps.deliveryLoop.stop() // drains the in-flight pass before the db goes away
+      await deps.leaseSweeper.stop() // drains an in-flight sweep (audit completeness, D-iii)
       await server.close()
       await db.destroy()
       process.exit(0)

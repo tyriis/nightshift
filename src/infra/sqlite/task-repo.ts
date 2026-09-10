@@ -251,7 +251,8 @@ export class SqliteTaskRepo implements TaskRepo {
 
   async listStaleClaims(cutoff: string, limit: number): Promise<StaleClaimRow[]> {
     // D-hhh: stored timestamps are toISOString UTC — lexicographic `<` IS the time
-    // order (P4 probe-verified). The coalesce gives pre-G claims an honest anchor.
+    // order (P4 probe-verified). The coalesce gives pre-G claims an honest anchor
+    // (trust contract + legacy-row caveat: see ports.ts listStaleClaims, advisories #3/#7).
     const r = await sql<StaleClaimRow>`
       select id, claim_token_id, claim_generation, last_heartbeat_at
         from tasks

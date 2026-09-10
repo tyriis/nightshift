@@ -8,7 +8,9 @@ export interface HeartbeatInput extends ActorContext {
   lease_token: string
 }
 
-/** Liveness record only — no keepalive enforcement in v1 (spec §3, §12). */
+/** Liveness record for the keepalive lease — enforcement shipped in G (D-iii): a
+ * claim silent past NS_KEEPALIVE_TIMEOUT_S reverts to todo under the generation
+ * fence. Dormant (0/0) = the pre-G behavior, byte-for-byte. */
 export class Heartbeat {
   constructor(
     private readonly uow: UnitOfWork,
