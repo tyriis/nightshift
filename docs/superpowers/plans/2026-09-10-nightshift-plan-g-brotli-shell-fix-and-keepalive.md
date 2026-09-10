@@ -31,6 +31,17 @@ Per the ticket protocol and the A–F binding lessons ("treat your own plan as u
 - **P9 — sweeper-vs-suite probe:** with the new `leaseSweeper` in `AppDeps`, `makeTestApp` defaults keep it inert (`start()` refuses on 0/0) — run the FULL suite once with the wiring applied and no sweeper tests; zero new flakes, zero stray timers.
 - **P10 — coverage-ghost analysis:** enumerate every new branch (sweeper `continue` arm, `start()` refusal arms, `!` casts, CLI local-config-error arm) and name its covering arm; any statically uncoverable branch is REWRITTEN OUT of the plan before dispatch (Plan D "prove it, not document it" precedent).
 
+### Plan-review lane — VERDICT: PASS (attempt 1, 2026-09-10, independent oracle)
+
+Verbatim highlights: every embedded block verified compile-plausible against current source; `ui.ts:45-47` anchor byte-exact; U3 (:96-97) grounds the D-fff inject-negotiation argument; `sendFile` (ui.ts:55) routes through the SAME `pumpSendToReply` (static index.js:105-112, opts merged :252) — U9b's gz-fallback RED is structurally real; zombie heartbeat/status/release all throw `stale_lease`→412 with zero use-case change; Problem-code enum untouched; no cheat path on the 23/0 flip (the smoke's `/ui/` call sends no explicit `accept-encoding`; undici auto-negotiates br); D-fff genuinely closes the `d95dab4`/Task-6 owner follow-up; §12 realized with the env-pair deviation OWNED; no coverage ghosts found; scope: every #13 deliverable owned, nothing smuggled.
+
+Advisories A1–A4 applied as sanctions in this wave (non-blocking):
+
+- **A1:** Task 5 Step 4 now re-derives ALL `run.ts:N` citations in deploy/README.md (whole-file grep), not only the usage block.
+- **A2:** Task 3 Step 5 corrected — the test fakes reach the seams via `as unknown as Repos` casts (claim-task.test.ts:256, update-status.test.ts:461), so typecheck will NOT red and fakes widen: the expected commit-body truth is "none (cast seams)".
+- **A3:** Task 8 Step 1 `sed` span corrected to :73-77 (the no-cache check itself).
+- **A4:** Task 2 Step 3(2) placement wording — "inside the callback, before its closing `})`".
+
 ## Decision records (Plan G — `D-fff … D-lll`; triples continue from F; `D-uu` stays dead)
 
 Grep duty: the triples CONTAIN earlier pairs (`D-ff` ⊂ `D-fff`) — every ledger citation is whole-token.
@@ -436,7 +447,7 @@ After `setHeartbeat` add:
   }
 ```
 
-- [ ] **Step 5: Fake-widening duty.** `pnpm typecheck` — test-side fakes implementing the full `TaskRepo`/`Repos` interfaces (the D-cc capture fake in `claim-task.test.ts`) must gain the two members or typecheck REDS. Add to each fake touched:
+- [ ] **Step 5: Fake-widening duty.** `pnpm typecheck` — A2 NOTE (review-verified): the test-side fakes reach the seams via `as unknown as Repos` casts (claim-task.test.ts:256, update-status.test.ts:461), so typecheck will NOT red and NO fake widens — the expected commit-body truth is `fakes widened: none (cast seams)`. ONLY if typecheck DOES report a missing-member error, add to each fake touched:
 
 ```ts
     listStaleClaims: async () => {
@@ -446,8 +457,6 @@ After `setHeartbeat` add:
       throw new Error('sweep never runs in this fake')
     },
 ```
-
-Record "fakes widened: <list>" in the commit body (or "none" if none were touched).
 
 - [ ] **Step 6: Verify + commit.** `pnpm vitest run src/infra/sqlite/task-repo.test.ts` ⇒ PASS; `pnpm test && pnpm lint && pnpm typecheck` clean (the claim model-arms staying green PROVES the stamp harmless — the claim HTTP response is `{lease_token, generation}`, NOT a Task DTO). Commit `git commit -am "feat(tasks): sweep CAS primitives, claim-stamped liveness (D-hhh)"`; raw-git verify.
 
@@ -869,7 +878,7 @@ if (cmd === 'heartbeat') {
 }
 ```
 
-- [ ] **Step 4: README byte-sync, SAME commit.** In `deploy/README.md` §The CLI: replace the three lines inside the ` ```text ` block with the FINAL USAGE lines byte-exact; RE-DERIVE the "`src/cli/run.ts:41-43`" citation against the final file (`grep -n "usage: nightshift" src/cli/run.ts` — COMMANDS gained a line, so the span moved; cite the true span). Add the commands-table row between `claim` and `report`:
+- [ ] **Step 4: README byte-sync, SAME commit.** In `deploy/README.md` §The CLI: replace the three lines inside the ` ```text ` block with the FINAL USAGE lines byte-exact; RE-DERIVE the "`src/cli/run.ts:41-43`" citation against the final file (`grep -n "usage: nightshift" src/cli/run.ts` — COMMANDS gained a line, so the span moved; cite the true span). A1 (review): RE-DERIVE **ALL** `run.ts:N` citations in deploy/README.md — whole-file `grep -n "run.ts:" deploy/README.md` (the env-table span :203, the never-echoed quote :213, the secret-scan note :245 all shift; the COMMANDS line and the inserted dispatch arm push everything down). Add the commands-table row between `claim` and `report`:
 
 ```markdown
 | `heartbeat` | `<task-id>` (exactly one); the lease via `NS_LEASE_TOKEN` — REQUIRED (absent ⇒ exit 2, nothing sent) | the server's Task DTO (liveness recorded) |
@@ -917,7 +926,7 @@ description: liveness record for the keepalive lease; silent leases expire via t
 
 ```markdown
 | `NS_KEEPALIVE_INTERVAL_MS` | `0` | int, ≥`0`; **`0` = sweeper never starts (dormant default, D-ggg)**; the sweep tick when enabled |
-| `NS_KEEPALIVE_TIMEOUT_S` | `0` | int, ≥`0`; **`0` = claims never expire**; silence budget before a silent claim reverts to `todo`; the interval form an all-or-nothing pair — half-open fails the boot, budget ≥ tick (`config.ts` superRefine) |
+| `NS_KEEPALIVE_TIMEOUT_S` | `0` | int, ≥`0`; **`0` = claims never expire**; silence budget before a silent claim reverts to `todo`; with the interval it forms an all-or-nothing pair — half-open fails the boot, budget ≥ tick (`config.ts` superRefine) |
 ```
 
 Then RE-DERIVE every stale `config.ts` citation in this file: the "Transcribed from `src/main/config.ts:5-34`" span and the "`config.ts:39-56`" fail-closed-matrix citation (grep the FINAL file's schema/superRefine bounds; update to truth).
