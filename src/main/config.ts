@@ -32,6 +32,12 @@ const EnvSchema = z
       .transform((v) => v?.replace(/\/+$/, '')),
     NS_SESSION_KEY: z.string().min(32).optional(),
     NS_SESSION_TTL_S: z.coerce.number().int().min(60).max(2_592_000).default(28_800),
+    // Plan G (D-ggg): keepalive enforcement, DORMANT by default (0/0) on the
+    // NS_WEBHOOK_INTERVAL_MS precedent. Interval = sweeper tick; timeout = silence
+    // budget before a silent claim expires. superRefine keeps it all-or-nothing —
+    // a half-opened posture fails the boot (D-qq precedent).
+    NS_KEEPALIVE_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
+    NS_KEEPALIVE_TIMEOUT_S: z.coerce.number().int().min(0).default(0),
     // fail-closed matrix (D-qq): once OIDC is configured (issuer AND client id),
     // the session key and our own public URL are REQUIRED — a half-configured
     // login surface is worse than no login surface.
@@ -53,6 +59,32 @@ const EnvSchema = z
         })
       }
     }
+    // D-ggg fail-closed matrix: enforcement is all-or-nothing, and the budget must
+    // be at least one tick (a sub-tick budget is a policy the timer cannot honor).
+    if (e.NS_KEEPALIVE_INTERVAL_MS > 0 && e.NS_KEEPALIVE_TIMEOUT_S <= 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'NS_KEEPALIVE_TIMEOUT_S is required when the sweeper interval is set',
+        path: ['NS_KEEPALIVE_TIMEOUT_S'],
+      })
+    }
+    if (e.NS_KEEPALIVE_TIMEOUT_S > 0 && e.NS_KEEPALIVE_INTERVAL_MS <= 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'NS_KEEPALIVE_INTERVAL_MS is required when a lease timeout is set',
+        path: ['NS_KEEPALIVE_INTERVAL_MS'],
+      })
+    }
+    if (
+      e.NS_KEEPALIVE_INTERVAL_MS > 0 &&
+      e.NS_KEEPALIVE_TIMEOUT_S * 1000 < e.NS_KEEPALIVE_INTERVAL_MS
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'NS_KEEPALIVE_TIMEOUT_S must be at least the sweeper interval',
+        path: ['NS_KEEPALIVE_TIMEOUT_S'],
+      })
+    }
   })
 
 export interface Config {
@@ -73,6 +105,8 @@ export interface Config {
   publicUrl?: string
   sessionKey?: string
   sessionTtlS: number
+  keepaliveIntervalMs: number
+  keepaliveTimeoutS: number
 }
 
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
@@ -97,6 +131,8 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
     publicUrl: r.data.NS_PUBLIC_URL,
     sessionKey: r.data.NS_SESSION_KEY,
     sessionTtlS: r.data.NS_SESSION_TTL_S,
+    keepaliveIntervalMs: r.data.NS_KEEPALIVE_INTERVAL_MS,
+    keepaliveTimeoutS: r.data.NS_KEEPALIVE_TIMEOUT_S,
   }
 }
 

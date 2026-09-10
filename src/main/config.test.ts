@@ -20,6 +20,8 @@ describe('loadConfig', () => {
       publicUrl: undefined,
       sessionKey: undefined,
       sessionTtlS: 28_800,
+      keepaliveIntervalMs: 0,
+      keepaliveTimeoutS: 0,
     })
   })
 
@@ -101,5 +103,27 @@ describe('plan E config seams (D-pp/D-qq)', () => {
   it('oidcEnabled is the single truth for the enabled posture', () => {
     expect(oidcEnabled(loadConfig(oidcEnv))).toBe(true)
     expect(oidcEnabled(loadConfig({ NS_DB_PATH: ':memory:' }))).toBe(false)
+  })
+})
+
+describe('plan G keepalive config (D-ggg)', () => {
+  it('dormant by default: 0/0 — every pre-G deployment byte-unchanged', () => {
+    const c = loadConfig({})
+    expect(c.keepaliveIntervalMs).toBe(0)
+    expect(c.keepaliveTimeoutS).toBe(0)
+  })
+
+  it('half-opened enforcement fails the boot, both directions (D-qq precedent)', () => {
+    expect(() => loadConfig({ NS_KEEPALIVE_INTERVAL_MS: '30000' })).toThrow(/invalid env/)
+    expect(() => loadConfig({ NS_KEEPALIVE_TIMEOUT_S: '300' })).toThrow(/invalid env/)
+  })
+
+  it('a budget shorter than the sweep tick is invalid; the enabled pair parses', () => {
+    expect(() =>
+      loadConfig({ NS_KEEPALIVE_INTERVAL_MS: '30000', NS_KEEPALIVE_TIMEOUT_S: '29' })
+    ).toThrow(/invalid env/)
+    const c = loadConfig({ NS_KEEPALIVE_INTERVAL_MS: '30000', NS_KEEPALIVE_TIMEOUT_S: '30' })
+    expect(c.keepaliveIntervalMs).toBe(30_000)
+    expect(c.keepaliveTimeoutS).toBe(30)
   })
 })
