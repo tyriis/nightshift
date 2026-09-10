@@ -330,3 +330,50 @@ describe('cli report (D-aaa)', () => {
     )
   })
 })
+
+// D-jjj — the heartbeat leg: the CLI's keepalive voice for the sweeper (D-iii).
+// The lease is a capability: absent NS_LEASE_TOKEN is LOCAL (exit 2, nothing
+// sent, the D-aaa ladder); on the wire it rides the EXISTING heartbeat op.
+describe('cli heartbeat (D-jjj)', () => {
+  it('keeps the claim alive and prints the server Task DTO (last_heartbeat_at fresh)', async () => {
+    const agent = await agentToken('a_beater')
+    const t = await createTask('beatable')
+    const lease = await claimAs(t.id, agent)
+    const r = await run(['heartbeat', t.id], { NS_TOKEN: agent, NS_LEASE_TOKEN: lease })
+    expect(r.code).toBe(0)
+    const dto = JSON.parse(r.out[0]) as Record<string, unknown>
+    expect(dto).toMatchObject({ id: t.id, status: 'in_progress' })
+    expect(dto.last_heartbeat_at).not.toBeNull()
+  })
+  it('absent NS_LEASE_TOKEN is a local config_error — exit 2, NOTHING sent', async () => {
+    const r = await run(
+      ['heartbeat', 't_x'],
+      {},
+      stubFetch(() => Promise.reject(new Error('must not send')))
+    )
+    expect(r.code).toBe(2)
+    expect(r.err[0]).toBe('nightshift: config_error heartbeat requires NS_LEASE_TOKEN (from claim)')
+  })
+  it('local gates: exact arity, no foreign flags', async () => {
+    expect((await run(['heartbeat'])).err[0]).toBe(
+      "nightshift: usage_error 'heartbeat' takes exactly one <task-id>"
+    )
+    expect((await run(['heartbeat', 'a', 'b'])).code).toBe(2)
+    expect(
+      (await run(['heartbeat', 't_x', '--label', 'nope'], { NS_LEASE_TOKEN: 'l' })).err[0]
+    ).toBe("nightshift: usage_error unknown flag --label for 'heartbeat'")
+  })
+  it('a dead lease exits 3 stale_lease (release bumped the generation)', async () => {
+    const agent = await agentToken('a_dead')
+    const t = await createTask('dead-lease')
+    const lease = await claimAs(t.id, agent)
+    await CURRENT.app.inject({
+      method: 'POST',
+      url: `/tasks/${t.id}/release`,
+      headers: { authorization: `Bearer ${agent}` },
+    })
+    const r = await run(['heartbeat', t.id], { NS_TOKEN: agent, NS_LEASE_TOKEN: lease })
+    expect(r.code).toBe(3)
+    expect(r.err[0]).toBe('nightshift: stale_lease')
+  })
+})

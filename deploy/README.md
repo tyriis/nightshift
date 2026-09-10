@@ -182,12 +182,12 @@ The image `HEALTHCHECK` is a `node -e` fetch against
 `nightshift` (`bin/nightshift.mjs`; in-image `docker exec … node
 bin/nightshift.mjs …`, host `node bin/nightshift.mjs …` after `pnpm build`,
 dev `pnpm cli …` — `DEPLOY-SMOKE.md` §3). The usage block below is copied
-verbatim from `src/cli/run.ts:41-43` (`nightshift --help` prints exactly these
+verbatim from `src/cli/run.ts:42-44` (`nightshift --help` prints exactly these
 lines, on **stderr**, exit 0):
 
 ```text
-usage: nightshift next [--label L] [--limit N] | claim <task-id> | report <task-id> [--message M] [--status S --reason R]
-env: NS_URL + NS_TOKEN required · NS_LEASE_TOKEN for --status · NS_TIMEOUT_MS default 15000 (secrets via env, never argv — D-ff)
+usage: nightshift next [--label L] [--limit N] | claim <task-id> | heartbeat <task-id> | report <task-id> [--message M] [--status S --reason R]
+env: NS_URL + NS_TOKEN required · NS_LEASE_TOKEN for heartbeat and --status · NS_TIMEOUT_MS default 15000 (secrets via env, never argv — D-ff)
 exit: 0 ok · 1 transport_error · 2 usage/config (nothing sent) · 3 API problem (`nightshift: <code>` on stderr)
 ```
 
@@ -197,20 +197,21 @@ The commands (the exact set `run.ts` dispatches):
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `next`            | `--label L`, `--limit N` (int 1..100 — the server pin)                                                                                                   | one JSON line per ready task (server DTO untouched); empty + 0 when none                      |
 | `claim`           | `<task-id>` (exactly one)                                                                                                                                | `{"task_id":…,"lease_token":…,"generation":…}` — the lease rides STDOUT, never argv (D-ff)    |
+| `heartbeat`       | `<task-id>` (exactly one); the lease via `NS_LEASE_TOKEN` — REQUIRED (absent ⇒ exit 2, nothing sent)                                                     | the server's Task DTO (liveness recorded)                                                     |
 | `report`          | `<task-id>`, `--message M`, and/or `--status S --reason R` (`--status` REQUIRES `--reason`; S ∈ `backlog\|todo\|in_progress\|in_review\|done\|canceled`) | with `--message` only: `{"task_id":…,"message_id":…}`; with `--status`: the server's Task DTO |
 | `help` / `--help` | —                                                                                                                                                        | (usage lines land on stderr)                                                                  |
 
 Environment (CLI-side, `run.ts:22-27`):
 
-| Variable         | Rule                                                                                                                                                                    |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NS_URL`         | REQUIRED; validated URL                                                                                                                                                 |
-| `NS_TOKEN`       | REQUIRED; non-empty bearer                                                                                                                                              |
-| `NS_LEASE_TOKEN` | optional; the claim-issued capability — REQUIRED **while the target task is CLAIMED** (absent on an unclaimed task ⇒ the field is simply omitted from the body; n29/P9) |
-| `NS_TIMEOUT_MS`  | int ≥`100`, default `15000`; a per-call `AbortSignal.timeout`                                                                                                           |
+| Variable         | Rule                                                                                                                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NS_URL`         | REQUIRED; validated URL                                                                                                                                                                                                         |
+| `NS_TOKEN`       | REQUIRED; non-empty bearer                                                                                                                                                                                                      |
+| `NS_LEASE_TOKEN` | optional; the claim-issued capability — REQUIRED for `heartbeat` (absent ⇒ exit 2, nothing sent) and REQUIRED **while the target task is CLAIMED** for `--status` (absent on an unclaimed task ⇒ omitted from the body; n29/P9) |
+| `NS_TIMEOUT_MS`  | int ≥`100`, default `15000`; a per-call `AbortSignal.timeout`                                                                                                                                                                   |
 
 **Secrets env-only, never argv (D-ff)** — `NS_TOKEN`/`NS_LEASE_TOKEN` never
-appear in argv and are never echoed (`run.ts:131`:
+appear in argv and are never echoed (`run.ts:132`:
 `nightshift: config_error check NS_URL / NS_TOKEN / NS_TIMEOUT_MS (values never echoed)`).
 
 **Exit ladder (pinned, grep-stable — branch on the code, never parse prose):**
@@ -242,7 +243,7 @@ NS_LEASE_TOKEN=<claim's lease_token> node bin/nightshift.mjs report t_01abc \
 An agent-daemon loop is just the ladder: `next` → `claim` → work →
 `report --message` → (lease-gated) `report --status`, branching on `$?` and the
 line-1 code. Notes: thread `kind: question` is **deliberately unexposed** by
-the CLI (humans decide — `run.ts:186`; `DEPLOY-SMOKE.md` §3/§7); an AGENT close
+the CLI (humans decide — `run.ts:204`; `DEPLOY-SMOKE.md` §3/§7); an AGENT close
 (`--status done`) answers `403 agent_close_forbidden` while `review_gate` is
 `on` (the default) — only humans close.
 
