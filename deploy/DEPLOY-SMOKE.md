@@ -59,6 +59,13 @@ no-cache` arm FAILed against Plan F's shipped image — on an encoding-negotiate
 > fence at exit 3 `stale_lease`, and cancel-with-lease clears the claim with
 > `claim_released`/`claim released on cancel` (D-mmm live). `docker stop -t 12` both
 > twins → ExitCode 0.
+>
+> I-wave LIVE run (beta shell wave; fresh `--no-cache` image `ad53ba2ddbb2`, built
+> from `feature/beta-v0.1.0-shell-wave`, tagged `ghcr.io/tyriis/nightshift:v0.1.0`)
+> measured **24 PASS / 0 FAIL, exit 0** — every H arm green, legs byte-unchanged;
+> the hashed-asset line reads `start.Cs0EahH7` (UI hash, as measured). Boot twin
+> on a throwaway volume healthy at i=3; `docker stop -t 12` → ExitCode 0; residue
+> zero (container + volume gone).
 
 ## 2. Container / health / shutdown posture
 
