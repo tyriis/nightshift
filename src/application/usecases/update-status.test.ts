@@ -512,7 +512,11 @@ describe('UpdateStatus gates (spec §6.4)', () => {
     expect(moved.status).toBe('canceled')
     expect(moved.claim_token_id).toBeNull()
     expect(moved.claim_generation).toBe(2) // clearClaim bumped the generation (D-mmm)
-    const audit = await new SqliteAuditRepo(db).search({ limit: 50 })
+    const audit = await new SqliteAuditRepo(db).search({
+      entity_type: 'task',
+      entity_id: task.id,
+      limit: 20,
+    })
     expect(
       audit.some((a) => a.action === 'claim_released' && a.reason === 'claim released on cancel')
     ).toBe(true)
