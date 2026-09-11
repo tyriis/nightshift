@@ -597,6 +597,8 @@ const newAgent = async (t: TestApp, handle: string): Promise<string> => {
 // surface: auth, validation, the malformed-MATCH 400 mapping, and the raw passthrough.
 describe('GET /search (D-ppp)', () => {
   it('requires auth (search is not in PUBLIC_PATHS — §5 stays every-AUTHENTICATED-actor)', async () => {
+    // A5: this arm is already GREEN at RED — the app-level onRequest hook 401s
+    // before routing; it pins the HOOK surface, not the route's existence.
     const t = await makeTestApp()
     expect((await t.app.inject({ method: 'GET', url: '/search?q=alpha' })).statusCode).toBe(401)
     await t.close()
@@ -632,7 +634,7 @@ describe('GET /search (D-ppp)', () => {
 
   it('the absent limit rides the route default (20) — the ?? arm; nothing 400s', async () => {
     const t = await makeTestApp()
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 21; i++) {
       await t.app.inject({
         method: 'POST',
         url: '/tasks',
@@ -646,7 +648,7 @@ describe('GET /search (D-ppp)', () => {
       headers: bearer(t),
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toHaveLength(3)
+    expect(res.json()).toHaveLength(20)
     await t.close()
   })
 
