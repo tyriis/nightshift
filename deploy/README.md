@@ -266,7 +266,7 @@ NS_LEASE_TOKEN=<claim's lease_token> node bin/nightshift.mjs report t_01abc \
 An agent-daemon loop is just the ladder: `next` → `claim` → work →
 `report --message` → (lease-gated) `report --status`, branching on `$?` and the
 line-1 code. Notes: thread `kind: question` is **deliberately unexposed** by
-the CLI (humans decide — `run.ts:204`; `DEPLOY-SMOKE.md` §3/§7); an AGENT close
+the CLI (humans decide — `run.ts:213`; `DEPLOY-SMOKE.md` §3/§7); an AGENT close
 (`--status done`) answers `403 agent_close_forbidden` while `review_gate` is
 `on` (the default) — only humans close.
 
