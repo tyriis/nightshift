@@ -35,9 +35,15 @@ Per the ticket protocol and the A–G binding lessons ("treat your own plan as u
 
 ### Plan-review lane — VERDICT: FAIL (attempt 1, 2026-09-11, independent oracle) ⇒ revisions applied, re-gate pending
 
-The three sharp rulings came back code-TRUE (D-mmm gate order/fences/guard verified against `update-status.ts:32/:40`, `heartbeat.ts:27`, `task-repo.ts:232-242/:260`, the smoke human-cancel arm's inertness; D-nnn single-world parity with `keepalive` outside VOLATILE + exactly ONE exact-shape claim pin at `claim-task.test.ts:58`, composites/mount toEqual-unaffected; D-ppp route pattern, both `??` arms armed). The FAIL is the paste-belief class the net exists for: **B1 (BLOCKER)** the Task-3 run.ts old-block was the unwrapped single-line form — real `run.ts:179-181` is prettier-wrapped (edit-exact-match fails); **B2** the Task-2 yaml old/new blocks carried 0-indent and single-quoted refs — real depth 14, DOUBLE-quoted per the prettier yaml override; **B3** the Task-4 svelte card block lost its 12-space nest indent; **B4** 27 not 26 pre-H `new ClaimTask(3-arg)` sites; **B5** QUEUED missed the Playwright-reinstall/CI-e2e line and the home-ops bundle ("highest-value pending item"); **B6** P10 must NAME the UI helper's un-gated TRUE arm honestly instead of a blanket close; **B7** cosmetic subject-count + the README `**23 PASS /**` wrap breaks the Task-6(c) anchor (re-anchored to the paragraph end). All seven applied in the amendments commit; VERDICT-PASS required from the re-gate before Task 1 dispatch.
+The three sharp rulings came back code-TRUE (D-mmm gate order/fences/guard verified against `update-status.ts:32/:40`, `heartbeat.ts:27`, `task-repo.ts:232-242/:260`, the smoke human-cancel arm's inertness; D-nnn single-world parity with `keepalive` outside VOLATILE + exactly ONE exact-shape claim pin at `claim-task.test.ts:58`, composites/mount toEqual-unaffected; D-ppp route pattern, both `??` arms armed). The FAIL is the paste-belief class the net exists for: **B1 (BLOCKER)** the Task-3 run.ts old-block was the unwrapped single-line form — real `run.ts:179-181` is prettier-wrapped (edit-exact-match fails); **B2** the Task-2 yaml old/new blocks carried 0-indent and single-quoted refs — real depth 14, DOUBLE-quoted per the prettier yaml override; **B3** the Task-4 svelte card block lost its 12-space nest indent; **B4** 27 not 26 pre-H `new ClaimTask(3-arg)` sites; **B5** QUEUED missed the Playwright-reinstall/CI-e2e line and the home-ops bundle ("highest-value pending item"); **B6** P10 must NAME the UI helper's un-gated TRUE arm honestly instead of a blanket close; **B7** cosmetic subject-count + the README `**23 PASS /**` wrap breaks the Task-6(c) anchor (re-anchored to the paragraph end). B4–B7 applied in `ce7ed4c`. THE TRUTH (attempt-2 caught it): the B1–B3 repair was LOST — the edit calls reported success but the interrupted turns never wrote them; the diff carried only B4–B7, and this section's then-current "All seven applied" claim was FALSE at that commit. Ledger honesty over face-saving: the three blocks are repaired in the attempt-3 commit in MEASURED byte forms (real-file byte-diffs + `prettier --stdin-filepath` canonical probes on patched copies; guard-asserted replacement script, post-grep verified). VERDICT-PASS required from the re-gate before Task 1 dispatch. SELF-CAUGHT in the same sweep (beyond the lane's B-list, same class): the deps.ts old-quote was prose-flush (now fenced at real 6-space), the deploy-smoke cleanup-comment quote lost the real line-wrap + capital `NOT` (now measured bytes), the D-ooo helper block drops the svelte script's 2-space style (now file-true), and the D-ooo/D-nnn new blocks gained full-file `prettier --stdin-filepath` stability probes — plus a measurement-based self-sweep (real-file slices ⇄ plan byte-presence + `prettier --stdin-filepath` FULL-FILE stability for every patched file) that caught and repaired the same-class flush-left anchors in Task 1 (D-c old/new, 6-space), Task 2 (success-return old/new, 8-space; :58 old/new, 4-space) and the test-arm indents (2/4-space file style) — all repaired here, guard-asserted.
 
-### Artifact preflight — VERDICT: PENDING
+### Plan-review lane — VERDICT: FAIL (attempt 2, 2026-09-11, same independent lane)
+
+B4–B7 CLOSED (measured: 27-sites grep, QUEUED completeness, P10 UI naming, subject 55 by `printf | wc -c`, README paragraph-end anchor exists once). B1–B3 NOT-CLOSED — the attempt-1 "repair" was annotation over flush-left blocks (the repairs never reached the file); the lane also flagged this ledger's false closure claim. Attempt-3: the three blocks replaced with measured byte forms — `run.ts` real 5-line old / prettier-canonical new (patched-file `--stdin-filepath` probe), claim-yaml at the real 14/16/18 depth with double-quoted refs (cat -A witness `openapi.yaml:299-306`), svelte card at 12-space nest with the PRETTIER-CANONICAL new block (probe: the canonical SPLITS the `.map().join()` chain); the sibling yaml/depth drifts (op path depth, component 4/6/8, double quotes) repaired in the same pass. All rulings/anchors/counts remain verified code-true from attempt 1 — only block byte-forms and ledger truth were in play.
+
+### Artifact preflight — VERDICT: PREFLIGHT: PASS (2026-09-11, throwaway worktree @ detached `6fa3d58`, LEFT INTACT)
+
+Pinned env verbatim: node 24.20.0 / pnpm 10.33.0. RED→GREEN per task, every prediction met: T1 RED `expected 'tok_agent' to be null` ⇒ 696/89; T2 RED `2 failed | 15 passed (17)` (A2 text), regen delta **+6 ONLY** (KeepalivePair + the claim keepalive property), full **697/89** with `mcp-parity`/`mount`/`composites`/`tasks`/`scenarios`/`drift`/`openapi-contract` byte-untouched and GREEN — the D-nnn composition HOLDS on the machine, not just as an argument; T3 RED `expected undefined to deeply equal { interval_ms: +0, timeout_s: +0 }` ⇒ cli+shim 28/28, USAGE 3-line intact, P7 citations measured: `42-44`/`22-27`/`132` UNCHANGED, `204` ⇒ **:213**; T4 ui:build/offline-check hosts byte-unchanged AND the **e2e RAN green** (chromium headless-shell present) — selector stability LIVE-proved, P10's ♥-arm posture noted; T5 RED 5-of-6 (A5), regen cumulative **+49/−0** ONLY (/search + SearchHit + searchTasks), validation matrix `q=`/no-q/`limit=0`/`201`/`abc`/`1.5` ⇒ **400 invalid_request** every shape, absent-limit 21-task ⇒ exactly 20 ⇒ **no ajv default-injection — the route's `limit ?? 20` is the single default truth, both arms armed** (P4 CLOSED); tokenization on the real trigger path: `q=<stamp>` ⇒ 200+hit TRUE, bare-hyphen ⇒ `no such column: smoke` ⇒ unmapped 500 (**OBS-1** — D-gg map gap, port byte-frozen in H, arm stamp-only ⇒ H ships sound; QUEUED); full-suite **703/90 — P9's pinned prediction EXACT**; T6 `node --check` exit 0, 24th arm at the stated anchor (`stamp`/`id`/`agentCall`/`check` in scope — measured). Coverage verbatim: `Statements 99.53 (1938/1947) · Branches 98.58 (905/918) · Functions 99.79 (476/477) · Lines 99.71 (1765/1770)` — every axis ≥ the G floor (Branches/Funcs strictly above); domain 6/6 files 100×4 programmatically; per-file lcov for `routes/search.ts`/`claim-task.ts`/`update-status.ts`/`run.ts`: ZERO new uncovered lines/branches — P10 HOLDS. Zero-drift: 16 tracked + 3 untracked files, all mapping to the File-structure table; forbidden set (`adapters/mcp/**`, `auth.ts`, `vitest.config.ts`, `ci.yaml`, `pnpm-lock.yaml`, `specs/`, `e2e/`, `ui.ts`, `openapi-contract.test.ts`, `mcp-parity.test.ts`, `mount.test.ts`) → ZERO entries. FORCED-AMENDMENTS dispositions: A1 file-indentation normalization on insertions (sanctioned, G precedent, content verbatim) · A2/A3/A5 folded into the task texts above · A4 count arithmetic reconciled (27 pre-H + the new 4-arg site) · A7 the probe lane's own brief typo (plan unaffected) · A8 probe-method note (vitest console capture). No probe weakened; nothing committed anywhere; **dispatch may proceed on the plan-review PASS.**
 
 ## Decision records (Plan H — `D-mmm … D-rrr`; triples continue from G; `D-uu` stays dead)
 
@@ -46,10 +52,10 @@ Grep duty: the triples CONTAIN earlier pairs (`D-ppp` ⊃ `D-pp`) — every ledg
 - **D-mmm — Cancel clears its claim (amending the E-era D-c block).** Ruling: `canceled` joins `in_review`/`done` in the clear-on-transition block — a canceled task is terminal AND the sweeper respects canceled-terminal (D-hhh, by design), so an attached claim there could NEVER be swept: a dead claim forever, visible on a public DTO with no owner. The clear rides the EXISTING `clearClaim` (generation bumped); the audit rides the EXISTING `claim_released` action with a NEW grep-pinned machine reason `claim released on cancel` (§6.7 names reasons machine-readable; the review/done string `claim released on review` stays byte-untouched for its pinned arms). Zombie fencing adds ZERO code: a late heartbeat rides the shipped 412 `stale_lease` (the claim is gone — `heartbeat.ts` validates currency), any late status write rides `canceled_terminal` (the gate runs ahead of the lease check). What this does NOT do: widen the cancel gate — invariant 3 stays (cancel of a CLAIMED task still requires the current lease; a human cancels unclaimed work, the claimant cancels its own).
 - **D-nnn — The claim response echoes the keepalive pair (a real contract ruling).** §12's literal sketch — "lease carries `interval` + `timeout`" — realizes as `keepalive: {interval_ms, timeout_s}` on the claim 200 response. Composition: the USE CASE result (`ClaimTask` gains an optional 4th ctor arg, the policy pair, defaulting to the DORMANT `{interval_ms: 0, timeout_s: 0}` — every pre-H 3-arg construction stays byte-green and exercises the default arm; `deps.ts` passes the real config, so the wire truth always comes from config). One composition point, three transports inherit it verbatim: REST `POST /tasks/{id}/claim` (route passthrough, zero route edit), MCP `claim_task` (returns the use-case result), MCP `claim_next` (embeds `claim`) — the parity twins echo the SAME config ⇒ `mcp-parity.test.ts` compares `keepalive` (not volatile) ⇒ EQUAL ⇒ the pin holds byte-untouched; MCP stays 35 tools, `mount.test.ts` byte-untouched. Dormant pairs echo `{0, 0}` — the D-ggg truth visible on the wire, never a guess. Contract: ONE additive property on the claim 200 + one new component schema; required-sets, paths×methods, the Problem-code enum — byte-untouched; `pnpm gen:client` regen IN THE SAME COMMIT (D-zz duty, drift.test.ts byte-proves). The CLI `claim` prints the pair (D-aaa: the DTO IS the truth) ⇒ the `run.ts:N` README citations re-derive in the same commit (D-jjj docs-mirror duty: grep, never guess). This REPLACES D-ggg's "NOT as response fields" sentence — the amendment is logged here, the dormancy/deviation ledger stays honest: G ruled the server-side PAIR over response fields; H adds the echo ON TOP of the pair (the pair never moved).
 - **D-ooo — The board surfaces claim liveness (age, not staleness).** An `in_progress` card whose `claim_token_id !== null` shows `♥ <age>` derived from `last_heartbeat_at ?? updated_at` (the claim IS the first liveness — D-hhh). NO threshold judgment: the expiry budget is server config (dormant by default), so the UI shows AGE and the operator's config supplies meaning — `last_heartbeat_at` is already public on every DTO (G's QUEUED note's premise, measured). Detail page: none — the activity tab (audit `heartbeat` rows) already owns the liveness story; adding a second source there is duplication, stated. UI is outside the vitest include (build + offline-check + e2e are its gates — E/G doctrine, recorded posture).
-- **D-ppp — `GET /search`: one documented route over the D-gg port.** The §12 "FTS-backed search UI" slice, read-only half: the yaml gains a `/search` path (opId `searchTasks`, tags `tasks`, `q` required minLength 1, `limit` 1..200 — the repo clamp's ceiling as a 400 instead of a silent clamp, M-2 doctrine) + a `SearchHit` component schema `{id,title,snippet,score}` (required all); regen same commit (D-zz). The route (`src/adapters/rest/routes/search.ts`, wired in `app.ts` beside the task family) validates via fastify querystring schema (400 `invalid_request` rides the shipped problem arm) and passes `deps.searchRoot.search(q, limit ?? 20)` through RAW — the snippet `[…]` wrapping and bm25 order are the port's published semantics (search-repo.ts), the route owns none. Auth: NOT in `PUBLIC_PATHS` — every AUTHENTICATED actor may read everything (§5); rate-limit budget burns like the feed (D-dd posture, mirrored in the op description). MCP gets NO search tool (D-nn freeze: exposure would be a recorded re-freeze — QUEUED). The CLI gets NO `search` command (COMMANDS exact set byte-untouched). Malformed MATCH strings ⇒ the repo's `invalid_request` map, over HTTP unchanged (400, zero new codes).
+- **D-ppp — `GET /search`: one documented route over the D-gg port.** The §12 "FTS-backed search UI" slice, read-only half: the yaml gains a `/search` path (opId `searchTasks`, tags `tasks`, `q` required minLength 1, `limit` 1..200 — the repo clamp's ceiling as a 400 instead of a silent clamp, M-2 doctrine) + a `SearchHit` component schema `{id,title,snippet,score}` (required all); regen same commit (D-zz). The route (`src/adapters/rest/routes/search.ts`, wired in `app.ts` beside the task family) validates via fastify querystring schema (400 `invalid_request` rides the shipped problem arm) and passes `deps.searchRoot.search(q, limit ?? 20)` through RAW — the snippet `[…]` wrapping and bm25 order are the port's published semantics (search-repo.ts), the route owns none. Auth: NOT in `PUBLIC_PATHS` — every AUTHENTICATED actor may read everything (§5); rate-limit budget burns like the feed (D-dd posture, mirrored in the op description). MCP gets NO search tool (D-nn freeze: exposure would be a recorded re-freeze — QUEUED). The CLI gets NO `search` command (COMMANDS exact set byte-untouched). Malformed MATCH strings ⇒ the repo's `invalid_request` map, over HTTP unchanged (400, zero new codes) — WITH preflight honesty (OBS-1, measured): the map's TWO probe-pinned shapes (`fts5:` / `unterminated string`) are the ONLY invalid_request class; other SqliteErrors re-throw to 500 exactly as the byte-frozen port ships (measured: a bare column-reference MATCH like `ns-smoke-x` ⇒ `no such column: smoke` ⇒ 500). The smoke arm queries the single stamp token (probe-proven 200+hit); the gap is QUEUED for the D-gg map owner — recorded, never smuggled.
 - **D-qqq — The search view.** `adapters/sveltekit/src/routes/search/+page.svelte` (form over `GET /search`, hits as links with the server's snippet and order, `invalid_request` errors shown not swallowed) + one nav link (`+layout.svelte`) + the `SearchHit` transcription in `lib/types.ts` (the file's own rule: one interface per SHIPPED route, cited). SAVED FILTERS / UNDO-RESTORE: REJECTED for this plan — mutating territory (new tables/endpoints/contract surface), sized honestly as beyond one plan, QUEUED.
 - **D-rrr — Deploy surface: the FTS arm grows the bar DELIBERATELY + the doc pass.** `scripts/deploy-smoke.mjs` gains ONE check (search finds the smoke task by its marker — the FTS triggers proven LIVE on the real image, the probe-picked token form per P5): 23 arms become 24, contract + record together, never silent. `deploy/README.md`: the §Keepalive section gains the cancel-clears line (the `claim released on cancel` machine string mirrored) and the claim-echo sentence (rides Task 2 — same-commit doc-mirror for a wire truth); the §Deploy-smoke count text ships H's FORWARD note ("the FTS arm joins; the standing recorded bar is 23/0 until the H final-gate live re-measure") and the count itself FLIPS ONLY at Task 7 with the measured tail (flips are evidence-licensed — G's §1 precedent); `DEPLOY-SMOKE.md` §3 notes the automated search arm. The standing wording nit: "advisory off ed74a60" ⇒ "advisory against ed74a60" (G's Task-7 PLAN DEFECT note, fixed here, never smuggled).
-- **QUEUED (HUMAN / follow-up, honest):** SSE wrapper (the streaming-vs-zero-socket harness question is a PREFLIGHT-class unknown — deferred honestly, its slice decision stays open) · capability scopes (the never-widen-silently auth class — riskiest since E) · CSP (nonce/hash grade is QUEUED-HUMAN by the ticket; interacts with D-fff's variant predicate) · email (spec §6.8 "no email in v1" — spec-frozen + SMTP creds are human-held) · search saved-filters / undo-restore (mutating class) · CLI `search` leg · MCP search exposure (= re-freeze decision) · detail-page liveness line · **home-ops bundle — the highest-value pending item in the repo** (HelmRelease, registry push, `@sha256` digest pin, real deploy of the G+H image, the §14 operator walkthrough incl. keepalive legs, first-week audit — what it shakes loose feeds the NEXT slice decision) · Playwright browser re-install after upgrades + optional CI e2e job · F's unchanged ledger (real Pocket ID, nonce verify-once, role surgery, session-key rotation, npm publish).
+- **QUEUED (HUMAN / follow-up, honest):** SSE wrapper (the streaming-vs-zero-socket harness question is a PREFLIGHT-class unknown — deferred honestly, its slice decision stays open) · capability scopes (the never-widen-silently auth class — riskiest since E) · CSP (nonce/hash grade is QUEUED-HUMAN by the ticket; interacts with D-fff's variant predicate) · email (spec §6.8 "no email in v1" — spec-frozen + SMTP creds are human-held) · search saved-filters / undo-restore (mutating class) · CLI `search` leg · MCP search exposure (= re-freeze decision) · detail-page liveness line · OBS-1 — the D-gg error-map gap: bare column-reference/hyphen MATCH ⇒ `no such column:` ⇒ unmapped 500 (preflight-measured; H ships the port byte-frozen + a stamp-token smoke arm, so H is sound — the MAP is the candidate, its owner decides) · **home-ops bundle — the highest-value pending item in the repo** (HelmRelease, registry push, `@sha256` digest pin, real deploy of the G+H image, the §14 operator walkthrough incl. keepalive legs, first-week audit — what it shakes loose feeds the NEXT slice decision) · Playwright browser re-install after upgrades + optional CI e2e job · F's unchanged ledger (real Pocket ID, nonce verify-once, role surgery, session-key rotation, npm publish).
 
 ## Slice decision (Act 2) — recorded with the rejected candidates
 
@@ -199,7 +205,22 @@ if (
 }
 ```
 
-- [ ] **Step 4: Comment truth in the smoke script** — in `scripts/deploy-smoke.mjs`, the cleanup comment (anchor: the 4-line comment above `const released2 =`) currently claims "update-status.ts clears it only on in_progress/done" — replace the clause `in_progress does NOT clear the claim (update-status.ts clears it only on in_review/done — B2/S2)` with `in_progress does NOT clear the claim (update-status.ts clears on in_review/done/canceled only — B2/S2 + D-mmm)` (rest of the comment byte-untouched).
+- [ ] **Step 4: Comment truth in the smoke script** — in `scripts/deploy-smoke.mjs`, the cleanup comment's first two lines are (ATTEMPT-3 REPAIR, MEASURED byte-exact — line-wrapped, capital `NOT`):
+
+```js
+// cleanup: in_progress does NOT clear the claim (update-status.ts clears it only on
+// in_review/done — B2/S2) — the AGENT releases first (the arm P9 verified
+```
+
+replace with:
+
+```js
+// cleanup: in_progress does NOT clear the claim (update-status.ts clears on
+// in_review/done/canceled — B2/S2 + D-mmm) — the AGENT releases first (the arm P9 verified
+```
+
+(rest of the comment byte-untouched; the script keeps its `scripts/` doctrine — js lines there are outside lint/format gates, wrap honesty is a courtesy).
+
 - [ ] **Step 5: Run GREEN** — `pnpm test src/application/usecases/update-status.test.ts src/infra/keepalive/lease-sweeper.test.ts src/adapters/rest/scenarios-events.test.ts` ⇒ all green (P1/P6 predicted; the sweeper suite proves non-interference).
 - [ ] **Step 6: Full gate + commit**
 
@@ -251,7 +272,7 @@ it('D-nnn: an explicit keepalive pair echoes on the claim verbatim (the deps wir
 })
 ```
 
-- [ ] **Step 2: Run RED** — `pnpm test src/application/usecases/claim-task.test.ts` ⇒ expected: the amended arm fails `keepalive: undefined ≠ {...}` and the new arm fails `keepalive is not a property` (verbatim, recorded).
+- [ ] **Step 2: Run RED** — `pnpm test src/application/usecases/claim-task.test.ts` ⇒ expected (PREFLIGHT-MEASURED, A2): `Tests 2 failed | 15 passed (17)` — the amended :58 arm fails with the keepalive toEqual diff (received lacks the two keys); the new arm fails `expected undefined to deeply equal { interval_ms: 1000, timeout_s: 5 }`. Record verbatim (the plan's earlier "is not a property" guess was vitest-runtime-inaccurate).
 - [ ] **Step 3: Implement the use case** — in `claim-task.ts` replace (verbatim current):
 
 ```ts
@@ -322,7 +343,13 @@ return {
 }
 ```
 
-- [ ] **Step 4: Wire deps** — in `src/main/deps.ts` replace `claimTask: new ClaimTask(uow, clock, ids),` with:
+- [ ] **Step 4: Wire deps** — in `src/main/deps.ts` replace (verbatim current, real 6-space):
+
+```ts
+      claimTask: new ClaimTask(uow, clock, ids),
+```
+
+with:
 
 ```ts
       claimTask: new ClaimTask(uow, clock, ids, {
@@ -331,7 +358,7 @@ return {
       }),
 ```
 
-- [ ] **Step 5: Contract edit** — in `openapi/openapi.yaml`, inside the `/tasks/{id}/claim` 200 response (verbatim current block):
+- [ ] **Step 5: Contract edit** — in `openapi/openapi.yaml`, inside the `/tasks/{id}/claim` 200 response (verbatim current block — ATTEMPT-3 REPAIR, MEASURED byte-exact against `openapi/openapi.yaml:299-306`):
 
 ```yaml
 schema:
@@ -341,7 +368,7 @@ schema:
     generation: { type: integer }
 ```
 
-becomes (indentation MEASURED — `schema:` sits at 14 spaces under `application/json:`; yaml refs are DOUBLE-QUOTED per the repo's prettier yaml override `singleQuote: false` — B2 amendment):
+becomes (yaml refs DOUBLE-QUOTED per the repo's prettier yaml override `singleQuote: false` — the real file's `default: { $ref: "#/components/responses/Problem" }` on the next line is the style witness):
 
 ```yaml
 schema:
@@ -400,7 +427,7 @@ expect(parsed.keepalive).toEqual({ interval_ms: 0, timeout_s: 0 })
 ```
 
 - [ ] **Step 2: Run RED** — `pnpm test src/cli/cli.test.ts` ⇒ FAIL `expected undefined to deeply equal { interval_ms: 0, timeout_s: 0 }` (verbatim).
-- [ ] **Step 3: Implement** — in `run.ts`, replace (verbatim current):
+- [ ] **Step 3: Implement** — in `run.ts`, replace (verbatim current — ATTEMPT-3 REPAIR, MEASURED byte-exact against `src/cli/run.ts:178-182`; the new block is prettier-canonical — the patched real file passes `prettier --stdin-filepath src/cli/run.ts` UNCHANGED):
 
 ```ts
 // trust-cast (D-aaa): failFrom proved data present
@@ -427,9 +454,9 @@ io.stdout(
 )
 ```
 
-(prettier owns the final wrapping — content verbatim, lefthook normalizes.)
+(prettier canonical MEASURED — the block above is what `prettier --stdin-filepath src/cli/run.ts` produces for the patched file; no normalization surprise can ride the commit.)
 
-- [ ] **Step 4: README byte-sync (D-jjj duty, same commit)** — `grep -n 'run\.ts:[0-9]' deploy/README.md deploy/DEPLOY-SMOKE.md`; pre-edit measured citations: `42-44` (usage block) / `22-27` (env) / `132` (config_error) / `204` (report comment). The edit zone is ~lines 174-183: `42-44`, `22-27`, `132` sit ABOVE ⇒ re-verify by grep they still land right (expect unchanged); `204` sits BELOW ⇒ grep the cited symbol in the FINAL run.ts and re-point. Update README lines 204/223/233/265-cited spans ONLY as measurement dictates (word-sequences byte-untouched; numbers only).
+- [ ] **Step 4: README byte-sync (D-jjj duty, same commit)** — `grep -n 'run\.ts:[0-9]' deploy/README.md deploy/DEPLOY-SMOKE.md`; pre-edit measured citations: `42-44` (usage block) / `22-27` (env) / `132` (config_error) / `204` (report comment). The edit zone is ~lines 174-183: `42-44`, `22-27`, `132` sit ABOVE ⇒ re-verify by grep they still land right (expect unchanged); `204` sits BELOW ⇒ grep the cited symbol in the FINAL run.ts and re-point. Update the four README citation-spans ONLY as measurement dictates (word-sequences byte-untouched; numbers only — PREFLIGHT-MEASURED A3: after Task 2's echo paragraph the citation LINES sit at README 208/227/237/269, and the `204`-citation target in the final run.ts lands at **:213** — grep the FINAL files at application time, never paste).
 - [ ] **Step 5: GREEN** — `pnpm test src/cli/cli.test.ts src/cli/shim.test.ts` ⇒ 28/28+1; `pnpm test` full ⇒ 697/89 (no count change — arm amendment).
 - [ ] **Step 6: Commit**
 
@@ -463,7 +490,7 @@ const livenessAge = (t: TaskDto): string | null => {
 }
 ```
 
-- [ ] **Step 2: Card render** — replace (verbatim current, indentation MEASURED — `<a>` at 12 spaces inside the `{#each cell(...)}` nest; B3 amendment):
+- [ ] **Step 2: Card render** — replace (verbatim current — ATTEMPT-3 REPAIR, MEASURED byte-exact against `adapters/sveltekit/src/routes/+page.svelte:115-117`; the old block is prettier-stable AS SHIPPED):
 
 ```svelte
 <a class="card" href="/ui/tasks/{t.id}"
@@ -471,7 +498,7 @@ const livenessAge = (t: TaskDto): string | null => {
 >
 ```
 
-with:
+with (PRETTIER-CANONICAL — MEASURED: the patched real file through `prettier --stdin-filepath adapters/sveltekit/src/routes/+page.svelte` yields EXACTLY this; the `{#if}` addition crosses 100 cols so prettier SPLITS the `.map().join()` chain — shipping anything else would mean the hook rewrites the block at commit):
 
 ```svelte
 <a class="card" href="/ui/tasks/{t.id}"
@@ -639,7 +666,7 @@ describe('GET /search (D-ppp)', () => {
 })
 ```
 
-- [ ] **Step 2: Run RED** — `pnpm test src/adapters/rest/routes/search.test.ts` ⇒ every arm 404 `not_found` (route absent; verbatim recorded). The openapi-contract drift test is ALSO red the moment the yaml lands ahead of the route — that is WHY Step 3-5 ship together.
+- [ ] **Step 2: Run RED** — `pnpm test src/adapters/rest/routes/search.test.ts` ⇒ 5 of 6 arms 404 `not_found` (route absent — PREFLIGHT-MEASURED A5: the auth arm is ALREADY GREEN at RED, the 401 `onRequest` hook answers before routing; honest RED face, not a broken arm). The openapi-contract drift test is ALSO red the moment the yaml lands ahead of the route — that is WHY Step 3-5 ship together.
 - [ ] **Step 3: Contract** — in `openapi/openapi.yaml`, insert the path AFTER the `/events:` block (anchor: the events block ends `        default: { $ref: "#/components/responses/Problem" }` immediately before `  /admin/actors:`):
 
 ```yaml
@@ -648,10 +675,11 @@ describe('GET /search (D-ppp)', () => {
     tags: [tasks]
     operationId: searchTasks
     description: >-
-      FTS5 task search (spec §9, D-gg): MATCH syntax over title/description/AC — a
-      malformed query answers invalid_request; snippet wraps matched terms in [];
-      score is bm25 flipped (higher = better). Burning this burns the per-actor
-      rate-limit budget (D-dd posture, same as the feed).
+      FTS5 task search (spec §9, D-gg): MATCH syntax over title/description/AC — the
+      port's published semantics and error mapping (invalid_request on the D-gg
+      malformed-shape map, OBS-1 recorded in the plan); snippet wraps matched terms
+      in []; score is bm25 flipped (higher = better). Burning this burns the
+      per-actor rate-limit budget (D-dd posture, same as the feed).
     parameters:
       - { name: q, in: query, required: true, schema: { type: string, minLength: 1 } }
       - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
