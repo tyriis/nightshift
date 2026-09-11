@@ -356,6 +356,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/search': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** @description FTS5 task search (spec §9, D-gg): MATCH syntax over title/description/AC — the port's published semantics and error mapping (invalid_request on the D-gg malformed-shape map, OBS-1 recorded in the plan); snippet wraps matched terms in []; score is bm25 flipped (higher = better). Burning this burns the per-actor rate-limit budget (D-dd posture, same as the feed). */
+    get: operations['searchTasks']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/admin/actors': {
     parameters: {
       query?: never
@@ -831,6 +848,14 @@ export interface components {
     KeepalivePair: {
       interval_ms: number
       timeout_s: number
+    }
+    /** @description FTS5 hit (D-gg) — snippet wraps matched terms in [] */
+    SearchHit: {
+      id: string
+      title: string
+      snippet: string
+      /** @description bm25 flipped — higher = better */
+      score: number
     }
     /** @description RFC 9457; `already_claimed` additionally carries holder_handle/holder_display_name */
     Problem: {
@@ -1575,6 +1600,30 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Event'][]
+        }
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  searchTasks: {
+    parameters: {
+      query: {
+        q: string
+        limit?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description hits in score-desc order (bm25 flipped); empty when nothing matches; default limit 20 (the route default) */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SearchHit'][]
         }
       }
       default: components['responses']['Problem']
