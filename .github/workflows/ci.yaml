@@ -18,3 +18,13 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test:coverage
       - run: pnpm build
+  # CUT 4 (beta v0.1.0): the docker-build arm — the image arc stays continuously
+  # tested. Build only; the tagged publish (`docker push`) is the operator's
+  # release step (see deploy/README.md). Both jobs are the required-status-check
+  # rollup the operator flips on `main` (gh api prep in the PR description).
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t nightshift:ci .
+      - run: docker image inspect nightshift:ci --format '{{json .Config.Labels}}'
