@@ -212,8 +212,8 @@ try {
       cursors.every((v, i) => i === 0 || v > cursors[i - 1]),
     `rows ${cursors.length}`
   )
-  // cleanup: in_progress does NOT clear the claim (update-status.ts clears it only on
-  // in_review/done — B2/S2) — the AGENT releases first (the arm P9 verified
+  // cleanup: in_progress does NOT clear the claim (update-status.ts clears on
+  // in_review/done/canceled — B2/S2 + D-mmm) — the AGENT releases first (the arm P9 verified
   // claim→move→release→human-cancel = 200), then the HUMAN closes (agents may not);
   // the token goes away; the task + note stay as the honest audit-visible residue
   const released2 = await agentCall(`/tasks/${id}/release`, { method: 'POST' })

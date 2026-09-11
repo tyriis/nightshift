@@ -87,8 +87,18 @@ export class UpdateStatus {
 
       await repos.tasks.setStatus(input.taskId, input.to, now)
 
-      // D-c: leave review/done un-claimed so humans can close without a lease.
-      if ((input.to === 'in_review' || input.to === 'done') && task.claim_token_id !== null) {
+      // D-c (AMENDED by D-mmm, Plan H): review/done/canceled all leave the task un-claimed.
+      // review/done so humans can close without a lease (D-c, byte-kept); cancel because
+      // canceled is terminal AND the sweeper respects canceled-terminal (D-hhh) — an
+      // attached claim there could NEVER be swept: a dead claim forever, public on the
+      // DTO with no owner. The clear bumps the fencing generation; late writes ride the
+      // SHIPPED fences (heartbeat 412 stale_lease, status canceled_terminal ahead of it)
+      // — zero new codes. The gate is NOT widened: cancel of a claimed task still
+      // requires the lease (invariant 3 above).
+      if (
+        (input.to === 'in_review' || input.to === 'done' || input.to === 'canceled') &&
+        task.claim_token_id !== null
+      ) {
         await repos.tasks.clearClaim(input.taskId, now)
         await repos.audit.append({
           actor_id: input.actor.id,
@@ -96,7 +106,10 @@ export class UpdateStatus {
           action: 'claim_released',
           entity_type: 'task',
           entity_id: input.taskId,
-          reason: 'claim released on review',
+          // §6.7 machine-readable reason, named per path — the review/done string stays
+          // byte-untouched for its pinned arms; 'claim released on cancel' is D-mmm's
+          // new grep-pinned string (mirrored in deploy/README.md §Keepalive, Task 6)
+          reason: input.to === 'canceled' ? 'claim released on cancel' : 'claim released on review',
           created_at: now,
         })
       }
