@@ -89,6 +89,9 @@ host form: `NS_URL=… NS_TOKEN=… node bin/nightshift.mjs …` (built `dist/`)
 - [ ] Race pin: two concurrent `… claim <same-id>` — exactly one exit 0; the loser exits 3,
       stderr line 1 exactly `nightshift: already_claimed`, line 2 the flat problem JSON
       with `holder_handle`.
+- [ ] Search: NO operator step added here — the FTS5 live proof joined §1's automated probes
+      in H (D-rrr): the smoke's 24th arm queries `GET /search?q=<stamp>` for the task it just
+      created and requires it back (the CLI has no `search` command — D-ppp).
 
 ## 4. REAL Pocket ID (QUEUED HUMAN legs)
 

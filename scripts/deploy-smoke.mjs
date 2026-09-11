@@ -177,6 +177,16 @@ try {
     moved.res.status === 200 && moved.json?.status === 'in_progress',
     moved.text.slice(0, 160)
   )
+  // the D-gg FTS substrate on the LIVE image (D-rrr): the create INSERT rode the
+  // real task_fts triggers; the marker in the description must come back from the
+  // D-ppp search contract. The token form is probe-picked (P5): a base36 stamp is a
+  // single unicode61 alnum token — the hyphen-marker form needs phrase semantics.
+  const found = await agentCall(`/search?q=${stamp}&limit=10`)
+  check(
+    'search finds the smoke task (FTS5 live)',
+    found.res.status === 200 && Array.isArray(found.json) && found.json.some((h) => h.id === id),
+    found.text.slice(0, 160)
+  )
   const note = await agentCall(
     `/tasks/${id}/threads`,
     json('POST', { kind: 'note', body: `deploy-smoke ${stamp} — agent note on the live board` })

@@ -150,6 +150,11 @@ event feed). Any LATER write with the old lease answers `412 stale_lease` — th
 zombie fence, zero new error surface. Holders stay alive by heartbeating inside
 the budget (`nightshift heartbeat`, or MCP `post_update` which already rides it).
 
+Cancel CLEARS its claim too (H, D-mmm): canceling a claimed task (its own holder —
+invariant 3 still requires the lease) clears the claim, bumps the generation, and
+audits action `claim_released` with reason `claim released on cancel` (§6.7 named,
+grep-mirrored here). A canceled task never keeps a dead claim the sweeper can't touch.
+
 A CLAIM echoes the pair: `POST /tasks/{id}/claim` answers `keepalive:
 {interval_ms, timeout_s}` (0/0 = dormant) so a holder paces off the server's
 policy, never off a guess (§12's "lease carries interval + timeout", shipped in H).
@@ -157,7 +162,7 @@ policy, never off a guess (§12's "lease carries interval + timeout", shipped in
 Effective budget is TICK-QUANTIZED: expiry is checked only on sweep
 ticks, so detection can lag the configured budget by up to one interval
 (worst case budget == interval means up to a full interval late — quality-lane
-advisory off ed74a60, sanctioned here into the operator text).
+advisory against ed74a60, sanctioned here into the operator text).
 
 ## Volumes & WAL
 
@@ -288,6 +293,11 @@ immutable` (the bare `.html` check missed them; a 30 d stale-shell hazard, plus 
 unprobed gzip-fallback face). Plan G's `ui.ts` fix closed both faces and the G-wave
 ship-time run measured 23 PASS / 0 FAIL with the probe byte-identical. Full lineage:
 `DEPLOY-SMOKE.md` §1 and Plan F's Task-6 record.
+
+H adds the FTS search arm (D-rrr): the arm ships with the
+contract, the bar GROWS DELIBERATELY to 24 arms — and the recorded count flips from
+23/0 to the measured tail only at the H final gate's LIVE run (flips are
+evidence-licensed; this line stays honest until then).
 
 Honest scope (D-eee): the automated legs (steps 0–3, 6) ran against the
 ship-time container; the browser/OIDC legs (steps 4, 5, 7 — real Pocket ID, a
