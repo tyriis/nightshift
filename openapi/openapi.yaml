@@ -306,6 +306,7 @@ paths:
                 properties:
                   lease_token: { type: string }
                   generation: { type: integer }
+                  keepalive: { $ref: "#/components/schemas/KeepalivePair" }
         default: { $ref: "#/components/responses/Problem" }
   /tasks/{id}/release:
     parameters: [{ $ref: "#/components/parameters/TaskId" }]
@@ -1106,6 +1107,13 @@ components:
         entity_id: { type: string }
         reason: { type: ["string", "null"] }
         created_at: { type: string }
+    KeepalivePair:
+      type: object
+      description: the keepalive policy echoed at claim (D-nnn) — 0/0 = dormant (D-ggg); pace heartbeats well inside timeout_s, expiry detection lags up to one interval_ms tick
+      required: [interval_ms, timeout_s]
+      properties:
+        interval_ms: { type: integer }
+        timeout_s: { type: integer }
     Problem:
       type: object
       description: RFC 9457; `already_claimed` additionally carries holder_handle/holder_display_name

@@ -55,7 +55,11 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
     const { db, uow, task } = await setup()
     const claimUc = new ClaimTask(uow, fixedClock(), seqIds())
     const won = await claimUc.run({ ...agentA, taskId: task.id })
-    expect(won).toEqual({ lease_token: formatLeaseToken(task.id, 1), generation: 1 })
+    expect(won).toEqual({
+      lease_token: formatLeaseToken(task.id, 1),
+      generation: 1,
+      keepalive: { interval_ms: 0, timeout_s: 0 }, // D-nnn: 3-arg ctor = the dormant echo
+    })
 
     await expect(claimUc.run({ ...agentB, taskId: task.id })).rejects.toMatchObject({
       code: 'already_claimed',
@@ -273,6 +277,16 @@ describe('ClaimTask exclusivity (spec §6.4.1/4)', () => {
         created_at: '2026-05-05T05:05:05.000Z',
       },
     ])
+  })
+
+  it('D-nnn: an explicit keepalive pair echoes on the claim verbatim (the deps wiring face)', async () => {
+    const { db, uow, task } = await setup()
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds(), {
+      interval_ms: 1000,
+      timeout_s: 5,
+    }).run({ ...agentA, taskId: task.id })
+    expect(claim.keepalive).toEqual({ interval_ms: 1000, timeout_s: 5 })
+    await db.destroy()
   })
 })
 

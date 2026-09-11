@@ -827,6 +827,11 @@ export interface components {
       reason?: string | null
       created_at?: string
     }
+    /** @description the keepalive policy echoed at claim (D-nnn) — 0/0 = dormant (D-ggg); pace heartbeats well inside timeout_s, expiry detection lags up to one interval_ms tick */
+    KeepalivePair: {
+      interval_ms: number
+      timeout_s: number
+    }
     /** @description RFC 9457; `already_claimed` additionally carries holder_handle/holder_display_name */
     Problem: {
       type: string
@@ -1331,6 +1336,7 @@ export interface operations {
           'application/json': {
             lease_token?: string
             generation?: number
+            keepalive?: components['schemas']['KeepalivePair']
           }
         }
       }

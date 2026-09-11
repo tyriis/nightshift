@@ -179,7 +179,10 @@ export const makeDepsFromDb = (
       updateTask: new UpdateTask(uow, clock, ids),
       updateStatus: new UpdateStatus(uow, clock),
       splitTask: new SplitTask(uow, clock, ids),
-      claimTask: new ClaimTask(uow, clock, ids),
+      claimTask: new ClaimTask(uow, clock, ids, {
+        interval_ms: config.keepaliveIntervalMs,
+        timeout_s: config.keepaliveTimeoutS,
+      }),
       releaseClaim: new ReleaseClaim(uow, clock),
       heartbeat: new Heartbeat(uow, clock),
       addBlock: new AddBlock(uow, clock),

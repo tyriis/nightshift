@@ -150,6 +150,10 @@ event feed). Any LATER write with the old lease answers `412 stale_lease` — th
 zombie fence, zero new error surface. Holders stay alive by heartbeating inside
 the budget (`nightshift heartbeat`, or MCP `post_update` which already rides it).
 
+A CLAIM echoes the pair: `POST /tasks/{id}/claim` answers `keepalive:
+{interval_ms, timeout_s}` (0/0 = dormant) so a holder paces off the server's
+policy, never off a guess (§12's "lease carries interval + timeout", shipped in H).
+
 Effective budget is TICK-QUANTIZED: expiry is checked only on sweep
 ticks, so detection can lag the configured budget by up to one interval
 (worst case budget == interval means up to a full interval late — quality-lane
