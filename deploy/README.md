@@ -286,7 +286,7 @@ not supported. Take the snapshot before every upgrade.
 ## Deploy-smoke
 
 Run the automated probes after any deploy: `DEPLOY-SMOKE.md` §1
-(`NS_URL=… NS_TOKEN=… node scripts/deploy-smoke.mjs`). Expect **23 PASS /
+(`NS_URL=… NS_TOKEN=… node scripts/deploy-smoke.mjs`). Expect **24 PASS /
 0 FAIL** (exit 0). Plan F's ship-time run recorded 22/1 — the one FAIL was the
 encoding-negotiated `/ui` shell variants served as `public, max-age=2592000,
 immutable` (the bare `.html` check missed them; a 30 d stale-shell hazard, plus an
@@ -294,10 +294,14 @@ unprobed gzip-fallback face). Plan G's `ui.ts` fix closed both faces and the G-w
 ship-time run measured 23 PASS / 0 FAIL with the probe byte-identical. Full lineage:
 `DEPLOY-SMOKE.md` §1 and Plan F's Task-6 record.
 
-H adds the FTS search arm (D-rrr): the arm ships with the
-contract, the bar GROWS DELIBERATELY to 24 arms — and the recorded count flips from
-23/0 to the measured tail only at the H final gate's LIVE run (flips are
-evidence-licensed; this line stays honest until then).
+H adds the FTS search arm (D-rrr): the arm shipped with the contract
+and the bar GREW DELIBERATELY to 24 arms — the H final gate's LIVE run (fresh
+`--no-cache` image, `4ceb72ad8928`) measured **24 PASS / 0 FAIL, exit 0**, every
+G-wave arm green unchanged plus the new FTS live arm; the armed keepalive twin
+(1000/3) measured the claim echo `{interval_ms:1000,timeout_s:3}` (D-nnn), the
+silent-revert `lease_expired` audit, the exit-3 dead-lease fence, and the
+cancel-clears `claim_released`/`claim released on cancel` row (D-mmm). Full tail:
+the plan's FINAL-GATE RECORD.
 
 Honest scope (D-eee): the automated legs (steps 0–3, 6) ran against the
 ship-time container; the browser/OIDC legs (steps 4, 5, 7 — real Pocket ID, a

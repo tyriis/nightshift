@@ -48,6 +48,17 @@ no-cache` arm FAILed against Plan F's shipped image — on an encoding-negotiate
 > G-wave LIVE run measured **23 PASS / 0 FAIL, exit 0** — the probe was NEVER weakened:
 > `scripts/deploy-smoke.mjs` byte-identical since Plan F. Historical evidence: Plan F's
 > Task-6 record and the `d95dab4` gate-line amendment.
+>
+> H-wave LIVE run (fresh `--no-cache` image `4ceb72ad8928`) measured
+> **24 PASS / 0 FAIL, exit 0** — every G arm green unchanged plus the new
+> `search finds the smoke task (FTS5 live)` arm. `scripts/deploy-smoke.mjs` otherwise
+> unchanged since F EXCEPT the sanctioned additive arm (D-rrr — growth by plan, zero
+> assertions touched) and two comment-truth lines (D-mmm). Armed keepalive twin
+> (1000/3): claim echoes `{interval_ms:1000,timeout_s:3}` (D-nnn live), silent claims
+> revert with `lease_expired`/`lease expired` (in_progress g1 → todo g2), dead leases
+> fence at exit 3 `stale_lease`, and cancel-with-lease clears the claim with
+> `claim_released`/`claim released on cancel` (D-mmm live). `docker stop -t 12` both
+> twins → ExitCode 0.
 
 ## 2. Container / health / shutdown posture
 
