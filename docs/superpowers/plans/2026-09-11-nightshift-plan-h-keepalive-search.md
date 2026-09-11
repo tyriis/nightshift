@@ -49,6 +49,10 @@ Against the `c2a5cdf` blob: B1–B3, the full self-sweep residuals, and the ledg
 
 All six attempt-5 checks measured CLOSED against the committed blobs: (1) the full zero-flush/all-measured gate on the landing blob with the c2a5cdf→1d57e10 diff provably prose-only (one lane probe re-probed: a `claimTask` marker hit that is the CORRECT real 6-space fenced block — probe over-breadth, not a defect); (2) hook-path empirics: explicit-path `prettier --write --ignore-unknown` on the plan doc and on `.prettierignore` both no-op sha-identical, `--check` rc 0; (3) the exemption blob complete; (4) scope audit: only `.prettierignore` (+2) and the plan doc touched across both new commits, zero `src/**`, zero forbidden-set; (5) ledger consistency — the attempt-4 record reads accurately against attempts 1–4, the false "hook-processed" claim confessed as historical correction. Pre-dispatch duty COMPLETE: artifact preflight PASS (fixer lane @ `6fa3d58`; the block bytes are provably unchanged since — attempt-5 diff proof) + plan-review PASS ⇒ **Task 1 cleared for implementer dispatch**; serial gates per task (fresh implementer; spec-compliance review THEN code-quality review; PASS before next dispatch); carried preflight truths for execution: P4 no-ajv-default (`limit ?? 20` single default truth), P5 stamp-token arm (`q=<stamp>` hits; bare-hyphen ⇒ unmapped 500 — OBS-1 QUEUED), P12 live echo/cancel legs ride Task 8.
 
+### Execution-start catch (Task-1 lanes) — residual fence indents repaired
+
+The Task-1 implementer lanes correctly HALTED per the byte-exact rule and named the defect precisely: four fences still carried the pre-exemption FLUSH form — the deploy-smoke OLD/NEW pair, the app.ts wire-register line, the smoke-arm block (all <8-space indents, dedented by prettier in the hook-era commits BEFORE the exemption landed; the re-anchor sweep had gated the replace-anchors and the ≥8-space survivors and missed the 2-space class — the gate inherited the marker set, not the problem). Mechanical repair, content byte-identical, re-indented to file truth: deploy OLD = `deploy-smoke.mjs:215-216` verbatim by slice (2-space), deploy NEW = the same comment re-cast (2-space), wire-register 2-space (app.ts body indent), smoke-arm shifted +2 (the try-block indent). The nav line audited as a MISS is INLINE PROSE (not fenced) — its 2-space truth lives inside backticks, unaffected; marker over-breadth, not a defect. Execution authority = THIS commit; subsequent task-dispatch prompts carry the file-truth fence forms for their steps (indent-aware, not content-only).
+
 ### Artifact preflight — VERDICT: PREFLIGHT: PASS (2026-09-11, throwaway worktree @ detached `6fa3d58`, LEFT INTACT)
 
 Pinned env verbatim: node 24.20.0 / pnpm 10.33.0. RED→GREEN per task, every prediction met: T1 RED `expected 'tok_agent' to be null` ⇒ 696/89; T2 RED `2 failed | 15 passed (17)` (A2 text), regen delta **+6 ONLY** (KeepalivePair + the claim keepalive property), full **697/89** with `mcp-parity`/`mount`/`composites`/`tasks`/`scenarios`/`drift`/`openapi-contract` byte-untouched and GREEN — the D-nnn composition HOLDS on the machine, not just as an argument; T3 RED `expected undefined to deeply equal { interval_ms: +0, timeout_s: +0 }` ⇒ cli+shim 28/28, USAGE 3-line intact, P7 citations measured: `42-44`/`22-27`/`132` UNCHANGED, `204` ⇒ **:213**; T4 ui:build/offline-check hosts byte-unchanged AND the **e2e RAN green** (chromium headless-shell present) — selector stability LIVE-proved, P10's ♥-arm posture noted; T5 RED 5-of-6 (A5), regen cumulative **+49/−0** ONLY (/search + SearchHit + searchTasks), validation matrix `q=`/no-q/`limit=0`/`201`/`abc`/`1.5` ⇒ **400 invalid_request** every shape, absent-limit 21-task ⇒ exactly 20 ⇒ **no ajv default-injection — the route's `limit ?? 20` is the single default truth, both arms armed** (P4 CLOSED); tokenization on the real trigger path: `q=<stamp>` ⇒ 200+hit TRUE, bare-hyphen ⇒ `no such column: smoke` ⇒ unmapped 500 (**OBS-1** — D-gg map gap, port byte-frozen in H, arm stamp-only ⇒ H ships sound; QUEUED); full-suite **703/90 — P9's pinned prediction EXACT**; T6 `node --check` exit 0, 24th arm at the stated anchor (`stamp`/`id`/`agentCall`/`check` in scope — measured). Coverage verbatim: `Statements 99.53 (1938/1947) · Branches 98.58 (905/918) · Functions 99.79 (476/477) · Lines 99.71 (1765/1770)` — every axis ≥ the G floor (Branches/Funcs strictly above); domain 6/6 files 100×4 programmatically; per-file lcov for `routes/search.ts`/`claim-task.ts`/`update-status.ts`/`run.ts`: ZERO new uncovered lines/branches — P10 HOLDS. Zero-drift: 16 tracked + 3 untracked files, all mapping to the File-structure table; forbidden set (`adapters/mcp/**`, `auth.ts`, `vitest.config.ts`, `ci.yaml`, `pnpm-lock.yaml`, `specs/`, `e2e/`, `ui.ts`, `openapi-contract.test.ts`, `mcp-parity.test.ts`, `mount.test.ts`) → ZERO entries. FORCED-AMENDMENTS dispositions: A1 file-indentation normalization on insertions (sanctioned, G precedent, content verbatim) · A2/A3/A5 folded into the task texts above · A4 count arithmetic reconciled (27 pre-H + the new 4-arg site) · A7 the probe lane's own brief typo (plan unaffected) · A8 probe-method note (vitest console capture). No probe weakened; nothing committed anywhere; **dispatch may proceed on the plan-review PASS.**
@@ -217,15 +221,15 @@ with:
 - [ ] **Step 4: Comment truth in the smoke script** — in `scripts/deploy-smoke.mjs`, the cleanup comment's first two lines are (ATTEMPT-3 REPAIR, MEASURED byte-exact — line-wrapped, capital `NOT`):
 
 ```js
-// cleanup: in_progress does NOT clear the claim (update-status.ts clears it only on
-// in_review/done — B2/S2) — the AGENT releases first (the arm P9 verified
+  // cleanup: in_progress does NOT clear the claim (update-status.ts clears it only on
+  // in_review/done — B2/S2) — the AGENT releases first (the arm P9 verified
 ```
 
 replace with:
 
 ```js
-// cleanup: in_progress does NOT clear the claim (update-status.ts clears on
-// in_review/done/canceled — B2/S2 + D-mmm) — the AGENT releases first (the arm P9 verified
+  // cleanup: in_progress does NOT clear the claim (update-status.ts clears on
+  // in_review/done/canceled — B2/S2 + D-mmm) — the AGENT releases first (the arm P9 verified
 ```
 
 (rest of the comment byte-untouched; the script keeps its `scripts/` doctrine — js lines there are outside lint/format gates, wrap honesty is a courtesy).
@@ -760,7 +764,7 @@ export const registerSearchRoutes = (app: FastifyInstance, deps: AppDeps): void 
 - [ ] **Step 5: Wire** — in `src/adapters/rest/app.ts`: import `{ registerSearchRoutes } from '#root/adapters/rest/routes/search'` (alphabetical with the route imports) and register after the task routes line:
 
 ```ts
-registerSearchRoutes(server, deps) // D-ppp — the FTS read surface beside the task family
+  registerSearchRoutes(server, deps) // D-ppp — the FTS read surface beside the task family
 ```
 
 - [ ] **Step 6: Regen** — `pnpm gen:client` (delta = /search path + SearchHit component per P3; anything else ⇒ STOP).
@@ -853,16 +857,16 @@ LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(ui): the search view ride
 - [ ] **Step 5: the 24th smoke arm** — in `scripts/deploy-smoke.mjs`, after the `'lease-gated status → in_progress'` check block (anchor: the `check(` call whose detail arg is `moved.text.slice(0, 160)`), insert:
 
 ```js
-// the D-gg FTS substrate on the LIVE image (D-rrr): the create INSERT rode the
-// real task_fts triggers; the marker in the description must come back from the
-// D-ppp search contract. The token form is probe-picked (P5): a base36 stamp is a
-// single unicode61 alnum token — the hyphen-marker form needs phrase semantics.
-const found = await agentCall(`/search?q=${stamp}&limit=10`)
-check(
-  'search finds the smoke task (FTS5 live)',
-  found.res.status === 200 && Array.isArray(found.json) && found.json.some((h) => h.id === id),
-  found.text.slice(0, 160)
-)
+  // the D-gg FTS substrate on the LIVE image (D-rrr): the create INSERT rode the
+  // real task_fts triggers; the marker in the description must come back from the
+  // D-ppp search contract. The token form is probe-picked (P5): a base36 stamp is a
+  // single unicode61 alnum token — the hyphen-marker form needs phrase semantics.
+  const found = await agentCall(`/search?q=${stamp}&limit=10`)
+  check(
+    'search finds the smoke task (FTS5 live)',
+    found.res.status === 200 && Array.isArray(found.json) && found.json.some((h) => h.id === id),
+    found.text.slice(0, 160)
+  )
 ```
 
 - [ ] **Step 6: deploy docs (D-rrr pass)** — `deploy/README.md`:
