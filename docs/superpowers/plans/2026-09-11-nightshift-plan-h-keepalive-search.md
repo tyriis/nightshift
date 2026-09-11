@@ -35,7 +35,7 @@ Per the ticket protocol and the A–G binding lessons ("treat your own plan as u
 
 ### Plan-review lane — VERDICT: FAIL (attempt 1, 2026-09-11, independent oracle) ⇒ revisions applied, re-gate pending
 
-The three sharp rulings came back code-TRUE (D-mmm gate order/fences/guard verified against `update-status.ts:32/:40`, `heartbeat.ts:27`, `task-repo.ts:232-242/:260`, the smoke human-cancel arm's inertness; D-nnn single-world parity with `keepalive` outside VOLATILE + exactly ONE exact-shape claim pin at `claim-task.test.ts:58`, composites/mount toEqual-unaffected; D-ppp route pattern, both `??` arms armed). The FAIL is the paste-belief class the net exists for: **B1 (BLOCKER)** the Task-3 run.ts old-block was the unwrapped single-line form — real `run.ts:179-181` is prettier-wrapped (edit-exact-match fails); **B2** the Task-2 yaml old/new blocks carried 0-indent and single-quoted refs — real depth 14, DOUBLE-quoted per the prettier yaml override; **B3** the Task-4 svelte card block lost its 12-space nest indent; **B4** 27 not 26 pre-H `new ClaimTask(3-arg)` sites; **B5** QUEUED missed the Playwright-reinstall/CI-e2e line and the home-ops bundle ("highest-value pending item"); **B6** P10 must NAME the UI helper's un-gated TRUE arm honestly instead of a blanket close; **B7** cosmetic subject-count + the README `**23 PASS /**` wrap breaks the Task-6(c) anchor (re-anchored to the paragraph end). B4–B7 applied in `ce7ed4c`. THE TRUTH (attempt-2 caught it): the B1–B3 repair was LOST — the edit calls reported success but the interrupted turns never wrote them; the diff carried only B4–B7, and this section's then-current "All seven applied" claim was FALSE at that commit. Ledger honesty over face-saving: the three blocks are repaired in the attempt-3 commit in MEASURED byte forms (real-file byte-diffs + `prettier --stdin-filepath` canonical probes on patched copies; guard-asserted replacement script, post-grep verified). VERDICT-PASS required from the re-gate before Task 1 dispatch. SELF-CAUGHT in the same sweep (beyond the lane's B-list, same class): the deps.ts old-quote was prose-flush (now fenced at real 6-space), the deploy-smoke cleanup-comment quote lost the real line-wrap + capital `NOT` (now measured bytes), the D-ooo helper block drops the svelte script's 2-space style (now file-true), and the D-ooo/D-nnn new blocks gained full-file `prettier --stdin-filepath` stability probes — plus a measurement-based self-sweep (real-file slices ⇄ plan byte-presence + `prettier --stdin-filepath` FULL-FILE stability for every patched file) that caught and repaired the same-class flush-left anchors in Task 1 (D-c old/new, 6-space), Task 2 (success-return old/new, 8-space; :58 old/new, 4-space) and the test-arm indents (2/4-space file style) — all repaired here, guard-asserted.
+The three sharp rulings came back code-TRUE (D-mmm gate order/fences/guard verified against `update-status.ts:32/:40`, `heartbeat.ts:27`, `task-repo.ts:232-242/:260`, the smoke human-cancel arm's inertness; D-nnn single-world parity with `keepalive` outside VOLATILE + exactly ONE exact-shape claim pin at `claim-task.test.ts:58`, composites/mount toEqual-unaffected; D-ppp route pattern, both `??` arms armed). The FAIL is the paste-belief class the net exists for: **B1 (BLOCKER)** the Task-3 run.ts old-block was the unwrapped single-line form — real `run.ts:179-181` is prettier-wrapped (edit-exact-match fails); **B2** the Task-2 yaml old/new blocks carried 0-indent and single-quoted refs — real depth 14, DOUBLE-quoted per the prettier yaml override; **B3** the Task-4 svelte card block lost its 12-space nest indent; **B4** 27 not 26 pre-H `new ClaimTask(3-arg)` sites; **B5** QUEUED missed the Playwright-reinstall/CI-e2e line and the home-ops bundle ("highest-value pending item"); **B6** P10 must NAME the UI helper's un-gated TRUE arm honestly instead of a blanket close; **B7** cosmetic subject-count + the README `**23 PASS /**` wrap breaks the Task-6(c) anchor (re-anchored to the paragraph end). B4–B7 applied in `ce7ed4c`. THE TRUTH (attempt-2 caught it): the B1–B3 repair was LOST — the edit calls reported success but the interrupted turns never wrote them; the diff carried only B4–B7, and this section's then-current "All seven applied" claim was FALSE at that commit. Ledger honesty over face-saving: the blocks land IN THE COMMIT CARRYING THIS TEXT (attempt-3-final): every OLD block is a slice of the real file, every NEW block is the `prettier --stdin-filepath` canonical of the patched real copy (stability asserted in-process, all 8 files STABLE), written position-keyed (no content-anchors to drift) — and the gate re-greps the COMMITTED BLOB (`git show HEAD:`), not the worktree. VERDICT-PASS required from the re-gate before Task 1 dispatch. SELF-CAUGHT in the same sweep (beyond the lane's B-list, same class): the deps.ts old-quote was prose-flush (now fenced at real 6-space), the deploy-smoke cleanup-comment quote lost the real line-wrap + capital `NOT` (now measured bytes), the D-ooo helper block drops the svelte script's 2-space style (now file-true), and the D-ooo/D-nnn new blocks gained full-file `prettier --stdin-filepath` stability probes — plus a measurement-based self-sweep (real-file slices ⇄ plan byte-presence + `prettier --stdin-filepath` FULL-FILE stability for every patched file) that caught and repaired the same-class flush-left anchors in Task 1 (D-c old/new, 6-space), Task 2 (success-return old/new, 8-space; :58 old/new, 4-space) and the test-arm indents (2/4-space file style) — all repaired here, guard-asserted.
 
 ### Plan-review lane — VERDICT: FAIL (attempt 2, 2026-09-11, same independent lane)
 
@@ -108,101 +108,101 @@ BYTE-UNTOUCHED (contract-surface audit at Task 7): `src/adapters/mcp/**` (35 fre
 - [ ] **Step 1: Write the failing test** — append inside the existing `describe('UpdateStatus gates ...')` in `update-status.test.ts`, and add `import { Heartbeat } from '#root/application/usecases/heartbeat'` to the import block:
 
 ```ts
-it('D-mmm: cancel clears an attached claim (generation bumped, audit named, fences hold)', async () => {
-  const { db, uow } = await withAgent()
-  const task = await new CreateTask(uow, fixedClock(), seqIds()).run({
-    ...human,
-    title: 'x',
-    status: 'todo',
-  })
-  const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
-    ...agent,
-    taskId: task.id,
-  })
-  const uc = new UpdateStatus(uow, fixedClock())
-  const moved = await uc.run({
-    ...agent,
-    taskId: task.id,
-    to: 'canceled',
-    reason: 'abandoned',
-    lease_token: claim.lease_token, // invariant 3 holds: cancel of a claimed task needs the lease
-  })
-  expect(moved.status).toBe('canceled')
-  expect(moved.claim_token_id).toBeNull()
-  expect(moved.claim_generation).toBe(2) // clearClaim bumped the generation (D-mmm)
-  const audit = await new SqliteAuditRepo(db).search({ limit: 50 })
-  expect(
-    audit.some((a) => a.action === 'claim_released' && a.reason === 'claim released on cancel')
-  ).toBe(true)
-  // the zombie's fences are the SHIPPED ones — zero new codes:
-  await expect(
-    new Heartbeat(uow, fixedClock()).run({
+  it('D-mmm: cancel clears an attached claim (generation bumped, audit named, fences hold)', async () => {
+    const { db, uow } = await withAgent()
+    const task = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'x',
+      status: 'todo',
+    })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
       ...agent,
       taskId: task.id,
-      lease_token: claim.lease_token,
     })
-  ).rejects.toMatchObject({ code: 'stale_lease' }) // the claim is gone
-  await expect(
-    uc.run({
+    const uc = new UpdateStatus(uow, fixedClock())
+    const moved = await uc.run({
       ...agent,
       taskId: task.id,
-      to: 'todo',
-      reason: 'zombie',
-      lease_token: claim.lease_token,
+      to: 'canceled',
+      reason: 'abandoned',
+      lease_token: claim.lease_token, // invariant 3 holds: cancel of a claimed task needs the lease
     })
-  ).rejects.toMatchObject({ code: 'canceled_terminal' }) // the gate runs AHEAD of the lease check
-  await db.destroy()
-})
+    expect(moved.status).toBe('canceled')
+    expect(moved.claim_token_id).toBeNull()
+    expect(moved.claim_generation).toBe(2) // clearClaim bumped the generation (D-mmm)
+    const audit = await new SqliteAuditRepo(db).search({ limit: 50 })
+    expect(
+      audit.some((a) => a.action === 'claim_released' && a.reason === 'claim released on cancel')
+    ).toBe(true)
+    // the zombie's fences are the SHIPPED ones — zero new codes:
+    await expect(
+      new Heartbeat(uow, fixedClock()).run({
+        ...agent,
+        taskId: task.id,
+        lease_token: claim.lease_token,
+      })
+    ).rejects.toMatchObject({ code: 'stale_lease' }) // the claim is gone
+    await expect(
+      uc.run({
+        ...agent,
+        taskId: task.id,
+        to: 'todo',
+        reason: 'zombie',
+        lease_token: claim.lease_token,
+      })
+    ).rejects.toMatchObject({ code: 'canceled_terminal' }) // the gate runs AHEAD of the lease check
+    await db.destroy()
+  })
 ```
 
 - [ ] **Step 2: Run it RED** — `pnpm test src/application/usecases/update-status.test.ts` ⇒ expect FAIL `expected 'tok_agent' to be null` (claim still attached pre-fix), verbatim recorded.
 - [ ] **Step 3: Implement** — replace the D-c block in `update-status.ts` (verbatim old text, lines 90-102):
 
 ```ts
-// D-c: leave review/done un-claimed so humans can close without a lease.
-if ((input.to === 'in_review' || input.to === 'done') && task.claim_token_id !== null) {
-  await repos.tasks.clearClaim(input.taskId, now)
-  await repos.audit.append({
-    actor_id: input.actor.id,
-    token_id: input.tokenId,
-    action: 'claim_released',
-    entity_type: 'task',
-    entity_id: input.taskId,
-    reason: 'claim released on review',
-    created_at: now,
-  })
-}
+      // D-c: leave review/done un-claimed so humans can close without a lease.
+      if ((input.to === 'in_review' || input.to === 'done') && task.claim_token_id !== null) {
+        await repos.tasks.clearClaim(input.taskId, now)
+        await repos.audit.append({
+          actor_id: input.actor.id,
+          token_id: input.tokenId,
+          action: 'claim_released',
+          entity_type: 'task',
+          entity_id: input.taskId,
+          reason: 'claim released on review',
+          created_at: now,
+        })
+      }
 ```
 
 with:
 
 ```ts
-// D-c (AMENDED by D-mmm, Plan H): review/done/canceled all leave the task un-claimed.
-// review/done so humans can close without a lease (D-c, byte-kept); cancel because
-// canceled is terminal AND the sweeper respects canceled-terminal (D-hhh) — an
-// attached claim there could NEVER be swept: a dead claim forever, public on the
-// DTO with no owner. The clear bumps the fencing generation; late writes ride the
-// SHIPPED fences (heartbeat 412 stale_lease, status canceled_terminal ahead of it)
-// — zero new codes. The gate is NOT widened: cancel of a claimed task still
-// requires the lease (invariant 3 above).
-if (
-  (input.to === 'in_review' || input.to === 'done' || input.to === 'canceled') &&
-  task.claim_token_id !== null
-) {
-  await repos.tasks.clearClaim(input.taskId, now)
-  await repos.audit.append({
-    actor_id: input.actor.id,
-    token_id: input.tokenId,
-    action: 'claim_released',
-    entity_type: 'task',
-    entity_id: input.taskId,
-    // §6.7 machine-readable reason, named per path — the review/done string stays
-    // byte-untouched for its pinned arms; 'claim released on cancel' is D-mmm's
-    // new grep-pinned string (mirrored in deploy/README.md §Keepalive, Task 6)
-    reason: input.to === 'canceled' ? 'claim released on cancel' : 'claim released on review',
-    created_at: now,
-  })
-}
+      // D-c (AMENDED by D-mmm, Plan H): review/done/canceled all leave the task un-claimed.
+      // review/done so humans can close without a lease (D-c, byte-kept); cancel because
+      // canceled is terminal AND the sweeper respects canceled-terminal (D-hhh) — an
+      // attached claim there could NEVER be swept: a dead claim forever, public on the
+      // DTO with no owner. The clear bumps the fencing generation; late writes ride the
+      // SHIPPED fences (heartbeat 412 stale_lease, status canceled_terminal ahead of it)
+      // — zero new codes. The gate is NOT widened: cancel of a claimed task still
+      // requires the lease (invariant 3 above).
+      if (
+        (input.to === 'in_review' || input.to === 'done' || input.to === 'canceled') &&
+        task.claim_token_id !== null
+      ) {
+        await repos.tasks.clearClaim(input.taskId, now)
+        await repos.audit.append({
+          actor_id: input.actor.id,
+          token_id: input.tokenId,
+          action: 'claim_released',
+          entity_type: 'task',
+          entity_id: input.taskId,
+          // §6.7 machine-readable reason, named per path — the review/done string stays
+          // byte-untouched for its pinned arms; 'claim released on cancel' is D-mmm's
+          // new grep-pinned string (mirrored in deploy/README.md §Keepalive, Task 6)
+          reason: input.to === 'canceled' ? 'claim released on cancel' : 'claim released on review',
+          created_at: now,
+        })
+      }
 ```
 
 - [ ] **Step 4: Comment truth in the smoke script** — in `scripts/deploy-smoke.mjs`, the cleanup comment's first two lines are (ATTEMPT-3 REPAIR, MEASURED byte-exact — line-wrapped, capital `NOT`):
@@ -245,31 +245,31 @@ Expected: 696/89 (baseline + the one new test); commit body carries the honest-R
 - [ ] **Step 1: Amend the pinned exact-shape arm and add the failing echo arm** — in `claim-task.test.ts`: the `setup()`-based exclusivity test asserts (verbatim current, line ~58):
 
 ```ts
-expect(won).toEqual({ lease_token: formatLeaseToken(task.id, 1), generation: 1 })
+    expect(won).toEqual({ lease_token: formatLeaseToken(task.id, 1), generation: 1 })
 ```
 
 Replace with (sanctioned amendment — D-nnn lineage in the commit body):
 
 ```ts
-expect(won).toEqual({
-  lease_token: formatLeaseToken(task.id, 1),
-  generation: 1,
-  keepalive: { interval_ms: 0, timeout_s: 0 }, // D-nnn: 3-arg ctor = the dormant echo
-})
+    expect(won).toEqual({
+      lease_token: formatLeaseToken(task.id, 1),
+      generation: 1,
+      keepalive: { interval_ms: 0, timeout_s: 0 }, // D-nnn: 3-arg ctor = the dormant echo
+    })
 ```
 
 Append the new arm inside the exclusivity describe (covers the GIVEN-policy arm — the deps wiring face):
 
 ```ts
-it('D-nnn: an explicit keepalive pair echoes on the claim verbatim (the deps wiring face)', async () => {
-  const { db, uow, task } = await setup()
-  const claim = await new ClaimTask(uow, fixedClock(), seqIds(), {
-    interval_ms: 1000,
-    timeout_s: 5,
-  }).run({ ...agentA, taskId: task.id })
-  expect(claim.keepalive).toEqual({ interval_ms: 1000, timeout_s: 5 })
-  await db.destroy()
-})
+  it('D-nnn: an explicit keepalive pair echoes on the claim verbatim (the deps wiring face)', async () => {
+    const { db, uow, task } = await setup()
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds(), {
+      interval_ms: 1000,
+      timeout_s: 5,
+    }).run({ ...agentA, taskId: task.id })
+    expect(claim.keepalive).toEqual({ interval_ms: 1000, timeout_s: 5 })
+    await db.destroy()
+  })
 ```
 
 - [ ] **Step 2: Run RED** — `pnpm test src/application/usecases/claim-task.test.ts` ⇒ expected (PREFLIGHT-MEASURED, A2): `Tests 2 failed | 15 passed (17)` — the amended :58 arm fails with the keepalive toEqual diff (received lacks the two keys); the new arm fails `expected undefined to deeply equal { interval_ms: 1000, timeout_s: 5 }`. Record verbatim (the plan's earlier "is not a property" guess was vitest-runtime-inaccurate).
@@ -327,20 +327,20 @@ with:
 and the success return (verbatim current):
 
 ```ts
-return {
-  lease_token: formatLeaseToken(task.id, result.generation),
-  generation: result.generation,
-}
+        return {
+          lease_token: formatLeaseToken(task.id, result.generation),
+          generation: result.generation,
+        }
 ```
 
 with:
 
 ```ts
-return {
-  lease_token: formatLeaseToken(task.id, result.generation),
-  generation: result.generation,
-  keepalive: { ...this.keepalive }, // D-nnn echo — a copy: the policy is never aliased
-}
+        return {
+          lease_token: formatLeaseToken(task.id, result.generation),
+          generation: result.generation,
+          keepalive: { ...this.keepalive }, // D-nnn echo — a copy: the policy is never aliased
+        }
 ```
 
 - [ ] **Step 4: Wire deps** — in `src/main/deps.ts` replace (verbatim current, real 6-space):
@@ -361,34 +361,34 @@ with:
 - [ ] **Step 5: Contract edit** — in `openapi/openapi.yaml`, inside the `/tasks/{id}/claim` 200 response (verbatim current block — ATTEMPT-3 REPAIR, MEASURED byte-exact against `openapi/openapi.yaml:299-306`):
 
 ```yaml
-schema:
-  type: object
-  properties:
-    lease_token: { type: string }
-    generation: { type: integer }
+              schema:
+                type: object
+                properties:
+                  lease_token: { type: string }
+                  generation: { type: integer }
 ```
 
 becomes (yaml refs DOUBLE-QUOTED per the repo's prettier yaml override `singleQuote: false` — the real file's `default: { $ref: "#/components/responses/Problem" }` on the next line is the style witness):
 
 ```yaml
-schema:
-  type: object
-  properties:
-    lease_token: { type: string }
-    generation: { type: integer }
-    keepalive: { $ref: '#/components/schemas/KeepalivePair' }
+              schema:
+                type: object
+                properties:
+                  lease_token: { type: string }
+                  generation: { type: integer }
+                  keepalive: { $ref: "#/components/schemas/KeepalivePair" }
 ```
 
 Insert the new component schema immediately BEFORE `    Problem:` (anchor: after the Event schema's last `created_at` line — the `Event:` block ends `        created_at: { type: string }` and `    Problem:` follows):
 
 ```yaml
-KeepalivePair:
-  type: object
-  description: the keepalive policy echoed at claim (D-nnn) — 0/0 = dormant (D-ggg); pace heartbeats well inside timeout_s, expiry detection lags up to one interval_ms tick
-  required: [interval_ms, timeout_s]
-  properties:
-    interval_ms: { type: integer }
-    timeout_s: { type: integer }
+    KeepalivePair:
+      type: object
+      description: the keepalive policy echoed at claim (D-nnn) — 0/0 = dormant (D-ggg); pace heartbeats well inside timeout_s, expiry detection lags up to one interval_ms tick
+      required: [interval_ms, timeout_s]
+      properties:
+        interval_ms: { type: integer }
+        timeout_s: { type: integer }
 ```
 
 - [ ] **Step 6: Regen in the SAME commit duty (run now, commit together)** — `pnpm gen:client`; the `schema.d.ts` delta must be ONLY the claim-200 keepalive property + the KeepalivePair component (P3's measured shape; anything else = STOP, re-read).
@@ -421,37 +421,39 @@ Subject 55 ≤ 72 (measured with `printf %s | wc -c`). Raw-git verify; `git show
 - [ ] **Step 1: Amend the arm (failing)** — in `cli.test.ts`, the claim arm's name line `it('claim prints {task_id, lease_token, generation} — the lease NEVER touches argv', ...)` becomes `it('claim prints {task_id, lease_token, generation, keepalive} — the lease NEVER touches argv', ...)` and after the generation assertion append:
 
 ```ts
-// D-nnn: the test twin boots dormant (no NS_KEEPALIVE_* overrides) — the echo is
-// the dormant pair verbatim
-expect(parsed.keepalive).toEqual({ interval_ms: 0, timeout_s: 0 })
+    // D-nnn: the test twin boots dormant (no NS_KEEPALIVE_* overrides) — the echo is
+    // the dormant pair verbatim
+    expect(parsed.keepalive).toEqual({ interval_ms: 0, timeout_s: 0 })
 ```
 
 - [ ] **Step 2: Run RED** — `pnpm test src/cli/cli.test.ts` ⇒ FAIL `expected undefined to deeply equal { interval_ms: 0, timeout_s: 0 }` (verbatim).
 - [ ] **Step 3: Implement** — in `run.ts`, replace (verbatim current — ATTEMPT-3 REPAIR, MEASURED byte-exact against `src/cli/run.ts:178-182`; the new block is prettier-canonical — the patched real file passes `prettier --stdin-filepath src/cli/run.ts` UNCHANGED):
 
 ```ts
-// trust-cast (D-aaa): failFrom proved data present
-const d = claim.data as { lease_token?: string; generation?: number }
-io.stdout(JSON.stringify({ task_id: id, lease_token: d.lease_token, generation: d.generation }))
+      // trust-cast (D-aaa): failFrom proved data present
+      const d = claim.data as { lease_token?: string; generation?: number }
+      io.stdout(
+        JSON.stringify({ task_id: id, lease_token: d.lease_token, generation: d.generation })
+      )
 ```
 
 with:
 
 ```ts
-// trust-cast (D-aaa): failFrom proved data present
-const d = claim.data as {
-  lease_token?: string
-  generation?: number
-  keepalive?: { interval_ms: number; timeout_s: number }
-}
-io.stdout(
-  JSON.stringify({
-    task_id: id,
-    lease_token: d.lease_token,
-    generation: d.generation,
-    keepalive: d.keepalive, // D-nnn echo — the holder paces off the server's pair
-  })
-)
+      // trust-cast (D-aaa): failFrom proved data present
+      const d = claim.data as {
+        lease_token?: string
+        generation?: number
+        keepalive?: { interval_ms: number; timeout_s: number }
+      }
+      io.stdout(
+        JSON.stringify({
+          task_id: id,
+          lease_token: d.lease_token,
+          generation: d.generation,
+          keepalive: d.keepalive, // D-nnn echo — the holder paces off the server's pair
+        })
+      )
 ```
 
 (prettier canonical MEASURED — the block above is what `prettier --stdin-filepath src/cli/run.ts` produces for the patched file; no normalization surprise can ride the commit.)
@@ -476,39 +478,41 @@ Body carries the measured citation re-derivation (old→new, grep-verified).
 - [ ] **Step 1: Helper** — after the `rollup` helper (anchor: the block ending `   return`${ls.filter((t) => t.status === 'done').length}/${ls.length}`\n  }`), insert:
 
 ```ts
-// D-ooo: claim liveness on the card — last_heartbeat_at is public on every Task DTO
-// (E shipped it, types.ts transcribes it). An in_progress card whose holder is silent
-// shows its AGE; NO threshold judgment — the expiry budget is server config (dormant
-// by default), so the card reports age and the operator's config supplies meaning.
-// The claim itself is the first liveness (D-hhh), so a pre-heartbeat claim anchors on
-// updated_at exactly like the sweeper's coalesce — same truth, same UI.
-const livenessAge = (t: TaskDto): string | null => {
-  if (t.status !== 'in_progress' || t.claim_token_id === null) return null
-  const anchor = Date.parse(t.last_heartbeat_at ?? t.updated_at)
-  const mins = Math.max(0, Math.round((Date.now() - anchor) / 60_000))
-  return mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`
-}
+  // D-ooo: claim liveness on the card — last_heartbeat_at is public on every Task DTO
+  // (E shipped it, types.ts transcribes it). An in_progress card whose holder is silent
+  // shows its AGE; NO threshold judgment — the expiry budget is server config (dormant
+  // by default), so the card reports age and the operator's config supplies meaning.
+  // The claim itself is the first liveness (D-hhh), so a pre-heartbeat claim anchors on
+  // updated_at exactly like the sweeper's coalesce — same truth, same UI.
+  const livenessAge = (t: TaskDto): string | null => {
+    if (t.status !== 'in_progress' || t.claim_token_id === null) return null
+    const anchor = Date.parse(t.last_heartbeat_at ?? t.updated_at)
+    const mins = Math.max(0, Math.round((Date.now() - anchor) / 60_000))
+    return mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`
+  }
 ```
 
 - [ ] **Step 2: Card render** — replace (verbatim current — ATTEMPT-3 REPAIR, MEASURED byte-exact against `adapters/sveltekit/src/routes/+page.svelte:115-117`; the old block is prettier-stable AS SHIPPED):
 
 ```svelte
-<a class="card" href="/ui/tasks/{t.id}"
-  >{t.title}{t.blocked_flag ? ' ⚑' : ''}{t.labels.map((l) => ` #${l}`).join('')}</a
->
+            <a class="card" href="/ui/tasks/{t.id}"
+              >{t.title}{t.blocked_flag ? ' ⚑' : ''}{t.labels.map((l) => ` #${l}`).join('')}</a
+            >
 ```
 
 with (PRETTIER-CANONICAL — MEASURED: the patched real file through `prettier --stdin-filepath adapters/sveltekit/src/routes/+page.svelte` yields EXACTLY this; the `{#if}` addition crosses 100 cols so prettier SPLITS the `.map().join()` chain — shipping anything else would mean the hook rewrites the block at commit):
 
 ```svelte
-<a class="card" href="/ui/tasks/{t.id}"
-  >{t.title}{t.blocked_flag ? ' ⚑' : ''}{t.labels.map((l) => ` #${l}`).join('')}{#if livenessAge(t)}
-    <span
-      class="liveness"
-      title="claim liveness — the heartbeat (or the claim itself) saw the holder this long ago"
-      >♥ {livenessAge(t)}</span
-    >{/if}</a
->
+            <a class="card" href="/ui/tasks/{t.id}"
+              >{t.title}{t.blocked_flag ? ' ⚑' : ''}{t.labels
+                .map((l) => ` #${l}`)
+                .join('')}{#if livenessAge(t)}
+                <span
+                  class="liveness"
+                  title="claim liveness — the heartbeat (or the claim itself) saw the holder this long ago"
+                  >♥ {livenessAge(t)}</span
+                >{/if}</a
+            >
 ```
 
 - [ ] **Step 3: Build gate (UI doctrine: no unit suite — build/offline/e2e are the gates)** — `pnpm ui:build && pnpm ui:offline-check` ⇒ exit 0, hosts unchanged; `pnpm test:e2e` PROBE-FIRST ⇒ green (the e2e task is never claimed ⇒ no ♥ span appears ⇒ selector-stable — P8 pre-verified; if the probe REDed, the markup re-forms per the amendment, NEVER the e2e test).
@@ -670,26 +674,26 @@ describe('GET /search (D-ppp)', () => {
 - [ ] **Step 3: Contract** — in `openapi/openapi.yaml`, insert the path AFTER the `/events:` block (anchor: the events block ends `        default: { $ref: "#/components/responses/Problem" }` immediately before `  /admin/actors:`):
 
 ```yaml
-/search:
-  get:
-    tags: [tasks]
-    operationId: searchTasks
-    description: >-
-      FTS5 task search (spec §9, D-gg): MATCH syntax over title/description/AC — the
-      port's published semantics and error mapping (invalid_request on the D-gg
-      malformed-shape map, OBS-1 recorded in the plan); snippet wraps matched terms
-      in []; score is bm25 flipped (higher = better). Burning this burns the
-      per-actor rate-limit budget (D-dd posture, same as the feed).
-    parameters:
-      - { name: q, in: query, required: true, schema: { type: string, minLength: 1 } }
-      - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
-    responses:
-      '200':
-        description: hits in score-desc order (bm25 flipped); empty when nothing matches; default limit 20 (the route default)
-        content:
-          application/json:
-            schema: { type: array, items: { $ref: '#/components/schemas/SearchHit' } }
-      default: { $ref: '#/components/responses/Problem' }
+  /search:
+    get:
+      tags: [tasks]
+      operationId: searchTasks
+      description: >-
+        FTS5 task search (spec §9, D-gg): MATCH syntax over title/description/AC — the
+        port's published semantics and error mapping (invalid_request on the D-gg
+        malformed-shape map, OBS-1 recorded in the plan); snippet wraps matched terms
+        in []; score is bm25 flipped (higher = better). Burning this burns the
+        per-actor rate-limit budget (D-dd posture, same as the feed).
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: hits in score-desc order (bm25 flipped); empty when nothing matches; default limit 20 (the route default)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
+        default: { $ref: "#/components/responses/Problem" }
 ```
 
 (the `limit` schema carries NO `default` key ON PURPOSE: P4 measures fastify's default-injection; the route's `limit ?? 20` is the single default truth, both its arms test-armed — D-ppp ruling.)
@@ -697,15 +701,15 @@ describe('GET /search (D-ppp)', () => {
 Insert the schema AFTER the KeepalivePair block (Task 2 shipped it; anchor: its last line `        timeout_s: { type: integer }`, before `    Problem:`):
 
 ```yaml
-SearchHit:
-  type: object
-  description: FTS5 hit (D-gg) — snippet wraps matched terms in []
-  required: [id, title, snippet, score]
-  properties:
-    id: { type: string }
-    title: { type: string }
-    snippet: { type: string }
-    score: { type: number, description: bm25 flipped — higher = better }
+    SearchHit:
+      type: object
+      description: FTS5 hit (D-gg) — snippet wraps matched terms in []
+      required: [id, title, snippet, score]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        snippet: { type: string }
+        score: { type: number, description: bm25 flipped — higher = better }
 ```
 
 - [ ] **Step 4: Route** — create `src/adapters/rest/routes/search.ts`:
