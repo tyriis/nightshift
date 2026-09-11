@@ -27,8 +27,8 @@ export class ClaimTask {
     private readonly clock: Clock,
     private readonly ids: IdGen, // D-cc: the loser inbox copy needs an id
     // D-nnn: the policy echo (config truth at the composition root). The default is
-    // the DORMANT pair so every pre-H 3-arg construction (27 test sites) stays
-    // byte-green — the wire truth comes from deps.ts, which always passes config.
+    // the DORMANT pair so every pre-H 3-arg construction (grep: `new ClaimTask(`)
+    // stays byte-green — the wire truth comes from deps.ts, which always passes config.
     private readonly keepalive: KeepalivePair = { interval_ms: 0, timeout_s: 0 }
   ) {}
 
@@ -94,7 +94,7 @@ export class ClaimTask {
         return {
           lease_token: formatLeaseToken(task.id, result.generation),
           generation: result.generation,
-          keepalive: { ...this.keepalive }, // D-nnn echo — a copy: the policy is never aliased
+          keepalive: { ...this.keepalive }, // D-nnn echo — a copy: the response must never alias the instance pair
         }
       })
     } catch (e) {
