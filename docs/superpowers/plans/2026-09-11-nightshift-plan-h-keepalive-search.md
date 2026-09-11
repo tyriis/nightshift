@@ -501,6 +501,8 @@ Body carries the measured citation re-derivation (old→new, grep-verified).
   // by default), so the card reports age and the operator's config supplies meaning.
   // The claim itself is the first liveness (D-hhh), so a pre-heartbeat claim anchors on
   // updated_at exactly like the sweeper's coalesce — same truth, same UI.
+  // Cadence: recomputes on each feed-driven refresh — heartbeats land in the feed, so
+  // a live holder tracks within one poll cycle; between events, as-of-last-refresh.
   const livenessAge = (t: TaskDto): string | null => {
     if (t.status !== 'in_progress' || t.claim_token_id === null) return null
     const anchor = Date.parse(t.last_heartbeat_at ?? t.updated_at)
