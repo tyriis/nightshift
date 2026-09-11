@@ -74,6 +74,15 @@ export interface TaskPatch {
   assignee_id?: string | null
 }
 
+/** A row the keepalive sweep may expire (D-hhh). Ascending by id — deterministic
+ * audit order; `last_heartbeat_at` rides as the captured staleness witness. */
+export interface StaleClaimRow {
+  id: string
+  claim_token_id: string
+  claim_generation: number
+  last_heartbeat_at: string | null
+}
+
 export interface TaskRepo {
   create(draft: TaskDraft): Promise<TaskRecord>
   findById(id: string): Promise<TaskRecord | null>
@@ -85,7 +94,9 @@ export interface TaskRepo {
   hasChildren(id: string): Promise<boolean>
   countOpenDescendants(id: string): Promise<number>
   nextPosition(parentId: string | null): Promise<number>
-  /** Atomic CAS: succeeds only if unclaimed. `status` is the new status computed by the use-case. */
+  /** Atomic CAS: succeeds only if unclaimed. `status` is the new status computed by the use-case.
+   * D-hhh: the claim IS the first liveness — updated_at is also stamped into last_heartbeat_at,
+   * so every claim carries a staleness anchor. */
   tryClaim(
     taskId: string,
     tokenId: string,
@@ -96,6 +107,26 @@ export interface TaskRepo {
   /** Clears the claim and bumps the generation, invalidating the old fencing token. */
   clearClaim(taskId: string, updated_at: string): Promise<void>
   setHeartbeat(taskId: string, at: string): Promise<void>
+  /** Keepalive sweep read (D-hhh): claimed `in_progress` tasks whose staleness
+   * anchor — heartbeat, or `updated_at` for pre-G claims (the coalesce) — predates
+   * `cutoff`. Ascending by id, at most `limit` rows. `limit` must be >= 0 —
+   * SQLite treats a negative LIMIT as unlimited (the sweeper passes BATCH; advisory #7).
+   * Legacy-row caveat: a never-heartbeating PRE-G claim anchors on updated_at —
+   * frequent content edits keep it alive; accept/backfill is an operator question
+   * (advisory #3). */
+  listStaleClaims(cutoff: string, limit: number): Promise<StaleClaimRow[]>
+  /** Keepalive sweep write (D-hhh): a FULL CAS on the captured claim — id, token,
+   * generation, `in_progress` status AND the staleness predicate are re-checked
+   * inside the UPDATE (a heartbeat that lands after the sweep read is an honest
+   * miss, never a false revert). Reverts to `todo`, clears the claim, bumps the
+   * generation (the zombie fence), clears the anchor. Returns the NEW generation. */
+  expireStaleClaim(input: {
+    taskId: string
+    tokenId: string
+    generation: number
+    cutoff: string
+    at: string
+  }): Promise<{ generation: number } | null>
   /** Ancestors of the task, root first, excluding the task itself. */
   ancestors(id: string): Promise<TaskRecord[]>
 }

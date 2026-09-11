@@ -311,3 +311,82 @@ describe('SqliteTaskRepo', () => {
     await db.destroy()
   })
 })
+
+// D-hhh — the keepalive sweep primitives, pinned on a SEEDED store (claim /
+// heartbeat / canceled / legacy-null-anchor rows through the REAL repo paths —
+// F's binding lesson: stateful seeding, never fresh fixtures).
+describe('stale-claim sweep primitives (D-hhh)', () => {
+  it('tryClaim stamps the liveness anchor — the claim IS the first heartbeat', async () => {
+    const db = await setup()
+    const repo = new SqliteTaskRepo(db)
+    await seedToken(db, 'tok_s', 'a_agent')
+    await repo.create(draft('t_1'))
+    const r = await repo.tryClaim(
+      't_1',
+      'tok_s',
+      'a_agent',
+      'in_progress',
+      '2026-01-02T00:00:00.000Z'
+    )
+    expect(r).not.toBeNull()
+    expect((await repo.findById('t_1'))?.last_heartbeat_at).toBe('2026-01-02T00:00:00.000Z')
+    await db.destroy()
+  })
+
+  it('listStaleClaims finds silent in_progress claims only; coalesce carries legacy rows', async () => {
+    const db = await setup()
+    const repo = new SqliteTaskRepo(db)
+    for (const t of ['tok_s', 'tok_f', 'tok_l']) await seedToken(db, t, 'a_agent')
+    await repo.create(draft('t_stale'))
+    await repo.tryClaim('t_stale', 'tok_s', 'a_agent', 'in_progress', '2026-01-02T00:00:00.000Z')
+    await repo.setHeartbeat('t_stale', '2026-01-03T00:00:00.000Z')
+    await repo.create(draft('t_live'))
+    await repo.tryClaim('t_live', 'tok_f', 'a_agent', 'in_progress', '2026-01-02T00:00:00.000Z')
+    await repo.setHeartbeat('t_live', '2026-01-06T00:00:00.000Z')
+    await repo.create(draft('t_legacy'))
+    // the pre-G claim shape: token + status WITHOUT any heartbeat value — the
+    // coalesce anchor is updated_at (draft literal: 2026-01-01) → stale vs cutoff
+    await sql`update tasks set claim_token_id='tok_l', status='in_progress' where id='t_legacy'`.execute(
+      db
+    )
+    const hit = await repo.listStaleClaims('2026-01-05T00:00:00.000Z', 50)
+    expect(hit.map((h) => h.id)).toEqual(['t_legacy', 't_stale']) // ascending by id
+    // canceled is terminal — a claimed canceled row is NEVER sweep material.
+    // (P4 FORCED amendment: the cutoff stays 01-05 — at 01-07 t_live is
+    // HONESTLY stale and the assertion would record the wrong truth; at 01-05
+    // the CANCEL is what excludes t_stale, so the arm stays discriminating.)
+    await repo.setStatus('t_stale', 'canceled', '2026-01-06T00:00:00.000Z')
+    const after = await repo.listStaleClaims('2026-01-05T00:00:00.000Z', 50)
+    expect(after.map((h) => h.id)).toEqual(['t_legacy'])
+    await db.destroy()
+  })
+
+  it('expireStaleClaim is the FULL CAS: wrong token/generation, fresh heartbeat, all miss', async () => {
+    const db = await setup()
+    const repo = new SqliteTaskRepo(db)
+    await seedToken(db, 'tok_s', 'a_agent')
+    await seedToken(db, 'tok_x', 'a_agent')
+    await repo.create(draft('t_1'))
+    await repo.tryClaim('t_1', 'tok_s', 'a_agent', 'in_progress', '2026-01-02T00:00:00.000Z')
+    const cutoff = '2026-01-05T00:00:00.000Z'
+    const base = { taskId: 't_1', cutoff, at: '2026-01-06T00:00:00.000Z' } as const
+    expect(await repo.expireStaleClaim({ ...base, tokenId: 'tok_x', generation: 1 })).toBeNull()
+    expect(await repo.expireStaleClaim({ ...base, tokenId: 'tok_s', generation: 99 })).toBeNull()
+    // the race-defeat arm: a heartbeat fresher than the cutoff defeats the sweep
+    await repo.setHeartbeat('t_1', '2026-01-06T00:00:00.000Z')
+    expect(await repo.expireStaleClaim({ ...base, tokenId: 'tok_s', generation: 1 })).toBeNull()
+    // the exact captured stale claim expires: todo, unclaimed, fence bumped, anchor cleared
+    await repo.setHeartbeat('t_1', '2026-01-03T00:00:00.000Z')
+    expect(await repo.expireStaleClaim({ ...base, tokenId: 'tok_s', generation: 1 })).toEqual({
+      generation: 2,
+    })
+    const t = (await repo.findById('t_1'))!
+    expect([t.status, t.claim_token_id, t.claim_generation, t.last_heartbeat_at]).toEqual([
+      'todo',
+      null,
+      2,
+      null,
+    ])
+    await db.destroy()
+  })
+})

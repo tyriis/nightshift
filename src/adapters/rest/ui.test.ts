@@ -257,3 +257,61 @@ describe('U8 D-vv skip arm: build absent ⇒ warn + mount SKIPS + root 404 intac
     }
   })
 })
+
+// D-fff — the deploy-smoke hazard, pinned in-suite. inject negotiates NOTHING
+// implicitly (the U1-U4 blindness, Plan F's recorded lesson), but U3 PROVED it
+// honors an explicit accept-encoding — so these arms send the header a browser
+// or node fetch sends by default and finally see the preCompressed variant path.
+describe('ui shell cache under explicit br/gz negotiation (D-fff)', () => {
+  it.skipIf(!BUILD)(
+    'U9 GET /ui/ with accept-encoding: br — the shell, br-encoded, STILL no-cache',
+    async () => {
+      const t = await uiApp()
+      const res = await t.app.inject({
+        method: 'GET',
+        url: '/ui/',
+        headers: { 'accept-encoding': 'br' },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(res.headers['content-encoding']).toBe('br')
+      expect(res.headers['cache-control']).toBe('no-cache')
+      await t.close()
+    }
+  )
+
+  it.skipIf(!BUILD)(
+    'U9b gzip deep-link rides the fallback: the shell, gz-encoded, no-cache (the fallback hazard the smoke never probed)',
+    async () => {
+      const t = await uiApp()
+      const res = await t.app.inject({
+        method: 'GET',
+        url: '/ui/tasks/NS-1',
+        headers: { 'accept-encoding': 'gzip' },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(res.headers['content-type']).toContain('text/html')
+      expect(res.headers['content-encoding']).toBe('gzip')
+      expect(res.headers['cache-control']).toBe('no-cache')
+      await t.close()
+    }
+  )
+
+  it.skipIf(!BUILD)(
+    'U10 hashed asset under br keeps the 30d immutable posture (the fix is shell-scoped)',
+    async () => {
+      const t = await uiApp()
+      const asset = readdirSync(join(BUILD_DIR, '_app', 'immutable', 'entry')).find(
+        (f) => !f.endsWith('.br') && !f.endsWith('.gz')
+      )!
+      const res = await t.app.inject({
+        method: 'GET',
+        url: `/ui/_app/immutable/entry/${asset}`,
+        headers: { 'accept-encoding': 'br' },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(res.headers['content-encoding']).toBe('br')
+      expect(res.headers['cache-control']).toBe('public, max-age=2592000, immutable')
+      await t.close()
+    }
+  )
+})

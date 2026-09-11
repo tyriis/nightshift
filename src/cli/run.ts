@@ -31,6 +31,7 @@ const EnvSchema = z.object({
 const COMMANDS: Record<string, readonly string[]> = {
   next: ['label', 'limit'],
   claim: [],
+  heartbeat: [],
   report: ['message', 'status', 'reason'],
 }
 
@@ -38,8 +39,8 @@ const LimitSchema = z.coerce.number().int().min(1).max(100) // mirrors the yaml 
 const StatusSchema = z.enum(TASK_STATUSES) // the SINGLE truth — zero enum duplication (D-aaa)
 
 const USAGE = [
-  'usage: nightshift next [--label L] [--limit N] | claim <task-id> | report <task-id> [--message M] [--status S --reason R]',
-  'env: NS_URL + NS_TOKEN required · NS_LEASE_TOKEN for --status · NS_TIMEOUT_MS default 15000 (secrets via env, never argv — D-ff)',
+  'usage: nightshift next [--label L] [--limit N] | claim <task-id> | heartbeat <task-id> | report <task-id> [--message M] [--status S --reason R]',
+  'env: NS_URL + NS_TOKEN required · NS_LEASE_TOKEN for heartbeat and --status · NS_TIMEOUT_MS default 15000 (secrets via env, never argv — D-ff)',
   'exit: 0 ok · 1 transport_error · 2 usage/config (nothing sent) · 3 API problem (`nightshift: <code>` on stderr)',
 ]
 
@@ -104,7 +105,7 @@ export const runCli = async (io: CliIo): Promise<number> => {
   for (const key of Object.keys(parsed.flags)) {
     if (!COMMANDS[cmd].includes(key)) return usageError(`unknown flag --${key} for '${cmd}'`)
   }
-  const idWanted = cmd === 'claim' || cmd === 'report'
+  const idWanted = cmd === 'claim' || cmd === 'heartbeat' || cmd === 'report'
   if (parsed.positionals.length !== (idWanted ? 1 : 0)) {
     return usageError(
       idWanted ? `'${cmd}' takes exactly one <task-id>` : `'${cmd}' takes no positional arguments`
@@ -179,6 +180,23 @@ export const runCli = async (io: CliIo): Promise<number> => {
       io.stdout(
         JSON.stringify({ task_id: id, lease_token: d.lease_token, generation: d.generation })
       )
+      return 0
+    }
+    if (cmd === 'heartbeat') {
+      // D-jjj: the holder's keepalive leg against the sweeper (D-iii). The lease is
+      // a capability — its absence is a LOCAL config_error (exit 2, NOTHING sent,
+      // D-aaa); on the wire it rides the EXISTING heartbeat op, zero contract change.
+      if (env.data.NS_LEASE_TOKEN === undefined) {
+        io.stderr('nightshift: config_error heartbeat requires NS_LEASE_TOKEN (from claim)')
+        return 2
+      }
+      const hb = await client.POST('/tasks/{id}/heartbeat', {
+        params: { path: { id } },
+        body: { lease_token: env.data.NS_LEASE_TOKEN },
+      })
+      const hf = failFrom(io, hb)
+      if (hf !== null) return hf
+      io.stdout(JSON.stringify(hb.data)) // the server's Task DTO IS the truth (D-aaa)
       return 0
     }
     // report (D-aaa): note thread FIRST, then the lease-gated status move. There is no

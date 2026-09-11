@@ -1,6 +1,6 @@
 import { sql, type Kysely, type RawBuilder, type SqlBool } from 'kysely'
 import type { TaskDraft, TaskRecord, TaskStatus } from '#root/domain/task'
-import type { TaskPatch, TaskRepo, TaskWithCounts } from '#root/application/ports'
+import type { StaleClaimRow, TaskPatch, TaskRepo, TaskWithCounts } from '#root/application/ports'
 import type { DB, TasksTable } from '#root/infra/sqlite/schema'
 
 type TaskRow = TasksTable
@@ -215,6 +215,8 @@ export class SqliteTaskRepo implements TaskRepo {
       .updateTable('tasks')
       .set((eb) => ({
         claim_token_id: tokenId,
+        // D-hhh: the claim IS the first heartbeat — every claim carries an anchor.
+        last_heartbeat_at: updated_at,
         assignee_id: claimantActorId,
         claim_generation: eb('claim_generation', '+', 1),
         status,
@@ -245,6 +247,50 @@ export class SqliteTaskRepo implements TaskRepo {
       .set({ last_heartbeat_at: at })
       .where('id', '=', taskId)
       .execute()
+  }
+
+  async listStaleClaims(cutoff: string, limit: number): Promise<StaleClaimRow[]> {
+    // D-hhh: stored timestamps are toISOString UTC — lexicographic `<` IS the time
+    // order (P4 probe-verified). The coalesce gives pre-G claims an honest anchor
+    // (trust contract + legacy-row caveat: see ports.ts listStaleClaims, advisories #3/#7).
+    const r = await sql<StaleClaimRow>`
+      select id, claim_token_id, claim_generation, last_heartbeat_at
+        from tasks
+       where claim_token_id is not null
+         and status = 'in_progress'
+         and coalesce(last_heartbeat_at, updated_at) < ${cutoff}
+       order by id
+       limit ${limit}
+    `.execute(this.db)
+    return r.rows
+  }
+
+  async expireStaleClaim(input: {
+    taskId: string
+    tokenId: string
+    generation: number
+    cutoff: string
+    at: string
+  }): Promise<{ generation: number } | null> {
+    // Single statement, full CAS (tryClaim lineage): the staleness predicate sits
+    // IN this UPDATE, so a heartbeat between sweep-read and sweep-write defeats it.
+    const row = await this.db
+      .updateTable('tasks')
+      .set((eb) => ({
+        claim_token_id: null,
+        claim_generation: eb('claim_generation', '+', 1),
+        status: 'todo',
+        last_heartbeat_at: null,
+        updated_at: input.at,
+      }))
+      .where('id', '=', input.taskId)
+      .where('claim_token_id', '=', input.tokenId)
+      .where('claim_generation', '=', input.generation)
+      .where('status', '=', 'in_progress')
+      .where(sql`coalesce(last_heartbeat_at, updated_at)`, '<', input.cutoff)
+      .returning('claim_generation')
+      .executeTakeFirst()
+    return row ? { generation: row.claim_generation } : null
   }
 
   async ancestors(id: string): Promise<TaskRecord[]> {

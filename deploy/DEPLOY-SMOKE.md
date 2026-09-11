@@ -38,13 +38,16 @@ asset caching, SPA deep-link, `/tasks` 401, `/mcp` 401, the full agent lifecycle
 live contract (agent+token ⇒ task ⇒ claim/release/re-claim ⇒ lease-gated status ⇒ note ⇒
 attachment round-trip ⇒ ascending event feed ⇒ agent release ⇒ human cancel ⇒ revoke).
 
-> KNOWN FINDING (recorded at ship-time local execution, plan Task 6 record): the
-> `/ui shell is no-cache` arm FAILed against the shipped image. On an encoding-negotiated
-> GET (browsers send `Accept-Encoding: br`) the preCompressed shell variants serve
-> `public, max-age=2592000, immutable` — `ui.ts`'s `setHeaders` `.endsWith('.html')`
-> check misses the `.br`/`.gz` paths, and the inject-based E pin (no negotiation) could
-> not see it. This is a real deploy hazard (the shell gets cached 30d immutable) awaiting
-> a SERVER fix — the probe must NOT be weakened; expect this arm to FAIL until fixed.
+> KNOWN FINDING — RESOLVED (Plan G, `fix(ui)` D-fff): the `/ui shell is
+no-cache` arm FAILed against Plan F's shipped image — on an encoding-negotiated
+> GET (`Accept-Encoding: br`) the preCompressed variants served
+> `public, max-age=2592000, immutable`; `ui.ts`'s `setHeaders` `.endsWith('.html')`
+> check missed the `.br`/`.gz` paths (and the gzip fallback leaked identically — a face
+> the smoke never probed). Plan G re-pinned the predicate (strip the encoding extension
+> before the `.html` check), pinned the class IN-SUITE (`ui.test.ts` U9/U9b), and the
+> G-wave LIVE run measured **23 PASS / 0 FAIL, exit 0** — the probe was NEVER weakened:
+> `scripts/deploy-smoke.mjs` byte-identical since Plan F. Historical evidence: Plan F's
+> Task-6 record and the `d95dab4` gate-line amendment.
 
 ## 2. Container / health / shutdown posture
 
@@ -71,6 +74,11 @@ host form: `NS_URL=… NS_TOKEN=… node bin/nightshift.mjs …` (built `dist/`)
 - [ ] `… next` → exit 0, one compact JSON line per ready task (empty output + 0 when none).
 - [ ] `… claim <task-id>` → exit 0 with `{task_id, lease_token, generation}` — the lease
       rides STDOUT (the agent's own pipe), never argv (D-ff).
+- [ ] `NS_LEASE_TOKEN=<lease> … heartbeat <task-id>` → exit 0 with the server Task
+      DTO (`last_heartbeat_at` fresh). Absent lease ⇒ exit 2, nothing sent. A dead
+      lease ⇒ exit 3, stderr line 1 `nightshift: stale_lease`. With enforcement
+      enabled (both `NS_KEEPALIVE_*` set), a SILENT claim reverts to `todo` past the
+      budget — audit action `lease_expired` — and the old lease then fences exit 3.
 - [ ] `… report <task-id> --message "progress: wired the door"` → exit 0 with
       `{task_id, message_id}` (a `note` thread; `kind: question` is deliberately NOT
       exposed by the CLI — humans decide).
