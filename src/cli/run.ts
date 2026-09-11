@@ -176,9 +176,18 @@ export const runCli = async (io: CliIo): Promise<number> => {
       const f = failFrom(io, claim)
       if (f !== null) return f
       // trust-cast (D-aaa): failFrom proved data present
-      const d = claim.data as { lease_token?: string; generation?: number }
+      const d = claim.data as {
+        lease_token?: string
+        generation?: number
+        keepalive?: { interval_ms: number; timeout_s: number }
+      }
       io.stdout(
-        JSON.stringify({ task_id: id, lease_token: d.lease_token, generation: d.generation })
+        JSON.stringify({
+          task_id: id,
+          lease_token: d.lease_token,
+          generation: d.generation,
+          keepalive: d.keepalive, // D-nnn echo — the holder paces off the server's pair
+        })
       )
       return 0
     }

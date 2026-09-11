@@ -3,3 +3,5 @@ coverage
 pnpm-lock.yaml
 adapters/sveltekit/build
 adapters/sveltekit/.svelte-kit
+# plan docs carry byte-exact fenced slices — prettier dedents <8-indent fences (attempt-4 root cause)
+docs/superpowers/plans/**

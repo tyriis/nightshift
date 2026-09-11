@@ -14,6 +14,7 @@ import { registerEventRoutes } from '#root/adapters/rest/routes/events'
 import { registerInboxRoutes } from '#root/adapters/rest/routes/inbox'
 import { registerDependencyRoutes } from '#root/adapters/rest/routes/dependencies'
 import { registerLabelRoutes } from '#root/adapters/rest/routes/labels'
+import { registerSearchRoutes } from '#root/adapters/rest/routes/search'
 import { registerTaskRoutes } from '#root/adapters/rest/routes/tasks'
 import { registerThreadRoutes } from '#root/adapters/rest/routes/threads'
 import { registerAttachmentRoutes } from '#root/adapters/rest/routes/attachments'
@@ -57,6 +58,7 @@ export const buildApp = (deps: AppDeps, opts: BuildAppOptions = {}): FastifyInst
   registerAuditRoutes(server, deps)
   registerEventRoutes(server, deps) // the cursor feed reads the same spine (D-aa)
   registerTaskRoutes(server, deps)
+  registerSearchRoutes(server, deps) // D-ppp — the FTS read surface beside the task family
   registerThreadRoutes(server, deps) // threads are task-surface (spec §7.2)
   registerInboxRoutes(server, deps)
   registerAttachmentRoutes(server, deps)

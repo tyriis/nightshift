@@ -306,6 +306,7 @@ paths:
                 properties:
                   lease_token: { type: string }
                   generation: { type: integer }
+                  keepalive: { $ref: "#/components/schemas/KeepalivePair" }
         default: { $ref: "#/components/responses/Problem" }
   /tasks/{id}/release:
     parameters: [{ $ref: "#/components/parameters/TaskId" }]
@@ -448,6 +449,26 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/Event" } }
+        default: { $ref: "#/components/responses/Problem" }
+  /search:
+    get:
+      tags: [tasks]
+      operationId: searchTasks
+      description: >-
+        FTS5 task search (spec §9, D-gg): MATCH syntax over title/description/AC — the
+        port's published semantics and error mapping (invalid_request on the D-gg
+        malformed-shape map, OBS-1 recorded in the plan); snippet wraps matched terms
+        in []; score is bm25 flipped (higher = better). Burning this burns the
+        per-actor rate-limit budget (D-dd posture, same as the feed).
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: hits in score-desc order (bm25 flipped); empty when nothing matches; default limit 20 (the route default)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
         default: { $ref: "#/components/responses/Problem" }
   /admin/actors:
     get:
@@ -1106,6 +1127,22 @@ components:
         entity_id: { type: string }
         reason: { type: ["string", "null"] }
         created_at: { type: string }
+    KeepalivePair:
+      type: object
+      description: the keepalive policy echoed at claim (D-nnn) — 0/0 = dormant (D-ggg); pace heartbeats well inside timeout_s, expiry detection lags up to one interval_ms tick
+      required: [interval_ms, timeout_s]
+      properties:
+        interval_ms: { type: integer }
+        timeout_s: { type: integer }
+    SearchHit:
+      type: object
+      description: FTS5 hit (D-gg) — snippet wraps matched terms in []
+      required: [id, title, snippet, score]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        snippet: { type: string }
+        score: { type: number, description: bm25 flipped — higher = better }
     Problem:
       type: object
       description: RFC 9457; `already_claimed` additionally carries holder_handle/holder_display_name

@@ -150,10 +150,19 @@ event feed). Any LATER write with the old lease answers `412 stale_lease` — th
 zombie fence, zero new error surface. Holders stay alive by heartbeating inside
 the budget (`nightshift heartbeat`, or MCP `post_update` which already rides it).
 
+Cancel CLEARS its claim too (H, D-mmm): canceling a claimed task (its own holder —
+invariant 3 still requires the lease) clears the claim, bumps the generation, and
+audits action `claim_released` with reason `claim released on cancel` (§6.7 named,
+grep-mirrored here). A canceled task never keeps a dead claim the sweeper can't touch.
+
+A CLAIM echoes the pair: `POST /tasks/{id}/claim` answers `keepalive:
+{interval_ms, timeout_s}` (0/0 = dormant) so a holder paces off the server's
+policy, never off a guess (§12's "lease carries interval + timeout", shipped in H).
+
 Effective budget is TICK-QUANTIZED: expiry is checked only on sweep
 ticks, so detection can lag the configured budget by up to one interval
 (worst case budget == interval means up to a full interval late — quality-lane
-advisory off ed74a60, sanctioned here into the operator text).
+advisory against ed74a60, sanctioned here into the operator text).
 
 ## Volumes & WAL
 
@@ -262,7 +271,7 @@ NS_LEASE_TOKEN=<claim's lease_token> node bin/nightshift.mjs report t_01abc \
 An agent-daemon loop is just the ladder: `next` → `claim` → work →
 `report --message` → (lease-gated) `report --status`, branching on `$?` and the
 line-1 code. Notes: thread `kind: question` is **deliberately unexposed** by
-the CLI (humans decide — `run.ts:204`; `DEPLOY-SMOKE.md` §3/§7); an AGENT close
+the CLI (humans decide — `run.ts:213`; `DEPLOY-SMOKE.md` §3/§7); an AGENT close
 (`--status done`) answers `403 agent_close_forbidden` while `review_gate` is
 `on` (the default) — only humans close.
 
@@ -277,13 +286,22 @@ not supported. Take the snapshot before every upgrade.
 ## Deploy-smoke
 
 Run the automated probes after any deploy: `DEPLOY-SMOKE.md` §1
-(`NS_URL=… NS_TOKEN=… node scripts/deploy-smoke.mjs`). Expect **23 PASS /
+(`NS_URL=… NS_TOKEN=… node scripts/deploy-smoke.mjs`). Expect **24 PASS /
 0 FAIL** (exit 0). Plan F's ship-time run recorded 22/1 — the one FAIL was the
 encoding-negotiated `/ui` shell variants served as `public, max-age=2592000,
 immutable` (the bare `.html` check missed them; a 30 d stale-shell hazard, plus an
 unprobed gzip-fallback face). Plan G's `ui.ts` fix closed both faces and the G-wave
 ship-time run measured 23 PASS / 0 FAIL with the probe byte-identical. Full lineage:
 `DEPLOY-SMOKE.md` §1 and Plan F's Task-6 record.
+
+H adds the FTS search arm (D-rrr): the arm shipped with the contract
+and the bar GREW DELIBERATELY to 24 arms — the H final gate's LIVE run (fresh
+`--no-cache` image, `4ceb72ad8928`) measured **24 PASS / 0 FAIL, exit 0**, every
+G-wave arm green unchanged plus the new FTS live arm; the armed keepalive twin
+(1000/3) measured the claim echo `{interval_ms:1000,timeout_s:3}` (D-nnn), the
+silent-revert `lease_expired` audit, the exit-3 dead-lease fence, and the
+cancel-clears `claim_released`/`claim released on cancel` row (D-mmm). Full tail:
+the plan's FINAL-GATE RECORD.
 
 Honest scope (D-eee): the automated legs (steps 0–3, 6) ran against the
 ship-time container; the browser/OIDC legs (steps 4, 5, 7 — real Pocket ID, a

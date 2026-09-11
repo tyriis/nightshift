@@ -175,7 +175,7 @@ const agentToken = async (handle: string): Promise<string> => {
 }
 
 describe('cli claim (D-aaa)', () => {
-  it('claim prints {task_id, lease_token, generation} — the lease NEVER touches argv', async () => {
+  it('claim prints {task_id, lease_token, generation, keepalive} — the lease NEVER touches argv', async () => {
     const t = await createTask('claimable')
     const r = await run(['claim', t.id])
     expect(r.code).toBe(0)
@@ -183,6 +183,9 @@ describe('cli claim (D-aaa)', () => {
     expect(parsed.task_id).toBe(t.id)
     expect(typeof parsed.lease_token).toBe('string')
     expect(typeof parsed.generation).toBe('number')
+    // D-nnn: the test twin boots dormant (no NS_KEEPALIVE_* overrides) — the echo is
+    // the dormant pair verbatim
+    expect(parsed.keepalive).toEqual({ interval_ms: 0, timeout_s: 0 })
   })
   it('the race loser exits 3 with `nightshift: already_claimed` + flat holder fields (P8)', async () => {
     const t = await createTask('contested')

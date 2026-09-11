@@ -48,6 +48,17 @@ no-cache` arm FAILed against Plan F's shipped image — on an encoding-negotiate
 > G-wave LIVE run measured **23 PASS / 0 FAIL, exit 0** — the probe was NEVER weakened:
 > `scripts/deploy-smoke.mjs` byte-identical since Plan F. Historical evidence: Plan F's
 > Task-6 record and the `d95dab4` gate-line amendment.
+>
+> H-wave LIVE run (fresh `--no-cache` image `4ceb72ad8928`) measured
+> **24 PASS / 0 FAIL, exit 0** — every G arm green unchanged plus the new
+> `search finds the smoke task (FTS5 live)` arm. `scripts/deploy-smoke.mjs` otherwise
+> unchanged since F EXCEPT the sanctioned additive arm (D-rrr — growth by plan, zero
+> assertions touched) and two comment-truth lines (D-mmm). Armed keepalive twin
+> (1000/3): claim echoes `{interval_ms:1000,timeout_s:3}` (D-nnn live), silent claims
+> revert with `lease_expired`/`lease expired` (in_progress g1 → todo g2), dead leases
+> fence at exit 3 `stale_lease`, and cancel-with-lease clears the claim with
+> `claim_released`/`claim released on cancel` (D-mmm live). `docker stop -t 12` both
+> twins → ExitCode 0.
 
 ## 2. Container / health / shutdown posture
 
@@ -89,6 +100,9 @@ host form: `NS_URL=… NS_TOKEN=… node bin/nightshift.mjs …` (built `dist/`)
 - [ ] Race pin: two concurrent `… claim <same-id>` — exactly one exit 0; the loser exits 3,
       stderr line 1 exactly `nightshift: already_claimed`, line 2 the flat problem JSON
       with `holder_handle`.
+- [ ] Search: NO operator step added here — the FTS5 live proof joined §1's automated probes
+      in H (D-rrr): the smoke's 24th arm queries `GET /search?q=<stamp>` for the task it just
+      created and requires it back (the CLI has no `search` command — D-ppp).
 
 ## 4. REAL Pocket ID (QUEUED HUMAN legs)
 

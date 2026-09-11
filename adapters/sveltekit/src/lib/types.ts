@@ -237,3 +237,12 @@ export interface PolicyDto {
   key: string
   value: string | null
 }
+
+// D-ppp routes/search.ts → ports.ts:430-439 SearchHit — the raw passthrough: snippet
+// wraps matched terms in [], score is bm25 flipped (higher = better). Server truth.
+export interface SearchHit {
+  id: string
+  title: string
+  snippet: string
+  score: number
+}

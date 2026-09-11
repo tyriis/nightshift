@@ -51,6 +51,20 @@
     const ls = leavesOf(rootId)
     return `${ls.filter((t) => t.status === 'done').length}/${ls.length}`
   }
+  // D-ooo: claim liveness on the card — last_heartbeat_at is public on every Task DTO
+  // (E shipped it, types.ts transcribes it). An in_progress card whose holder is silent
+  // shows its AGE; NO threshold judgment — the expiry budget is server config (dormant
+  // by default), so the card reports age and the operator's config supplies meaning.
+  // The claim itself is the first liveness (D-hhh), so a pre-heartbeat claim anchors on
+  // updated_at exactly like the sweeper's coalesce — same truth, same UI.
+  // Cadence: recomputes on each feed-driven refresh — heartbeats land in the feed, so
+  // a live holder tracks within one poll cycle; between events, as-of-last-refresh.
+  const livenessAge = (t: TaskDto): string | null => {
+    if (t.status !== 'in_progress' || t.claim_token_id === null) return null
+    const anchor = Date.parse(t.last_heartbeat_at ?? t.updated_at)
+    const mins = Math.max(0, Math.round((Date.now() - anchor) / 60_000))
+    return mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`
+  }
   // new-task form (humans file work — §14-2)
   let newTitle = $state('')
   async function fileTask(): Promise<void> {
@@ -113,7 +127,14 @@
           <h3>{col}</h3>
           {#each cell(root.id, col) as t (t.id)}
             <a class="card" href="/ui/tasks/{t.id}"
-              >{t.title}{t.blocked_flag ? ' ⚑' : ''}{t.labels.map((l) => ` #${l}`).join('')}</a
+              >{t.title}{t.blocked_flag ? ' ⚑' : ''}{t.labels
+                .map((l) => ` #${l}`)
+                .join('')}{#if livenessAge(t)}
+                <span
+                  class="liveness"
+                  title="claim liveness — the heartbeat (or the claim itself) saw the holder this long ago"
+                  >♥ {livenessAge(t)}</span
+                >{/if}</a
             >
           {/each}
         </div>

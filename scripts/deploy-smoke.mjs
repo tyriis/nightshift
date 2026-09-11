@@ -177,6 +177,16 @@ try {
     moved.res.status === 200 && moved.json?.status === 'in_progress',
     moved.text.slice(0, 160)
   )
+  // the D-gg FTS substrate on the LIVE image (D-rrr): the create INSERT rode the
+  // real task_fts triggers; the marker in the description must come back from the
+  // D-ppp search contract. The token form is probe-picked (P5): a base36 stamp is a
+  // single unicode61 alnum token — the hyphen-marker form needs phrase semantics.
+  const found = await agentCall(`/search?q=${stamp}&limit=10`)
+  check(
+    'search finds the smoke task (FTS5 live)',
+    found.res.status === 200 && Array.isArray(found.json) && found.json.some((h) => h.id === id),
+    found.text.slice(0, 160)
+  )
   const note = await agentCall(
     `/tasks/${id}/threads`,
     json('POST', { kind: 'note', body: `deploy-smoke ${stamp} — agent note on the live board` })
@@ -212,8 +222,8 @@ try {
       cursors.every((v, i) => i === 0 || v > cursors[i - 1]),
     `rows ${cursors.length}`
   )
-  // cleanup: in_progress does NOT clear the claim (update-status.ts clears it only on
-  // in_review/done — B2/S2) — the AGENT releases first (the arm P9 verified
+  // cleanup: in_progress does NOT clear the claim (update-status.ts clears on
+  // in_review/done/canceled — B2/S2 + D-mmm) — the AGENT releases first (the arm P9 verified
   // claim→move→release→human-cancel = 200), then the HUMAN closes (agents may not);
   // the token goes away; the task + note stay as the honest audit-visible residue
   const released2 = await agentCall(`/tasks/${id}/release`, { method: 'POST' })

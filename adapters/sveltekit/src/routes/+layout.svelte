@@ -37,6 +37,7 @@
 <nav>
   <a href="{base}/">board</a>
   <a href="{base}/inbox">inbox</a>
+  <a href="{base}/search">search</a>
   <a href="{base}/admin">admin</a>
   {#if me}
     <span class="who">

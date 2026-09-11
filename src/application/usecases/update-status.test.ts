@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CreateTask } from '#root/application/usecases/create-task'
 import { AnswerQuestion } from '#root/application/usecases/answer-question'
 import { ClaimTask } from '#root/application/usecases/claim-task'
+import { Heartbeat } from '#root/application/usecases/heartbeat'
 import { CreateThread } from '#root/application/usecases/create-thread'
 import { ReleaseClaim } from '#root/application/usecases/release-claim'
 import { UpdateStatus } from '#root/application/usecases/update-status'
@@ -486,6 +487,56 @@ describe('UpdateStatus gates (spec §6.4)', () => {
         reason: 'chaos',
       })
     ).rejects.toMatchObject({ code: 'invalid_request' })
+    await db.destroy()
+  })
+
+  it('D-mmm: cancel clears an attached claim (generation bumped, audit named, fences hold)', async () => {
+    const { db, uow } = await withAgent()
+    const task = await new CreateTask(uow, fixedClock(), seqIds()).run({
+      ...human,
+      title: 'x',
+      status: 'todo',
+    })
+    const claim = await new ClaimTask(uow, fixedClock(), seqIds()).run({
+      ...agent,
+      taskId: task.id,
+    })
+    const uc = new UpdateStatus(uow, fixedClock())
+    const moved = await uc.run({
+      ...agent,
+      taskId: task.id,
+      to: 'canceled',
+      reason: 'abandoned',
+      lease_token: claim.lease_token, // invariant 3 holds: cancel of a claimed task needs the lease
+    })
+    expect(moved.status).toBe('canceled')
+    expect(moved.claim_token_id).toBeNull()
+    expect(moved.claim_generation).toBe(2) // clearClaim bumped the generation (D-mmm)
+    const audit = await new SqliteAuditRepo(db).search({
+      entity_type: 'task',
+      entity_id: task.id,
+      limit: 20,
+    })
+    expect(
+      audit.some((a) => a.action === 'claim_released' && a.reason === 'claim released on cancel')
+    ).toBe(true)
+    // the zombie's fences are the SHIPPED ones — zero new codes:
+    await expect(
+      new Heartbeat(uow, fixedClock()).run({
+        ...agent,
+        taskId: task.id,
+        lease_token: claim.lease_token,
+      })
+    ).rejects.toMatchObject({ code: 'stale_lease' }) // the claim is gone
+    await expect(
+      uc.run({
+        ...agent,
+        taskId: task.id,
+        to: 'todo',
+        reason: 'zombie',
+        lease_token: claim.lease_token,
+      })
+    ).rejects.toMatchObject({ code: 'canceled_terminal' }) // the gate runs AHEAD of the lease check
     await db.destroy()
   })
 })
