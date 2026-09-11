@@ -29,11 +29,13 @@ Per the ticket protocol and the A–G binding lessons ("treat your own plan as u
 - **P7 — CLI suite probe:** apply the Task-2 run.ts delta; `cli.test.ts` + `shim.test.ts` — the sanctioned claim-arm amendment plus ZERO other RED; USAGE block (3 lines) stays 3 lines (string-content-only duty); measure the run.ts line-shift ⇒ the `run.ts:N` citations in deploy/README (grep-measured bounds 42-44 / 22-27 / 132 / 204 pre-edit — every citation BELOW the edit zone re-derived from the FINAL file in the same commit).
 - **P8 — UI build probe:** `pnpm ui:build && pnpm ui:offline-check` with the Task-3 liveness span + the Task-5 search view + nav link — offline-check hosts byte-unchanged (`http://www.w3.org https://svelte.dev`); `pnpm test:e2e` PROBE-FIRST green (the board card gains text ONLY for claimed+in_progress tasks; the e2e task is never claimed ⇒ selector-stable — if the probe REDs, the D-ooo markup re-forms, never the e2e test).
 - **P9 — full-suite integration probe:** all deltas wired, `pnpm test` once — record the exact count (baseline 695/89; expected +1 Task 1, +1 Task 2 unit, +6 in the NEW search route file ⇒ ~703 / 90 files — the probe PINS the prediction the final gate must meet).
-- **P10 — coverage-ghost enumeration (every new branch, NAMED covering arm):** update-status cancel-clear: `to === 'canceled'` TRUE arm (P1/T1 test) + FALSE arm (existing review/done tests) + outer `claim_token_id !== null` FALSE arm (existing D-m terminal test, unclaimed cancel) + reason ternary BOTH arms (T1 cancel test / existing review test); claim echo: ctor default arm (all 26 existing 3-arg constructions) + given arm (deps wiring face = new claim-task.test.ts arm); `{ ...this.keepalive }` zero branches; CLI display zero new branches (property echo); search route: `limit ?? 20` default arm (absent-limit test) + given arm (explicit-limit test); search handler zero throws of its own (repo mapping + fastify validation, both covered by their arms); sweeper/config/ui.ts ZERO new branches (untouched). No statically uncoverable branch survives.
+- **P10 — coverage-ghost enumeration (every new branch, NAMED covering arm):** update-status cancel-clear: `to === 'canceled'` TRUE arm (P1/T1 test) + FALSE arm (existing review/done tests) + outer `claim_token_id !== null` FALSE arm (existing D-m terminal test, unclaimed cancel) + reason ternary BOTH arms (T1 cancel test / existing review test); claim echo: ctor default arm (all 27 existing 3-arg constructions) + given arm (deps wiring face = new claim-task.test.ts arm); `{ ...this.keepalive }` zero branches; CLI display zero new branches (property echo); search route: `limit ?? 20` default arm (absent-limit test) + given arm (explicit-limit test); search handler zero throws of its own (repo mapping + fastify validation, both covered by their arms); sweeper/config/ui.ts ZERO new branches (untouched). UI is OUTSIDE the vitest include (adapters/): the D-ooo `livenessAge` helper's branches (status/claim guards, the anchor coalesce, the 60-min ternary) are gated by ui:build + offline-check + the e2e path — and the e2e NEVER claims a task, so the ♥ TRUE arm is structurally UNexercised by any automated gate; D-ooo records that posture honestly (build-gated UI is the shipped E/G doctrine, not a coverage claim). No statically uncoverable branch survives the SUITE.
 - **P11 — drift pins:** `openapi-contract.test.ts` with /search documented+served together ⇒ green (`GET /search` enters the documented⇄served equality automatically — the test file byte-untouched); `mount.test.ts` byte-untouched (35 tools — search ships NO MCP tool); `roles-matrix.test.ts` byte-untouched; `auth.test.ts` byte-untouched (search requires auth; PUBLIC_PATHS unchanged).
 - **P12 — live-shape probe (image):** the Task-7 keepalive-twin claim leg must show `"keepalive":{"interval_ms":1000,"timeout_s":3}` on the armed twin and `{"interval_ms":0,"timeout_s":0}` on the dormant smoke — the D-nnn live proof rides the FINAL GATE (recorded here as the planned evidence, never pre-claimed).
 
-### Plan-review lane — VERDICT: PENDING
+### Plan-review lane — VERDICT: FAIL (attempt 1, 2026-09-11, independent oracle) ⇒ revisions applied, re-gate pending
+
+The three sharp rulings came back code-TRUE (D-mmm gate order/fences/guard verified against `update-status.ts:32/:40`, `heartbeat.ts:27`, `task-repo.ts:232-242/:260`, the smoke human-cancel arm's inertness; D-nnn single-world parity with `keepalive` outside VOLATILE + exactly ONE exact-shape claim pin at `claim-task.test.ts:58`, composites/mount toEqual-unaffected; D-ppp route pattern, both `??` arms armed). The FAIL is the paste-belief class the net exists for: **B1 (BLOCKER)** the Task-3 run.ts old-block was the unwrapped single-line form — real `run.ts:179-181` is prettier-wrapped (edit-exact-match fails); **B2** the Task-2 yaml old/new blocks carried 0-indent and single-quoted refs — real depth 14, DOUBLE-quoted per the prettier yaml override; **B3** the Task-4 svelte card block lost its 12-space nest indent; **B4** 27 not 26 pre-H `new ClaimTask(3-arg)` sites; **B5** QUEUED missed the Playwright-reinstall/CI-e2e line and the home-ops bundle ("highest-value pending item"); **B6** P10 must NAME the UI helper's un-gated TRUE arm honestly instead of a blanket close; **B7** cosmetic subject-count + the README `**23 PASS /**` wrap breaks the Task-6(c) anchor (re-anchored to the paragraph end). All seven applied in the amendments commit; VERDICT-PASS required from the re-gate before Task 1 dispatch.
 
 ### Artifact preflight — VERDICT: PENDING
 
@@ -47,7 +49,7 @@ Grep duty: the triples CONTAIN earlier pairs (`D-ppp` ⊃ `D-pp`) — every ledg
 - **D-ppp — `GET /search`: one documented route over the D-gg port.** The §12 "FTS-backed search UI" slice, read-only half: the yaml gains a `/search` path (opId `searchTasks`, tags `tasks`, `q` required minLength 1, `limit` 1..200 — the repo clamp's ceiling as a 400 instead of a silent clamp, M-2 doctrine) + a `SearchHit` component schema `{id,title,snippet,score}` (required all); regen same commit (D-zz). The route (`src/adapters/rest/routes/search.ts`, wired in `app.ts` beside the task family) validates via fastify querystring schema (400 `invalid_request` rides the shipped problem arm) and passes `deps.searchRoot.search(q, limit ?? 20)` through RAW — the snippet `[…]` wrapping and bm25 order are the port's published semantics (search-repo.ts), the route owns none. Auth: NOT in `PUBLIC_PATHS` — every AUTHENTICATED actor may read everything (§5); rate-limit budget burns like the feed (D-dd posture, mirrored in the op description). MCP gets NO search tool (D-nn freeze: exposure would be a recorded re-freeze — QUEUED). The CLI gets NO `search` command (COMMANDS exact set byte-untouched). Malformed MATCH strings ⇒ the repo's `invalid_request` map, over HTTP unchanged (400, zero new codes).
 - **D-qqq — The search view.** `adapters/sveltekit/src/routes/search/+page.svelte` (form over `GET /search`, hits as links with the server's snippet and order, `invalid_request` errors shown not swallowed) + one nav link (`+layout.svelte`) + the `SearchHit` transcription in `lib/types.ts` (the file's own rule: one interface per SHIPPED route, cited). SAVED FILTERS / UNDO-RESTORE: REJECTED for this plan — mutating territory (new tables/endpoints/contract surface), sized honestly as beyond one plan, QUEUED.
 - **D-rrr — Deploy surface: the FTS arm grows the bar DELIBERATELY + the doc pass.** `scripts/deploy-smoke.mjs` gains ONE check (search finds the smoke task by its marker — the FTS triggers proven LIVE on the real image, the probe-picked token form per P5): 23 arms become 24, contract + record together, never silent. `deploy/README.md`: the §Keepalive section gains the cancel-clears line (the `claim released on cancel` machine string mirrored) and the claim-echo sentence (rides Task 2 — same-commit doc-mirror for a wire truth); the §Deploy-smoke count text ships H's FORWARD note ("the FTS arm joins; the standing recorded bar is 23/0 until the H final-gate live re-measure") and the count itself FLIPS ONLY at Task 7 with the measured tail (flips are evidence-licensed — G's §1 precedent); `DEPLOY-SMOKE.md` §3 notes the automated search arm. The standing wording nit: "advisory off ed74a60" ⇒ "advisory against ed74a60" (G's Task-7 PLAN DEFECT note, fixed here, never smuggled).
-- **QUEUED (HUMAN / follow-up, honest):** SSE wrapper (the streaming-vs-zero-socket harness question is a PREFLIGHT-class unknown — deferred honestly, its slice decision stays open) · capability scopes (the never-widen-silently auth class — riskiest since E) · CSP (nonce/hash grade is QUEUED-HUMAN by the ticket; interacts with D-fff's variant predicate) · email (spec §6.8 "no email in v1" — spec-frozen + SMTP creds are human-held) · search saved-filters / undo-restore (mutating class) · CLI `search` leg · MCP search exposure (= re-freeze decision) · detail-page liveness line · F's unchanged ledger (real Pocket ID, nonce verify-once, role surgery, session-key rotation, npm publish).
+- **QUEUED (HUMAN / follow-up, honest):** SSE wrapper (the streaming-vs-zero-socket harness question is a PREFLIGHT-class unknown — deferred honestly, its slice decision stays open) · capability scopes (the never-widen-silently auth class — riskiest since E) · CSP (nonce/hash grade is QUEUED-HUMAN by the ticket; interacts with D-fff's variant predicate) · email (spec §6.8 "no email in v1" — spec-frozen + SMTP creds are human-held) · search saved-filters / undo-restore (mutating class) · CLI `search` leg · MCP search exposure (= re-freeze decision) · detail-page liveness line · **home-ops bundle — the highest-value pending item in the repo** (HelmRelease, registry push, `@sha256` digest pin, real deploy of the G+H image, the §14 operator walkthrough incl. keepalive legs, first-week audit — what it shakes loose feeds the NEXT slice decision) · Playwright browser re-install after upgrades + optional CI e2e job · F's unchanged ledger (real Pocket ID, nonce verify-once, role surgery, session-key rotation, npm publish).
 
 ## Slice decision (Act 2) — recorded with the rejected candidates
 
@@ -295,7 +297,7 @@ with:
     private readonly clock: Clock,
     private readonly ids: IdGen, // D-cc: the loser inbox copy needs an id
     // D-nnn: the policy echo (config truth at the composition root). The default is
-    // the DORMANT pair so every pre-H 3-arg construction (26 test sites) stays
+    // the DORMANT pair so every pre-H 3-arg construction (27 test sites) stays
     // byte-green — the wire truth comes from deps.ts, which always passes config.
     private readonly keepalive: KeepalivePair = { interval_ms: 0, timeout_s: 0 }
   ) {}
@@ -339,7 +341,7 @@ schema:
     generation: { type: integer }
 ```
 
-becomes:
+becomes (indentation MEASURED — `schema:` sits at 14 spaces under `application/json:`; yaml refs are DOUBLE-QUOTED per the repo's prettier yaml override `singleQuote: false` — B2 amendment):
 
 ```yaml
 schema:
@@ -379,7 +381,7 @@ git add src/application/usecases/claim-task.ts src/application/usecases/claim-ta
 LEFTHOOK_CONFIG=$PWD/lefthook.yaml git commit -m "feat(contract): claim echoes the keepalive pair (D-nnn)"
 ```
 
-Subject 50 ≤ 72. Raw-git verify; `git show --stat` shows exactly the 6 files (contract + regen together — D-zz).
+Subject 55 ≤ 72 (measured with `printf %s | wc -c`). Raw-git verify; `git show --stat` shows exactly the 6 files (contract + regen together — D-zz).
 
 ### Task 3: The CLI prints the pair; README byte-sync (D-nnn, CLI leg)
 
@@ -461,7 +463,7 @@ const livenessAge = (t: TaskDto): string | null => {
 }
 ```
 
-- [ ] **Step 2: Card render** — replace (verbatim current):
+- [ ] **Step 2: Card render** — replace (verbatim current, indentation MEASURED — `<a>` at 12 spaces inside the `{#each cell(...)}` nest; B3 amendment):
 
 ```svelte
 <a class="card" href="/ui/tasks/{t.id}"
@@ -833,7 +835,7 @@ grep-mirrored here). A canceled task never keeps a dead claim the sweeper can't 
 ```
 
 (b) nit truth: `quality-lane advisory off ed74a60` ⇒ `quality-lane advisory against ed74a60` (the G-era PLAN DEFECT, fixed, nothing smuggled).
-(c) forward count-note in the §Deploy-smoke paragraph: after `Expect **23 PASS / 0 FAIL** (exit 0).` append:
+(c) forward count-note — insert as a NEW PARAGRAPH immediately after the §Deploy-smoke paragraph (B7 amendment: the count sentence wraps mid-line in the real README — `Expect **23 PASS /` + newline + `0 FAIL** (exit 0).`; the paragraph ENDS at the line `` `DEPLOY-SMOKE.md` §1 and Plan F's Task-6 record. `` — anchor THERE, no mid-paragraph surgery):
 
 ```
 H adds the FTS search arm (D-rrr): the arm ships with the
