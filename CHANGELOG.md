@@ -10,6 +10,15 @@ All notable changes to nightshift are documented here. The format follows
 digest (see `deploy/README.md` for the pull-and-run surface). Pre-releases,
 if any, use `v0.1.0-rc.N`.
 
+## [Unreleased]
+
+### Fixed
+
+- OIDC token exchange accepts a lowercase `token_type` (`bearer`/`dpop`)
+  case-insensitively (RFC 6750 §6.1) — Pocket ID answers `token_type: "bearer"`
+  (`src/adapters/shared/oidc-rp.ts`). The stub IdP now mirrors the real
+  lowercase shape (issue #25).
+
 ## v0.1.0 — 2026-09-11 (first public beta)
 
 ### Added

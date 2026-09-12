@@ -128,6 +128,12 @@ split — which is exactly why sessions here are signed `httpOnly`
 A successful browser login IS the verification (the RP rejects a callback whose
 nonce does not byte-match) — tick the box in `DEPLOY-SMOKE.md` §4.
 
+**token_type — Pocket ID ships lowercase `bearer` (verified 2026-09-12):**
+
+> Pocket ID's token endpoint answers `token_type: "bearer"` (lowercase). The RP
+> accepts it case-insensitively per RFC 6750 §6.1 — `oidc-rp.ts` compares the
+> value lowercased, so `Bearer`/`DPoP` in any case pass (issue #25).
+
 **Session-key rotation (D-qq) — VERBATIM from Plan E:**
 
 > Key rotation is deliberately deferred: single active key, env-keyed, rotation
