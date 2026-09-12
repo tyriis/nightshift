@@ -506,6 +506,32 @@ paths:
                 description: { type: string }
                 # D-ss: humans only, optional; default member (agents: dropped by the use-case)
                 role: { type: string, enum: [admin, member] }
+  /admin/actors/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    patch:
+      tags: [admin]
+      operationId: setActorRole
+      description: >-
+        issue #23: switch a HUMAN's role (agents carry role null and are refused). The
+        last admin cannot be demoted — with zero admins the board cannot self-heal.
+        Returns the updated actor row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              additionalProperties: false
+              properties:
+                role: { type: string, enum: [admin, member] }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Actor" }
+        default: { $ref: "#/components/responses/Problem" }
   /admin/actors/{id}/tokens:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:

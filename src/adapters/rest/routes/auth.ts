@@ -181,7 +181,8 @@ export const registerAuthRoutes = (app: FastifyInstance, deps: AppDeps): void =>
     if (gate === 'allowlist' && claims.email_verified === true && claims.email) {
       const listed = await deps.allowlistRoot.findByEmail(claims.email.toLowerCase())
       if (listed) {
-        // tree (4a): PROVISION (member, subject bound, human_provisioned audited
+        // tree (4a): PROVISION (role per NS_ADMIN_EMAILS — #23, else member; subject
+        // bound, human_provisioned audited
         // in the use-case; race-guard returns an existing row unchanged) then login
         const actor = await deps.useCases.provisionHumanFromOidc.run({
           sub: claims.sub,

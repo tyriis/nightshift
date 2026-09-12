@@ -1,5 +1,6 @@
 // src/adapters/rest/roles-matrix.test.ts
-// The thirteen admin ops (ten + the three D-tt allow-list ops) + the exact
+// The fourteen admin ops (ten + the three D-tt allow-list ops + the #23 role
+// switch) + the exact
 // rejection shape. Member => 403 with the pinned
 // string; admin (t.adminToken) => today's behavior byte-unchanged (covered by
 // the existing admin suites staying green). Members keep EVERYTHING else —
@@ -14,6 +15,8 @@ import { requireAdmin } from '#root/adapters/rest/auth'
 const ADMIN_OPS: ReadonlyArray<{ m: string; url: string; body?: unknown }> = [
   { m: 'GET', url: '/admin/actors' },
   { m: 'POST', url: '/admin/actors', body: { kind: 'agent', handle: 'h', display_name: 'H' } },
+  // issue #23: the role switch joins the pinned set (thirteen -> fourteen)
+  { m: 'PATCH', url: '/admin/actors/a_nils', body: { role: 'member' } },
   { m: 'POST', url: '/admin/actors/a_nils/tokens', body: { label: 'l' } },
   { m: 'POST', url: '/admin/tokens/tok_nils/revoke' },
   { m: 'GET', url: '/admin/policy/review_gate' },
@@ -37,9 +40,9 @@ describe('D-ss role matrix — role enforcement is an additional, separately pin
     return t
   }
 
-  it('every one of the thirteen admin ops answers 403 to a member — one string, pinned', async () => {
+  it('every one of the fourteen admin ops answers 403 to a member — one string, pinned', async () => {
     const t = await memberApp()
-    expect(ADMIN_OPS).toHaveLength(13) // the exact-set duty: this matrix IS the thirteen ops
+    expect(ADMIN_OPS).toHaveLength(14) // the exact-set duty: this matrix IS the fourteen ops
     for (const op of ADMIN_OPS) {
       const opts: InjectOptions = {
         method: op.m as InjectOptions['method'],

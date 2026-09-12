@@ -389,6 +389,25 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/admin/actors/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: string
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /** @description issue #23: switch a HUMAN's role (agents carry role null and are refused). The last admin cannot be demoted — with zero admins the board cannot self-heal. Returns the updated actor row. */
+    patch: operations['setActorRole']
+    trace?: never
+  }
   '/admin/actors/{id}/tokens': {
     parameters: {
       query?: never
@@ -1673,6 +1692,36 @@ export interface operations {
     responses: {
       /** @description created */
       201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Actor']
+        }
+      }
+      default: components['responses']['Problem']
+    }
+  }
+  setActorRole: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          role: 'admin' | 'member'
+        }
+      }
+    }
+    responses: {
+      /** @description updated */
+      200: {
         headers: {
           [name: string]: unknown
         }

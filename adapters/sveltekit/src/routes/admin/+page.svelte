@@ -94,6 +94,15 @@
       })()
     )
   }
+  // PATCH /admin/actors/:id — { role } only; server gates admin + last-admin demote
+  async function setRole(actorId: string, role: 'admin' | 'member'): Promise<void> {
+    await guard(
+      (async () => {
+        await api(`/admin/actors/${actorId}`, json('PATCH', { role }))
+        await reload()
+      })()
+    )
+  }
   const tokenLabels = $state<Record<string, string>>({})
   async function issueToken(actorId: string): Promise<void> {
     const label = (tokenLabels[actorId] ?? '').trim()
@@ -236,6 +245,11 @@
           <span class="pill">{a.kind}</span>
           {#if a.role}<span class="pill">{a.role}</span>{/if}
           <a href="/ui/inbox">{a.handle}</a> ({a.display_name})
+          {#if a.kind === 'human'}
+            <button onclick={() => void setRole(a.id, a.role === 'admin' ? 'member' : 'admin')}>
+              {a.role === 'admin' ? 'Demote to member' : 'Promote to admin'}
+            </button>
+          {/if}
           <form
             class="file-task"
             onsubmit={(e) => {

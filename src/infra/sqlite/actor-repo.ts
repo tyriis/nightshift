@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely'
 import type { ActorRepo, ActorRow, TokenLookup, TokenRow } from '#root/application/ports'
+import type { HumanRole } from '#root/domain/task'
 import type { DB } from '#root/infra/sqlite/schema'
 
 export class SqliteActorRepo implements ActorRepo {
@@ -17,6 +18,10 @@ export class SqliteActorRepo implements ActorRepo {
     oidc_subject?: string
   }): Promise<ActorRow> {
     return this.db.insertInto('actors').values(input).returningAll().executeTakeFirstOrThrow()
+  }
+
+  async setRole(id: string, role: HumanRole): Promise<void> {
+    await this.db.updateTable('actors').set({ role }).where('id', '=', id).execute()
   }
 
   async findByHandle(handle: string): Promise<ActorRow | null> {

@@ -60,6 +60,69 @@ export class CreateActor {
   }
 }
 
+export interface SetActorRoleInput extends ActorContext {
+  id: string
+  /** the edge enum is the HUMAN_ROLES twin (routes/admin.ts); no second gate needed */
+  role: HumanRole
+}
+
+/**
+ * issue #23: the admin-managed role switch, HUMANS ONLY (agents are role-null by
+ * construction — D-ss — and stay untouched). Two refusals:
+ * - the last admin cannot be demoted: with zero admins the board cannot self-heal
+ *   (the bootstrap `a_bootstrap` row is a plain admin row here, no special arm);
+ * - non-human actors and absent ids keep their existing doctrine.
+ * Audit rides `role_changed` with before/after, the update-status.ts lineage.
+ */
+export class SetActorRole {
+  constructor(
+    private readonly uow: UnitOfWork,
+    private readonly clock: Clock
+  ) {}
+
+  async run(input: SetActorRoleInput): Promise<ActorRow> {
+    const now = this.clock.now().toISOString()
+    return this.uow.withTransaction(async (repos) => {
+      const actor = await repos.actors.findById(input.id)
+      if (!actor) throw new DomainError('not_found', `actor ${input.id} not found`)
+      if (actor.kind !== 'human') {
+        throw new DomainError(
+          'invalid_request',
+          `actor ${input.id} is not a human — only humans carry a role`
+        )
+      }
+      // last-admin guard: a demotion needs a SECOND admin to survive on the board;
+      // an already-member target is a plain rewrite, never a demotion.
+      if (actor.role === 'admin' && input.role !== 'admin') {
+        const admins = (await repos.actors.list()).filter(
+          (a) => a.kind === 'human' && a.role === 'admin'
+        )
+        if (admins.length === 1) {
+          throw new DomainError(
+            'invalid_request',
+            `actor ${input.id} is the last admin — demoting it leaves no admin`
+          )
+        }
+      }
+      await repos.actors.setRole(input.id, input.role)
+      await repos.audit.append({
+        actor_id: input.actor.id,
+        token_id: input.tokenId,
+        action: 'role_changed',
+        entity_type: 'actor',
+        entity_id: input.id,
+        before: { role: actor.role },
+        after: { role: input.role },
+        reason: 'role changed',
+        created_at: now,
+      })
+      // the row was written in this very tx — the null arm of findById is unreachable
+      // (the CreateToken plan-verbatim cast precedent)
+      return (await repos.actors.findById(input.id)) as ActorRow
+    })
+  }
+}
+
 export interface CreateTokenInput extends ActorContext {
   actor_id: string
   label: string

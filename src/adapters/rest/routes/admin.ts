@@ -56,6 +56,41 @@ export const registerAdminRoutes = (app: FastifyInstance, deps: AppDeps): void =
     }
   )
 
+  // issue #23: the role switch (humans only — agents carry no role, D-ss). Same 3-arg
+  // shape as POST /admin/actors: the transport enum is the HUMAN_ROLES twin, so bad
+  // values 400 at the edge via problem.ts's validation branch.
+  app.patch(
+    '/admin/actors/:id',
+    {
+      preHandler: [requireHuman, requireAdmin],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['role'],
+          additionalProperties: false,
+          properties: {
+            role: {
+              type: 'string',
+              enum: ['admin', 'member'],
+              description: 'humans only; agents keep role null',
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const { role } = request.body as { role: HumanRole }
+      // trusted auth context spread LAST (Task 14 review defense)
+      const actor = await deps.useCases.setActorRole.run({
+        id,
+        role,
+        ...actorCtx(request),
+      })
+      return reply.code(200).send(actor)
+    }
+  )
+
   // 3-arg repair as above; handler body unchanged (already awaited in the plan)
   app.post(
     '/admin/actors/:id/tokens',

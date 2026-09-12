@@ -273,7 +273,161 @@ describe('D-tt allow-list admin ops (idempotent POST, ghost-404 DELETE, policy f
     expect(ghost.json().detail).toBe("allow-list entry 'ghost@x.example' not found")
     await t.close()
   })
+})
 
+// issue #23: PATCH /admin/actors/:id — the humans-only role switch, audited role_changed
+// (the update-status.ts before/after lineage), with the last-admin refusal as the
+// self-healing guard. The test board seeds exactly ONE admin (a_nils, test-app.ts).
+describe('issue #23: PATCH /admin/actors/:id (role switch)', () => {
+  const createActor = async (
+    t: TestApp,
+    payload: Record<string, unknown>
+  ): Promise<Record<string, unknown>> =>
+    (
+      await t.app.inject({
+        method: 'POST',
+        url: '/admin/actors',
+        headers: bearer(t),
+        payload,
+      })
+    ).json()
+
+  const patch = (t: TestApp, id: string, role: string) =>
+    t.app.inject({
+      method: 'PATCH',
+      url: `/admin/actors/${id}`,
+      headers: bearer(t),
+      payload: { role },
+    })
+
+  it('member -> admin -> member: 200 with the updated whole row, both directions', async () => {
+    const t = await makeTestApp()
+    const bob = await createActor(t, { kind: 'human', handle: 'bob', display_name: 'Bob' })
+    const up = await patch(t, bob.id as string, 'admin')
+    expect(up.statusCode).toBe(200)
+    // nothing-hidden twin of GET /admin/actors: the full ActorRow shape rides back
+    expect(Object.keys(up.json()).sort()).toEqual([
+      'created_at',
+      'description',
+      'display_name',
+      'handle',
+      'id',
+      'kind',
+      'oidc_subject',
+      'role',
+    ])
+    expect(up.json()).toMatchObject({ id: bob.id, handle: 'bob', kind: 'human', role: 'admin' })
+    const down = await patch(t, bob.id as string, 'member')
+    expect(down.statusCode).toBe(200)
+    expect(down.json().role).toBe('member')
+    // the 200 is the FRESH row, not an echo: the stored row matches
+    const listed = (
+      await t.app.inject({ method: 'GET', url: '/admin/actors', headers: bearer(t) })
+    ).json()
+    expect(listed.find((a: { id: string }) => a.id === bob.id).role).toBe('member')
+    await t.close()
+  })
+
+  it('audits role_changed with before/after, attributed to the acting admin', async () => {
+    const t = await makeTestApp()
+    const bob = await createActor(t, { kind: 'human', handle: 'bob', display_name: 'Bob' })
+    await patch(t, bob.id as string, 'admin')
+    await patch(t, bob.id as string, 'member')
+    const audit = (
+      await t.app.inject({
+        method: 'GET',
+        url: `/audit?entity_type=actor&entity_id=${bob.id}&limit=50`,
+        headers: bearer(t),
+      })
+    ).json()
+    const roles = audit.filter((a: { action: string }) => a.action === 'role_changed')
+    // search is DESC (the activity view), so the demotion leads the promotion
+    expect(roles.map((a: { before: unknown; after: unknown }) => [a.before, a.after])).toEqual([
+      [{ role: 'admin' }, { role: 'member' }],
+      [{ role: 'member' }, { role: 'admin' }],
+    ])
+    expect(roles[0]).toMatchObject({
+      actor_id: 'a_nils',
+      entity_type: 'actor',
+      entity_id: bob.id,
+      reason: 'role changed',
+    })
+    await t.close()
+  })
+
+  it('bad bodies 400 invalid_request (edge enum = HUMAN_ROLES twin); unknown id 404', async () => {
+    const t = await makeTestApp()
+    const bob = await createActor(t, { kind: 'human', handle: 'bob', display_name: 'Bob' })
+    for (const payload of [{ role: 'boss' }, {}] as const) {
+      const res = await t.app.inject({
+        method: 'PATCH',
+        url: `/admin/actors/${bob.id}`,
+        headers: bearer(t),
+        payload,
+      })
+      expect({ payload, status: res.statusCode, code: res.json().code }).toEqual({
+        payload,
+        status: 400,
+        code: 'invalid_request',
+      })
+    }
+    // removeAdditional status quo (fastify default ajv): a smuggled key is STRIPPED,
+    // never a 400 — the same doctrine as webhooks.test.ts and the MCP parity harness.
+    const smuggled = await t.app.inject({
+      method: 'PATCH',
+      url: `/admin/actors/${bob.id}`,
+      headers: bearer(t),
+      payload: { role: 'admin', extra: 1 },
+    })
+    expect(smuggled.statusCode).toBe(200)
+    expect(smuggled.json()).toMatchObject({ id: bob.id, role: 'admin' })
+    const ghost = await patch(t, 'a_ghost', 'admin')
+    expect(ghost.statusCode).toBe(404)
+    expect(ghost.json().code).toBe('not_found')
+    expect(ghost.json().detail).toBe('actor a_ghost not found')
+    await t.close()
+  })
+
+  it('agents are refused (role is humans-only, D-ss); no second admin is created', async () => {
+    const t = await makeTestApp()
+    const agent = await createActor(t, {
+      kind: 'agent',
+      handle: 'hermes-9',
+      display_name: 'H9',
+      role: 'admin', // dropped by CreateActor for agents — role stays null
+    })
+    expect(agent.role).toBeNull()
+    const res = await patch(t, agent.id as string, 'admin')
+    expect(res.statusCode).toBe(400)
+    expect(res.json().code).toBe('invalid_request')
+    expect(res.json().detail).toBe(`actor ${agent.id} is not a human — only humans carry a role`)
+    await t.close()
+  })
+
+  it('last-admin guard: the only admin cannot be demoted; a second admin unlocks it', async () => {
+    const t = await makeTestApp()
+    const solo = await patch(t, 'a_nils', 'member')
+    expect(solo.statusCode).toBe(400)
+    expect(solo.json().code).toBe('invalid_request')
+    expect(solo.json().detail).toBe('actor a_nils is the last admin — demoting it leaves no admin')
+    // the no-op arm is NOT a demotion: admin -> admin answers 200
+    expect((await patch(t, 'a_nils', 'admin')).statusCode).toBe(200)
+
+    const bob = await createActor(t, { kind: 'human', handle: 'bob', display_name: 'Bob' })
+    expect((await patch(t, bob.id as string, 'admin')).statusCode).toBe(200) // two admins now
+    const demoted = await patch(t, 'a_nils', 'member')
+    expect(demoted.statusCode).toBe(200)
+    expect(demoted.json()).toMatchObject({ id: 'a_nils', role: 'member' })
+    // the write is LIVE on the wire: the very next admin op by the same token is a 403,
+    // because a_nils is now a member (bob is the surviving admin)
+    const after = await t.app.inject({ method: 'GET', url: '/admin/actors', headers: bearer(t) })
+    expect(after.statusCode).toBe(403)
+    expect(after.json().code).toBe('forbidden')
+    await t.close()
+  })
+})
+
+describe('D-tt policy flag on the widened enum (2 of 2)', () => {
   it('policy flag on the widened enum: oidc_provisioning allowlist => 200, on => 400; review_gate + allowlist STILL 400 (R2/B10)', async () => {
     const t = await makeTestApp()
     const allow = await t.app.inject({
