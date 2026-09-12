@@ -275,12 +275,13 @@ describe('oidc-rp (D-pp): token exchange', () => {
     expect((err as Error).message).toMatch(/token exchange failed: 400/)
   })
 
-  it('exchangeCode: response gates — malformed body, unexpected token_type, DPoP accepted', async () => {
+  it('exchangeCode: response gates — malformed body, unexpected token_type, lowercase bearer + DPoP accepted', async () => {
     const { t } = await makeCannedApp({
       [`${ISSUER}/.well-known/openid-configuration`]: () => Response.json(CANNED_DOC),
       [`${ISSUER}/api/oidc/token`]: cycled([
         () => Response.json({ access_token: 42, id_token: 'x', token_type: 'Bearer' }),
         () => Response.json({ access_token: 'a', id_token: 'b', token_type: 'Mac' }),
+        () => Response.json({ access_token: 'a', id_token: 'b', token_type: 'bearer' }),
         () => Response.json({ access_token: 'a', id_token: 'b', token_type: 'DPoP' }),
       ]),
     })
@@ -290,6 +291,10 @@ describe('oidc-rp (D-pp): token exchange', () => {
     await expect(rp.exchangeCode(t.deps, 'c', 'v')).rejects.toThrow(
       /token exchange failed: unexpected token_type/
     )
+    await expect(rp.exchangeCode(t.deps, 'c', 'v')).resolves.toEqual({
+      access_token: 'a',
+      id_token: 'b',
+    })
     await expect(rp.exchangeCode(t.deps, 'c', 'v')).resolves.toEqual({
       access_token: 'a',
       id_token: 'b',

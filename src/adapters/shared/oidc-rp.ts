@@ -151,8 +151,10 @@ export const exchangeCode = async (
   const body = (await res.json()) as Partial<OidcTokenSet> & { token_type?: string }
   if (typeof body.access_token !== 'string' || typeof body.id_token !== 'string')
     throw new Error('token exchange failed: malformed response')
-  if (body.token_type !== 'Bearer' && body.token_type !== 'DPoP')
-    throw new Error('token exchange failed: unexpected token_type')
+  // RFC 6750 §6.1: token_type is case-INSENSITIVE. Pocket ID ships lowercase
+  // 'bearer' — a real-instance verify-once catch (lib-1 flag). Accept either case.
+  const tt = body.token_type?.toLowerCase()
+  if (tt !== 'bearer' && tt !== 'dpop') throw new Error('token exchange failed: unexpected token_type')
   return { access_token: body.access_token, id_token: body.id_token }
 }
 
