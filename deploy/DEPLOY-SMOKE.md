@@ -132,18 +132,20 @@ docker exec $C node -e "fetch('https://idp.example/.well-known/openid-configurat
 # then reach BOTH printed hosts from the container (node -e fetch, exit 0 = reachable)
 ```
 
-- [ ] Browser login: open `{NS_PUBLIC_URL}/ui`, sign in through Pocket ID, land on the
-      board (signed httpOnly session — same-origin browser + different-host IdP is the
-      D-pp cookie-split posture the design already accounts for).
-- [ ] **Nonce-echo verify-once** — check off at the FIRST real login (unconfirmed against
-      a live Pocket ID; it is exactly the QUEUED (HUMAN) leg from Plan E):
+- [x] Browser login (RUN 2026-09-12 — local run, signed in against id.techtales.io as
+      admin@techtales.io, landed on the board): open `{NS_PUBLIC_URL}/ui`, sign in through
+      Pocket ID, land on the board (signed httpOnly session — same-origin browser +
+      different-host IdP is the D-pp cookie-split posture the design already accounts for).
+- [x] **Nonce-echo verify-once — TICKED 2026-09-12 (id.techtales.io)**: the browser login
+      above succeeded and the RP's `verifyIdToken` requires a nonce byte-match, so Pocket ID
+      echoes nonce. Instance-specific record (id.techtales.io), not a blanket claim.
 
   > `nonce` echo is Fosite-conformant but was NOT confirmed in Pocket ID's repo
   > (lib-1 flag 1): the stub asserts it, the RP requires it, and a verify-once against
   > the real instance is QUEUED (HUMAN).
 
   A SUCCESSFUL login IS the verification (the RP rejects a callback whose nonce does not
-  byte-match) — once step 4's browser login succeeds, tick this box in the PR record.
+  byte-match) — TICKED: the browser login in the line above succeeded on 2026-09-12.
 
 ## 5. First-login allow-list round-trip
 
