@@ -119,11 +119,12 @@ same-origin with this app while the IdP lives on another host — cookie domains
 split — which is exactly why sessions here are signed `httpOnly`
 `__Host-ns_sess` envelopes rather than IdP-domain cookies (D-pp/D-qq).
 
-**Nonce echo — verify-once at the FIRST real login (QUEUED HUMAN):**
+**Nonce echo — VERIFIED 2026-09-12 against id.techtales.io (Pocket ID):**
 
-> `nonce` echo is Fosite-conformant but was NOT confirmed in Pocket ID's repo
-> (lib-1 flag 1): the stub asserts it, the RP requires it, and a verify-once
-> against the real instance is QUEUED (HUMAN).
+> `nonce` echo is Fosite-conformant and was confirmed on a live Pocket ID
+> (id.techtales.io, 2026-09-12): the RP's `verifyIdToken` requires a byte-match
+> and the browser login succeeded end-to-end. Instance-specific record — not a
+> blanket claim about all Pocket ID versions.
 
 A successful browser login IS the verification (the RP rejects a callback whose
 nonce does not byte-match) — tick the box in `DEPLOY-SMOKE.md` §4.
