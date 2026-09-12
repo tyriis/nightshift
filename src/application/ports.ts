@@ -206,6 +206,9 @@ export interface ActorRepo {
     /** D-tt: first-login provisioning binds the verified subject; every other site omits */
     oidc_subject?: string
   }): Promise<ActorRow>
+  /** issue #23: the humans-only role switch (SetActorRole). Fire-and-forget like
+   * setPolicy — the caller re-reads the row with findById for the fresh shape. */
+  setRole(id: string, role: HumanRole): Promise<void>
   findByHandle(handle: string): Promise<ActorRow | null>
   /** D-tt: first-login lookup by the verified id_token sub — FULL row, no trim
    * (the login path is NOT the token-lookup hot path). */

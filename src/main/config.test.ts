@@ -7,6 +7,7 @@ describe('loadConfig', () => {
       port: 3123,
       dbPath: './nightshift.db',
       bootstrapToken: undefined,
+      adminEmails: [],
       dataDir: './data',
       maxUploadBytes: 20_971_520,
       rateLimitPerMin: 120,
@@ -39,6 +40,15 @@ describe('loadConfig', () => {
 
   it('rejects short bootstrap token', () => {
     expect(() => loadConfig({ NS_BOOTSTRAP_TOKEN: 'short' })).toThrow(/invalid env/)
+  })
+
+  it('NS_ADMIN_EMAILS: comma-split, trimmed, empties dropped; unset is []', () => {
+    expect(loadConfig({}).adminEmails).toEqual([])
+    expect(loadConfig({ NS_ADMIN_EMAILS: '' }).adminEmails).toEqual([])
+    expect(loadConfig({ NS_ADMIN_EMAILS: ' nils@x.test , , bob@x.test ' }).adminEmails).toEqual([
+      'nils@x.test',
+      'bob@x.test',
+    ])
   })
 
   it('coerces the Plan B knobs; 0 rate limit is legal (off switch, D-v)', () => {

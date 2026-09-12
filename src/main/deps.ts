@@ -36,7 +36,12 @@ import { Heartbeat } from '#root/application/usecases/heartbeat'
 import { AddLink, RemoveLink } from '#root/application/usecases/manage-links'
 import { MarkInboxRead } from '#root/application/usecases/mark-inbox-read'
 import { AttachLabel, CreateLabel, DetachLabel } from '#root/application/usecases/labels'
-import { CreateActor, CreateToken, RevokeToken } from '#root/application/usecases/manage-actors'
+import {
+  CreateActor,
+  CreateToken,
+  RevokeToken,
+  SetActorRole,
+} from '#root/application/usecases/manage-actors'
 import {
   AddAllowlist,
   ListAllowlist,
@@ -112,6 +117,8 @@ export interface AppDeps {
     createActor: CreateActor
     createToken: CreateToken
     revokeToken: RevokeToken
+    // issue #23: humans-only role switch (PATCH /admin/actors/:id)
+    setActorRole: SetActorRole
     addAllowlist: AddAllowlist
     removeAllowlist: RemoveAllowlist
     listAllowlist: ListAllowlist
@@ -208,12 +215,13 @@ export const makeDepsFromDb = (
       attachLabel: new AttachLabel(uow, clock),
       detachLabel: new DetachLabel(uow, clock),
       createActor: new CreateActor(uow, clock, ids),
+      setActorRole: new SetActorRole(uow, clock),
       createToken: new CreateToken(uow, clock, ids),
       revokeToken: new RevokeToken(uow, clock),
       addAllowlist: new AddAllowlist(uow, clock),
       removeAllowlist: new RemoveAllowlist(uow, clock),
       listAllowlist: new ListAllowlist(uow),
-      provisionHumanFromOidc: new ProvisionHumanFromOidc(uow, clock, ids),
+      provisionHumanFromOidc: new ProvisionHumanFromOidc(uow, clock, ids, config.adminEmails),
       getPolicy: new GetPolicy(uow),
       setPolicy: new SetPolicy(uow, clock),
       createWebhook: new CreateWebhook(uow, clock, ids),

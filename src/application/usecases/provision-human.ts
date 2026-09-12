@@ -6,6 +6,7 @@
 // double-provision.
 import { DomainError } from '#root/domain/errors'
 import type { ActorRow, Clock, IdGen, UnitOfWork } from '#root/application/ports'
+import type { HumanRole } from '#root/domain/task'
 
 export interface ProvisionHumanInput {
   /** the VERIFIED id_token sub — bound to the row as oidc_subject */
@@ -32,7 +33,11 @@ export class ProvisionHumanFromOidc {
   constructor(
     private readonly uow: UnitOfWork,
     private readonly clock: Clock,
-    private readonly ids: IdGen
+    private readonly ids: IdGen,
+    // issue #23: the NS_ADMIN_EMAILS echo (config truth at the composition root, ClaimTask's
+    // D-nnn precedent). The [] default keeps every pre-#23 3-arg construction byte-green —
+    // no listed email ⇒ 'member', exactly the old pinned posture.
+    private readonly adminEmails: readonly string[] = []
   ) {}
 
   async run(input: ProvisionHumanInput): Promise<ActorRow> {
@@ -57,6 +62,15 @@ export class ProvisionHumanFromOidc {
       if (handle === null) {
         throw new DomainError('invalid_request', 'handle space exhausted (D-tt)')
       }
+      // issue #23: the role is decided HERE (the list is the env truth, echoed by the
+      // composition root). Matching follows the allow-list doctrine: trim + lowercase on
+      // BOTH sides, so 'Alice@Example.Test' in env and in claims meet. No match (or no
+      // email claim, or an empty/unset list) ⇒ 'member' — the D-ss default.
+      const email = input.email?.trim().toLowerCase()
+      const role: HumanRole =
+        email !== undefined && this.adminEmails.some((e) => e.trim().toLowerCase() === email)
+          ? 'admin'
+          : 'member'
       const actor = await repos.actors.create({
         id: this.ids.newId('a'),
         kind: 'human',
@@ -64,8 +78,9 @@ export class ProvisionHumanFromOidc {
         display_name: handle, // pinned: display_name rides the handle
         description: '',
         created_at: now,
-        // D-ss: MEMBERS arrive only via D-tt provisioning — admin is never here
-        role: 'member',
+        // D-ss: humans arrive only via D-tt provisioning; the role is the #23
+        // NS_ADMIN_EMAILS decision above (default member).
+        role,
         oidc_subject: input.sub,
       })
       await repos.audit.append({
@@ -76,7 +91,9 @@ export class ProvisionHumanFromOidc {
         action: 'human_provisioned',
         entity_type: 'actor',
         entity_id: actor.id,
-        after: { handle, subject: input.sub },
+        // issue #23: the assigned role rides `after` (the draft is open — `before`
+        // stays absent: provisioning is the row's FIRST state, there is no prior)
+        after: { handle, subject: input.sub, role },
         reason: 'oidc first-login allow-list', // pinned (D-tt)
         created_at: now,
       })

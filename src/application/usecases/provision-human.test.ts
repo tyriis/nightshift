@@ -130,10 +130,63 @@ describe('ProvisionHumanFromOidc (D-tt): the pinned handle algorithm', () => {
       action: 'human_provisioned',
       entity_type: 'actor',
       entity_id: actor.id,
-      after: { handle: 'alice', subject: 'stub-alice' },
+      after: { handle: 'alice', subject: 'stub-alice', role: 'member' }, // #23: role rides `after`
       reason: 'oidc first-login allow-list',
       created_at: NOW,
     })
+    await db.destroy()
+  })
+})
+
+// issue #23: NS_ADMIN_EMAILS decides the provisioned role (the list is echoed into the
+// use-case by the composition root — the ClaimTask D-nnn config-echo precedent, so the
+// 4th ctor arg is the array and its absence is the [] dormant posture).
+describe('ProvisionHumanFromOidc (issue #23): the NS_ADMIN_EMAILS role matrix', () => {
+  it('listed email => admin (row, returned actor and the audit `after`)', async () => {
+    const { db, uow } = await buildUow()
+    const uc = new ProvisionHumanFromOidc(uow, fixedClock(), seqIds(), [
+      'alice@example.test',
+      'other@example.test',
+    ])
+    const actor = await uc.run({ sub: 's-admin', email: 'alice@example.test' })
+    expect(actor.role).toBe('admin')
+    expect((await provisionedRow(db, 's-admin'))?.role).toBe('admin')
+    const [audit] = (await auditTail(uow)).filter((r) => r.action === 'human_provisioned')
+    expect(audit).toMatchObject({
+      action: 'human_provisioned',
+      entity_id: actor.id,
+      after: { handle: 'alice', subject: 's-admin', role: 'admin' },
+      reason: 'oidc first-login allow-list',
+    })
+    await db.destroy()
+  })
+
+  it('unlisted email => member; matching is trim + lowercase on both sides', async () => {
+    const { db, uow } = await buildUow()
+    const uc = new ProvisionHumanFromOidc(uow, fixedClock(), seqIds(), ['Alice@Example.test'])
+    expect((await uc.run({ sub: 's-miss', email: 'bob@example.test' })).role).toBe('member')
+    // the case/space-insensitive meet (the allow-list doctrine): claim ' ALICE@example.test '
+    expect((await uc.run({ sub: 's-hit', email: ' ALICE@example.test ' })).role).toBe('admin')
+    // no email claim at all => member, never a crash
+    expect((await uc.run({ sub: 's-noemail', preferred_username: 'x' })).role).toBe('member')
+    await db.destroy()
+  })
+
+  it('NS_ADMIN_EMAILS unset (3-arg construction, [] default) => every human is member', async () => {
+    const { db, uow } = await buildUow()
+    const uc = new ProvisionHumanFromOidc(uow, fixedClock(), seqIds())
+    expect((await uc.run({ sub: 's-dormant', email: 'alice@example.test' })).role).toBe('member')
+    await db.destroy()
+  })
+
+  it('the race guard stays role-blind: the bound row wins, no second audit', async () => {
+    const { db, uow } = await buildUow()
+    const uc = new ProvisionHumanFromOidc(uow, fixedClock(), seqIds(), ['alice@example.test'])
+    const first = await uc.run({ sub: 's-r2', email: 'alice@example.test' })
+    const before = await auditTail(uow)
+    const again = await uc.run({ sub: 's-r2', email: 'alice@example.test' })
+    expect(again).toEqual(first)
+    expect((await auditTail(uow)).length).toBe(before.length)
     await db.destroy()
   })
 })
