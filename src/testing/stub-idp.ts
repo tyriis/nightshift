@@ -146,7 +146,8 @@ export const buildStubIdp = (opts: StubIdpOptions): StubIdp => {
       ...(user.noAtHash ? {} : { at_hash: atHash(access) }),
     }
     const idToken = compactSign({ alg: 'RS256', kid: KID }, claims)
-    return { access_token: access, token_type: 'Bearer', expires_in: 300, id_token: idToken }
+    // lowercase 'bearer' mirrors the real Pocket ID token response (issue #25)
+    return { access_token: access, token_type: 'bearer', expires_in: 300, id_token: idToken }
   })
 
   const signIdToken = (overrides: Record<string, unknown> = {}, accessToken = ''): string => {
